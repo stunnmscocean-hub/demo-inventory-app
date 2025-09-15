@@ -1,0 +1,545 @@
+/* --- Page Layout --- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.section {
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 32px;
+}
+
+.myDemoSection {
+  background-color: #f0f8f0; /* 옅은 초록색 배경 */
+  border: 1px solid #d4edda; /* 연한 초록색 테두리 */
+  position: relative;
+}
+
+.myDemoSection.folded {
+  padding-bottom: 16px; /* 접기된 상태에서 하단 패딩 줄이기 */
+}
+
+.sectionTitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 22px;
+}
+
+/* --- Header --- */
+.header {
+  margin-bottom: 24px;
+}
+
+.headerTitle {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* --- MyDemoList Table --- */
+.overdue {
+  color: var(--danger-color);
+  font-weight: 700;
+}
+
+.overdueText {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+/* --- SearchBar --- */
+.searchForm {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.searchInput {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 15px;
+}
+
+/* --- EquipmentList Table --- */
+.clickableRow {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.clickableRow:hover {
+  background-color: var(--light-gray-color);
+}
+
+/* --- NewApplicationForm --- */
+.formContainer {
+  padding: 24px;
+  background-color: #fdfdfe;
+}
+
+.infoBox {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: #ffffff;
+}
+
+.formTitle {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, min-content 1fr); /* Two pairs of label (min-content) and input (1fr) */
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.formField {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.formField label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0; /* Prevent label from shrinking */
+}
+
+.formField input {
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  /* Removed flex-grow to allow inline styles to take full effect */
+}
+
+/* Full width field for items like '반출 사유' and '파트너 주소' */
+.formFieldFullWidth {
+  grid-column: 1 / -1; /* Spans all columns */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.formFieldFullWidth label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.formFieldFullWidth input {
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  /* Removed width and flex-grow to allow inline styles to take full effect */
+}
+
+.formFieldFullWidth button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.foldButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background-color: #28a745; /* 초록색 배경 */
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.foldButton:hover {
+  background-color: #218838; /* 더 진한 초록색 */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+.foldButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* Page fold effect */
+.foldButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-width: 0 15px 15px 0; /* Adjust size of the fold */
+  border-style: solid;
+  border-color: #f0f0f0 #f0f0f0 #ccc #ccc; /* Colors for the fold effect */
+  display: block;
+  transform: translateY(-50%) translateX(50%) rotate(45deg); /* Position and rotate */
+  box-shadow: -2px 2px 2px rgba(0, 0, 0, 0.1); /* Shadow for the fold */
+}
+
+.searchResults {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: white;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.searchResults li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.searchResults li:hover {
+  background-color: var(--light-gray-color);
+}
+
+/* --- Input with Search Results --- */
+.inputWithResults {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.inputWithResults .searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  margin-top: 2px;
+  width: 100%;
+  min-width: 200px;
+}
+
+/* --- Loading Styles --- */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: 16px;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- Main Content Layout --- */
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.sectionFooter {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #d4edda;
+}
+
+.myDemoSection.folded .sectionFooter {
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: none;
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filterLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.filterLabel input[type="checkbox"] {
+  margin: 0;
+}
+
+.searchSection {
+  margin-bottom: 20px;
+}
+
+.tableContainer {
+  overflow-x: auto;
+}
+
+.tableContainer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0;
+}
+
+.tableContainer th,
+.tableContainer td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tableContainer th {
+  background-color: var(--light-gray-color);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tableContainer td {
+  font-size: 14px;
+}
+
+.noData {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 40px;
+  margin: 0;
+}
+
+/* --- Button Styles --- */
+.button-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.button-primary:hover {
+  background-color: var(--primary-dark-color);
+}
+
+.button-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.button-secondary:hover {
+  background-color: #5a6268;
+}
+
+/* --- Equipment Selection Styles --- */
+.selectableRow {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.selectableRow:hover {
+  background-color: var(--light-gray-color);
+}
+
+.equipmentCheckbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* --- Selected Equipments List --- */
+.selectedEquipmentsContainer {
+  margin-top: 24px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.selectedEquipmentsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.selectedEquipmentsHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.applicationButton {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.applicationButton:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.applicationButton:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.selectedEquipmentsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.selectedEquipmentItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.equipmentInfo {
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.removeButton {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.removeButton:hover {
+  background-color: #c82333;
+}
+
+/* --- Application Form Container --- */
+.applicationFormContainer {
+  margin-top: 24px;
+  padding: 24px;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.applicationFormContainer h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.selectedEquipmentsSummary {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: #e9ecef;
+  border-radius: 6px;
+}
+
+.selectedEquipmentsSummary h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.selectedEquipmentsSummary ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.selectedEquipmentsSummary li {
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dee2e6;
+}
