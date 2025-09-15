@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { generatePdf } from '../utils/pdfGenerator';
+import { generateExcel, generateExcelWithExcelJS, generateExcelAsImage } from '../utils/excelGenerator'; // Import excel generators and image generator
+// import { generatePdf } from '../utils/pdfGenerator'; // PDF generation is no longer used
+import { exportGoogleSheetToPdf, updateGoogleSheetWithData, isGoogleApiReady } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
 import styles from './MainPage.module.css';
 
@@ -47,7 +49,9 @@ const MainPage = ({ user }) => {
   const [isMyDemosFolded, setIsMyDemosFolded] = useState(false); // State for folding MyDemoList
   const [loading, setLoading] = useState(true); // New loading state
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
+  // const [excelImage, setExcelImage] = useState(null); // State for Excel image preview (no longer needed for direct PDF export)
   const [showApplicationForm, setShowApplicationForm] = useState(false); // State for showing application form
+  const [googleApiLoaded, setGoogleApiLoaded] = useState(false); // State to track Google API readiness
 
   // Custom sorting order
   const customOrder = [
@@ -144,6 +148,16 @@ const MainPage = ({ user }) => {
     };
 
     fetchAllCsvData();
+
+    // Check Google API readiness periodically or on initial load
+    const checkApiReadiness = setInterval(() => {
+      if (isGoogleApiReady()) {
+        setGoogleApiLoaded(true);
+        clearInterval(checkApiReadiness);
+      }
+    }, 500); // Check every 500ms
+
+    return () => clearInterval(checkApiReadiness);
   }, [user.name, showInUseEquipment]);
 
   const handleSearch = (searchTerm) => {
@@ -431,7 +445,9 @@ const MainPage = ({ user }) => {
       setContactPersonSearchResults([]);
     };
 
-    const handleDownloadPdf = () => {
+    const handleDownloadPdf = async (e) => {
+      e.preventDefault(); // Prevent default form submission behavior
+      console.log("Form Data before validation:", formData); // Debugging line
       // Required fields validation
       if (!formData.returnDate || !formData.checkoutReason || !formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
         alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유, 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처");
@@ -444,15 +460,22 @@ const MainPage = ({ user }) => {
         formData.memoItems = memoData;
       }
 
-      const pdfData = {
-        ...formData,
-        checkoutDate: formatDateToYYYYMMDD(formData.checkoutDate),
-        returnDate: formatDateToYYYYMMDD(formData.returnDate),
-        equipmentName: equipment.name,
-        equipmentSerial: equipment.serial,
-        applicantName: applicantName, // Ensure applicantName is passed for consistency
-      };
-      generatePdf(pdfData);
+      // Update Google Sheet with form data
+      try {
+        const updateSuccess = await updateGoogleSheetWithData(formData, [equipment]);
+        if (!updateSuccess) {
+          alert("Google Sheet 업데이트에 실패했습니다. 다시 시도해주세요.");
+          return;
+        }
+        alert("Google Sheet에 데이터가 성공적으로 업데이트되었습니다.");
+
+        // Export Google Sheet to PDF
+        await exportGoogleSheetToPdf(`장비_대여요청서_${equipment.name}_${equipment.serial}.pdf`);
+        alert("데모 신청 양식이 PDF로 다운로드되었습니다.");
+      } catch (error) {
+        console.error("Error processing Google Sheet:", error);
+        alert("Google Sheet 처리 중 오류가 발생했습니다.");
+      }
       onNewDemo(equipment.id, formData.returnDate); // Pass original returnDate for state update
     };
     
@@ -705,7 +728,9 @@ const MainPage = ({ user }) => {
       setContactPersonSearchResults([]);
     };
 
-    const handleDownloadPdf = () => {
+    const handleDownloadPdf = async (e) => {
+      e.preventDefault(); // Prevent default form submission behavior
+      console.log("Form Data before validation (Multi):", formData); // Debugging line
       if (!formData.returnDate || !formData.checkoutReason || !formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
         alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유, 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처");
         return;
@@ -716,18 +741,22 @@ const MainPage = ({ user }) => {
         formData.memoItems = memoData;
       }
 
-      // 여러 장비에 대해 PDF 생성
-      selectedEquipments.forEach(equipment => {
-        const pdfData = {
-          ...formData,
-          checkoutDate: formatDateToYYYYMMDD(formData.checkoutDate),
-          returnDate: formatDateToYYYYMMDD(formData.returnDate),
-          equipmentName: equipment.name,
-          equipmentSerial: equipment.serial,
-          applicantName: applicantName,
-        };
-        generatePdf(pdfData);
-      });
+      // Update Google Sheet with form data for multiple equipments
+      try {
+        const updateSuccess = await updateGoogleSheetWithData(formData, selectedEquipments);
+        if (!updateSuccess) {
+          alert("Google Sheet 업데이트에 실패했습니다. 다시 시도해주세요.");
+          return;
+        }
+        alert("Google Sheet에 데이터가 성공적으로 업데이트되었습니다.");
+
+        // Export Google Sheet to PDF
+        await exportGoogleSheetToPdf(`장비_대여요청서_다중_${new Date().toISOString().slice(0, 10)}.pdf`);
+        alert("데모 신청 양식이 PDF로 다운로드되었습니다.");
+      } catch (error) {
+        console.error("Error processing Google Sheet:", error);
+        alert("Google Sheet 처리 중 오류가 발생했습니다.");
+      }
 
       onNewDemo(formData.returnDate);
     };
@@ -895,6 +924,8 @@ const MainPage = ({ user }) => {
               />
             </div>
           )}
+
+          {/* Excel 이미지 미리보기 (Google Sheet PDF 내보내기로 대체되어 더 이상 필요 없음) */}
         </div>
       </div>
     </div>
