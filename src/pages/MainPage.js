@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { generateExcel, generateExcelWithExcelJS, generateExcelAsImage } from '../utils/excelGenerator'; // Import excel generators and image generator
 // import { generatePdf } from '../utils/pdfGenerator'; // PDF generation is no longer used
-import { exportGoogleSheetToPdf, updateGoogleSheetWithData, isGoogleApiReady } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
+import { duplicateSpreadsheet, updateGoogleSheetWithData, isGoogleApiReady, initGoogleApis, exportGoogleSheetToPdfAndSaveToDrive, TEMPLATE_SPREADSHEET_ID, TEMPLATE_SHEET_GID, handleAuthClick } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
 import styles from './MainPage.module.css';
 
@@ -52,6 +52,7 @@ const MainPage = ({ user }) => {
   // const [excelImage, setExcelImage] = useState(null); // State for Excel image preview (no longer needed for direct PDF export)
   const [showApplicationForm, setShowApplicationForm] = useState(false); // State for showing application form
   const [googleApiLoaded, setGoogleApiLoaded] = useState(false); // State to track Google API readiness
+  const [googleTokenClient, setGoogleTokenClient] = useState(null); // State to store tokenClient
 
   // Custom sorting order
   const customOrder = [
@@ -149,15 +150,16 @@ const MainPage = ({ user }) => {
 
     fetchAllCsvData();
 
-    // Check Google API readiness periodically or on initial load
-    const checkApiReadiness = setInterval(() => {
-      if (isGoogleApiReady()) {
-        setGoogleApiLoaded(true);
-        clearInterval(checkApiReadiness);
-      }
-    }, 500); // Check every 500ms
+    // Initialize Google APIs
+    const initializeApis = async () => {
+      console.log("MainPage: Attempting to initialize Google APIs.");
+      const { tokenClient } = await initGoogleApis();
+      setGoogleTokenClient(tokenClient);
+      setGoogleApiLoaded(true);
+      console.log("MainPage: Google API and GIS are ready!");
+    };
+    initializeApis();
 
-    return () => clearInterval(checkApiReadiness);
   }, [user.name, showInUseEquipment]);
 
   const handleSearch = (searchTerm) => {
@@ -287,7 +289,15 @@ const MainPage = ({ user }) => {
       const equipmentToFilter = availableEquipments.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
       const filtered = equipmentToFilter.filter(eq => eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.serial.toLowerCase().includes(searchTerm.toLowerCase()));
       setFilteredEquipments(filtered);
-  }, [availableEquipments, showInUseEquipment]);
+  }, [availableEquipments, showInUseEquipment, selectedEquipments]);
+
+  useEffect(() => {
+    if (selectedEquipments.length > 0) {
+      setShowApplicationForm(true);
+    } else {
+      setShowApplicationForm(false);
+    }
+  }, [selectedEquipments]);
 
   // ----------------------------------------------------------------
   // Sub-components defined within the same file
@@ -447,36 +457,8 @@ const MainPage = ({ user }) => {
 
     const handleDownloadPdf = async (e) => {
       e.preventDefault(); // Prevent default form submission behavior
-      console.log("Form Data before validation:", formData); // Debugging line
-      // Required fields validation
-      if (!formData.returnDate || !formData.checkoutReason || !formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
-        alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유, 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처");
-        return;
-      }
-      
-      // Add memo items to pdfData
-      const memoData = memoItems.filter(memo => memo.trim() !== ''); // Filter out empty memos
-      if (memoData.length > 0) {
-        formData.memoItems = memoData;
-      }
-
-      // Update Google Sheet with form data
-      try {
-        const updateSuccess = await updateGoogleSheetWithData(formData, [equipment]);
-        if (!updateSuccess) {
-          alert("Google Sheet 업데이트에 실패했습니다. 다시 시도해주세요.");
-          return;
-        }
-        alert("Google Sheet에 데이터가 성공적으로 업데이트되었습니다.");
-
-        // Export Google Sheet to PDF
-        await exportGoogleSheetToPdf(`장비_대여요청서_${equipment.name}_${equipment.serial}.pdf`);
-        alert("데모 신청 양식이 PDF로 다운로드되었습니다.");
-      } catch (error) {
-        console.error("Error processing Google Sheet:", error);
-        alert("Google Sheet 처리 중 오류가 발생했습니다.");
-      }
-      onNewDemo(equipment.id, formData.returnDate); // Pass original returnDate for state update
+      alert("이 기능은 현재 MultiEquipmentApplicationForm에서만 지원됩니다. 여러 장비를 선택하여 데모 신청을 진행해주세요.");
+      return;
     };
     
     return (
@@ -486,13 +468,10 @@ const MainPage = ({ user }) => {
         <div className={styles.infoBox}>
           <h3>[기본정보]</h3>
           <div className={styles.formGrid}>
-            {/* 요청자, 반출일자, 회수일자는 고정 너비를 제거하여 그리지에 맞춰 자연스럽게 늘어나도록 함 */}
-            <div className={styles.formField} style={{ gridColumn: '1 / -1' }}><label>요청자 :</label><input type="text" name="requester" value={formData.requester} onChange={handleChange} style={{ width: '120px' }} /></div>
-            {/* 줄바꿈 추가 */}
-            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>반출일자 :</label><input type="text" name="checkoutDate" value={formData.checkoutDate} onChange={handleChange} placeholder="YYYY/MM/DD" style={{ width: '130px' }} /></div>
+            <div className={styles.formField} style={{ gridColumn: '1 / -1' }}><label>요청자 :</label><input type="text" name="requester" value={formData.requester} onChange={handleChange} style={{ width: '120px' }} readOnly /></div>
+            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>반출일자 :</label><input type="text" name="checkoutDate" value={formData.checkoutDate} onChange={handleChange} placeholder="YYYY/MM/DD" style={{ width: '130px' }} readOnly /></div>
             <div className={styles.formField} style={{ gridColumn: '2 / span 1' }}><label>회수일자 :</label><input type="text" name="returnDate" value={formData.returnDate} onChange={handleChange} required placeholder="YYYY/MM/DD" style={{ width: '130px' }} /></div>
             
-            {/* 반출 사유와 반출 장소는 내용이 길어질 수 있으므로 한 줄 전체를 사용 */}
             <div className={styles.formFieldFullWidth}><label>반출 사유 :</label><input type="text" name="checkoutReason" value={formData.checkoutReason} onChange={handleChange} required style={{ width: '600px', height: '60px' }} /></div>
             <div className={styles.formFieldFullWidth}><label>반출 장소 :</label><input type="text" name="checkoutLocation" value={formData.checkoutLocation} onChange={handleChange} style={{ width: '300px' }} /></div>
           </div>
@@ -517,7 +496,6 @@ const MainPage = ({ user }) => {
               </div>
             </div>
             <div className={styles.formField}><label>파트너 사업자번호 *(필수) :</label><input type="text" name="partnerBusinessNumber" value={formData.partnerBusinessNumber} onChange={handleChange} style={{ width: '150px' }} /></div>
-            {/* 줄바꿈 예시 */}
             <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
               <label>파트너 담당자 *(필수) :</label>
               <div className={styles.inputWithResults}>
@@ -535,7 +513,6 @@ const MainPage = ({ user }) => {
             </div>
             <div className={styles.formField}><label>파트너 연락처 *(필수) :</label><input type="text" name="partnerContactNumber" value={formData.partnerContactNumber} onChange={handleChange} style={{ width: '150px' }} /></div>
             
-            {/* 파트너 주소는 길어질 가능성이 높으므로 한 줄 전체를 사용 */}
             <div className={styles.formFieldFullWidth}><label>파트너 주소 *(필수) :</label><input type="text" name="partnerAddress" value={formData.partnerAddress} onChange={handleChange} style={{ width: '500px' }} /></div>
           </div>
           <div><em><div style={{ fontSize: '10px' }}>(파트너 정보는 기존 DB에서 불러올 예정입니다. 현재는 수동 입력)</div></em></div>
@@ -546,11 +523,9 @@ const MainPage = ({ user }) => {
           <div className={styles.formGrid}>
             <div className={styles.formField}><label>사용처 상호 *(필수) :</label><input type="text" name="usageCompanyName" value={formData.usageCompanyName} onChange={handleChange} required style={{ width: '150px' }} /></div>
             <div className={styles.formField}><label>사용처 사업자번호 :</label><input type="text" name="usageBusinessNumber" value={formData.usageBusinessNumber} onChange={handleChange} style={{ width: '150px' }} /></div>
-            {/* 줄바꿈 예시 */}
             <div className={styles.formField}style={{ gridColumn: '1 / span 1' }}><label>사용처 담당자 *(필수) :</label><input type="text" name="usageContactPerson" value={formData.usageContactPerson} onChange={handleChange} required style={{ width: '150px' }} /></div>
             <div className={styles.formField}><label>사용처 담당자 연락처 *(필수) :</label><input type="text" name="usageContactNumber" value={formData.usageContactNumber} onChange={handleChange} required style={{ width: '150px' }} /></div>
             
-            {/* 사용처 주소 역시 한 줄 전체를 사용 */}
             <div className={styles.formFieldFullWidth}><label>사용처 주소 *(필수) :</label><input type="text" name="usageAddress" value={formData.usageAddress} onChange={handleChange} required placeholder="" style={{ width: '500px'}} /></div>
           </div>
         </div>
@@ -574,7 +549,7 @@ const MainPage = ({ user }) => {
             </div>
           </div>
         </div>
-        <button onClick={handleDownloadPdf} className="button-primary">데모 신청 양식 출력(다운로드)</button>
+        <button onClick={handleDownloadPdf} className="button-primary" disabled>데모 신청 양식 출력(다운로드)</button>
       </div>
     );
   };
@@ -616,20 +591,13 @@ const MainPage = ({ user }) => {
     );
   };
 
-  const SelectedEquipmentsList = ({ selectedEquipments, onRemoveEquipment, onShowApplicationForm }) => {
+  const SelectedEquipmentsList = ({ selectedEquipments, onRemoveEquipment }) => {
     if (selectedEquipments.length === 0) return null;
 
     return (
       <div className={styles.selectedEquipmentsContainer}>
         <div className={styles.selectedEquipmentsHeader}>
           <h3>선택된 장비 ({selectedEquipments.length}개)</h3>
-          <button 
-            onClick={onShowApplicationForm}
-            className={styles.applicationButton}
-            disabled={selectedEquipments.length === 0}
-          >
-            데모 신청하기
-          </button>
         </div>
         <div className={styles.selectedEquipmentsList}>
           {selectedEquipments.map((equipment) => (
@@ -650,7 +618,8 @@ const MainPage = ({ user }) => {
     );
   };
 
-  const MultiEquipmentApplicationForm = ({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel }) => {
+  const MultiEquipmentApplicationForm = ({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel, isGoogleApiLoaded, googleTokenClient }) => {
+    console.log("MultiEquipmentApplicationForm: isGoogleApiLoaded =", isGoogleApiLoaded);
     const todayFormatted = formatDateToYYYYMMDD(new Date());
     const [formData, setFormData] = useState({
       requester: applicantName,
@@ -730,35 +699,98 @@ const MainPage = ({ user }) => {
 
     const handleDownloadPdf = async (e) => {
       e.preventDefault(); // Prevent default form submission behavior
-      console.log("Form Data before validation (Multi):", formData); // Debugging line
+      console.log("MultiEquipmentApplicationForm: handleDownloadPdf called.");
+      console.log("Form Data before validation (Multi):", formData);
+
       if (!formData.returnDate || !formData.checkoutReason || !formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
         alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유, 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처");
+        console.log("MultiEquipmentApplicationForm: Validation failed.");
         return;
       }
+      console.log("MultiEquipmentApplicationForm: Validation passed.");
       
       const memoData = memoItems.filter(memo => memo.trim() !== '');
       if (memoData.length > 0) {
         formData.memoItems = memoData;
       }
 
-      // Update Google Sheet with form data for multiple equipments
       try {
-        const updateSuccess = await updateGoogleSheetWithData(formData, selectedEquipments);
-        if (!updateSuccess) {
-          alert("Google Sheet 업데이트에 실패했습니다. 다시 시도해주세요.");
+        console.log("MultiEquipmentApplicationForm: Initiating Google authentication.");
+        const accessToken = await new Promise((resolve, reject) => {
+          handleAuthClick(googleTokenClient, resolve); // handleAuthClick will resolve with the accessToken
+        });
+
+        if (!accessToken) {
+          alert("Google 인증에 실패했습니다. 다시 시도해주세요.");
+          console.error("MultiEquipmentApplicationForm: Google authentication failed, no access token.");
           return;
         }
-        alert("Google Sheet에 데이터가 성공적으로 업데이트되었습니다.");
+        console.log("MultiEquipmentApplicationForm: Google authentication successful, access token obtained.");
 
-        // Export Google Sheet to PDF
-        await exportGoogleSheetToPdf(`장비_대여요청서_다중_${new Date().toISOString().slice(0, 10)}.pdf`);
-        alert("데모 신청 양식이 PDF로 다운로드되었습니다.");
+        // 1. Duplicate the template spreadsheet
+        console.log("MultiEquipmentApplicationForm: Attempting to duplicate spreadsheet.");
+        const newSpreadsheetTitle = `장비_대여요청서_${formData.requester}_${new Date().toISOString().slice(0, 10)}`;
+        
+        let newSpreadsheetId;
+        try {
+          newSpreadsheetId = await duplicateSpreadsheet(accessToken, TEMPLATE_SPREADSHEET_ID, newSpreadsheetTitle);
+          
+          if (!newSpreadsheetId) {
+            alert("스프레드시트 복제에 실패했습니다. 다시 시도해주세요.");
+            console.error("MultiEquipmentApplicationForm: Spreadsheet duplication failed.");
+            return;
+          }
+          alert(`스프레드시트가 성공적으로 복제되었습니다: ${newSpreadsheetTitle}`);
+          console.log("MultiEquipmentApplicationForm: Spreadsheet duplicated with ID:", newSpreadsheetId);
+        } catch (error) {
+          console.error("MultiEquipmentApplicationForm: Error duplicating spreadsheet:", error);
+          alert(`스프레드시트 복제 중 오류가 발생했습니다: ${error.message}`);
+          return;
+        }
+
+        // 2. Update the duplicated Google Sheet with form data
+        console.log("MultiEquipmentApplicationForm: Attempting to update duplicated Google Sheet.");
+        try {
+          const updateSuccess = await updateGoogleSheetWithData(accessToken, newSpreadsheetId, formData, selectedEquipments);
+          if (!updateSuccess) {
+            alert("복제된 Google Sheet 업데이트에 실패했습니다. 다시 시도해주세요.");
+            console.error("MultiEquipmentApplicationForm: Duplicated Google Sheet update failed.");
+            return;
+          }
+          alert("복제된 Google Sheet에 데이터가 성공적으로 업데이트되었습니다.");
+          console.log("MultiEquipmentApplicationForm: Duplicated Google Sheet updated successfully.");
+        } catch (error) {
+          console.error("MultiEquipmentApplicationForm: Error updating Google Sheet:", error);
+          alert(`Google Sheet 업데이트 중 오류가 발생했습니다: ${error.message}`);
+          return;
+        }
+
+        // 3. Export the updated Google Sheet to PDF and save to Drive
+        console.log("MultiEquipmentApplicationForm: Attempting to export Google Sheet to PDF and save to Drive.");
+        try {
+          // TEMPLATE_SHEET_GID is used here, assuming the duplicated sheet has the same GID for its first tab
+          const pdfFileId = await exportGoogleSheetToPdfAndSaveToDrive(accessToken, newSpreadsheetId, TEMPLATE_SHEET_GID, `${newSpreadsheetTitle}.pdf`);
+          
+          if (!pdfFileId) {
+            alert("PDF 내보내기 및 Drive 저장에 실패했습니다. 다시 시도해주세요.");
+            console.error("MultiEquipmentApplicationForm: PDF export and Drive save failed.");
+            return;
+          }
+          alert(`데모 신청 양식이 PDF로 변환되어 Google Drive에 저장되었습니다. 파일 ID: ${pdfFileId}`);
+          console.log("MultiEquipmentApplicationForm: PDF exported and saved to Google Drive with File ID:", pdfFileId);
+        } catch (error) {
+          console.error("MultiEquipmentApplicationForm: Error exporting to PDF:", error);
+          alert(`PDF 내보내기 중 오류가 발생했습니다: ${error.message}`);
+          return;
+        }
+
       } catch (error) {
-        console.error("Error processing Google Sheet:", error);
-        alert("Google Sheet 처리 중 오류가 발생했습니다.");
+        console.error("MultiEquipmentApplicationForm: Error processing Google Sheet workflow:", error);
+        alert("Google Sheet 워크플로우 처리 중 오류가 발생했습니다.");
       }
 
       onNewDemo(formData.returnDate);
+      console.log("MultiEquipmentApplicationForm: onNewDemo called.");
     };
 
     return (
@@ -834,7 +866,7 @@ const MainPage = ({ user }) => {
         </div>
 
         <div className={styles.formActions}>
-          <button onClick={handleDownloadPdf} className="button-primary">데모 신청 양식 출력(다운로드)</button>
+          <button onClick={handleDownloadPdf} className="button-primary" disabled={!isGoogleApiLoaded}>데모 신청 양식 출력(다운로드)</button>
           <button onClick={onCancel} className="button-secondary">취소</button>
         </div>
       </div>
@@ -906,10 +938,9 @@ const MainPage = ({ user }) => {
             />
           </div>
 
-          <SelectedEquipmentsList 
+          <SelectedEquipmentsList
             selectedEquipments={selectedEquipments}
             onRemoveEquipment={handleRemoveEquipment}
-            onShowApplicationForm={() => setShowApplicationForm(true)}
           />
 
           {showApplicationForm && selectedEquipments.length > 0 && (
@@ -921,6 +952,8 @@ const MainPage = ({ user }) => {
                 allPartners={allPartners}
                 onNewDemo={handleMultipleNewDemo}
                 onCancel={() => setShowApplicationForm(false)}
+                isGoogleApiLoaded={googleApiLoaded}
+                googleTokenClient={googleTokenClient}
               />
             </div>
           )}
