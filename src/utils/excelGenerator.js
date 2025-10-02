@@ -6,12 +6,12 @@ import jsPDF from 'jspdf';
 
 const CELL_MAPPINGS = {
   // 요청자 정보
-  requesterName: 'E3',
-  requesterSignature: 'M3',
-  checkoutDate: 'E4',
-  returnDate: 'E5',
-  checkoutReason: 'E6',
-  checkoutLocation: 'E7',
+  requesterName: 'E5',
+  // requesterSignature: 'E10', // 요청자 서명 필드 추가
+  checkoutDate: 'E6',
+  returnDate: 'E7',
+  checkoutReason: 'E8',
+  checkoutLocation: 'E9',
 
   // 파트너 정보
   partnerCompanyName: 'D12',
@@ -130,7 +130,7 @@ const generateExcelBuffer = async (formData, selectedEquipments) => {
   console.log("📊 요청자 정보 입력 중...");
   // Populate Requester Info
   writeCell(CELL_MAPPINGS.requesterName, formData.requester || '');
-  writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || '');
+  // writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || '');
   writeCell(CELL_MAPPINGS.checkoutDate, formData.checkoutDate || '');
   writeCell(CELL_MAPPINGS.returnDate, formData.returnDate || '');
   writeCell(CELL_MAPPINGS.checkoutReason, formData.checkoutReason || '');
@@ -414,7 +414,7 @@ export const generateExcelWithExcelJS = async (formData, selectedEquipments) => 
 
     // Populate Requester Info
     writeCell(CELL_MAPPINGS.requesterName, formData.requester || '');
-    writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || '');
+    // writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || '');
     writeCell(CELL_MAPPINGS.checkoutDate, formData.checkoutDate || '');
     writeCell(CELL_MAPPINGS.returnDate, formData.returnDate || '');
     writeCell(CELL_MAPPINGS.checkoutReason, formData.checkoutReason || '');
@@ -490,7 +490,7 @@ export const generateExcel = async (formData, selectedEquipments) => {
 
     // Populate Requester Info
     writeCell(CELL_MAPPINGS.requesterName, formData.requester || '');
-    writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || ''); // Assuming signature is requester's name
+    // writeCell(CELL_MAPPINGS.requesterSignature, formData.requester || ''); // Assuming signature is requester's name
     writeCell(CELL_MAPPINGS.checkoutDate, formData.checkoutDate || '');
     writeCell(CELL_MAPPINGS.returnDate, formData.returnDate || '');
     writeCell(CELL_MAPPINGS.checkoutReason, formData.checkoutReason || '');

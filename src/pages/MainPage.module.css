@@ -613,3 +613,189 @@
 .closeButton:hover {
   background: #545b62;
 }
+
+/* PDF 미리보기 스타일 */
+.pdfPreviewContainer {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.pdfPreviewContainer h3 {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pdfPreviewImages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pdfPreviewPage {
+  background-color: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.pdfPreviewPage h4 {
+  margin: 0;
+  padding: 10px 15px;
+  background-color: #e9ecef;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.pdfPreviewImage {
+  text-align: center;
+  padding: 15px;
+}
+
+/* JPG 이미지 미리보기 스타일 */
+.pdfPreviewContainer {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.pdfPreviewContainer h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  text-align: center;
+}
+
+.pdfImagesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+.pdfImageWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdfImage {
+  max-width: 100%;
+  max-height: 600px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.pdfImageInfo {
+  font-size: 14px;
+  color: #666;
+  font-weight: bold;
+}
+
+/* PNG Viewer Styles */
+.pngViewer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pngViewerHeader {
+  background: white;
+  padding: 20px;
+  border-radius: 8px 8px 0 0;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pngViewerHeader h3 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.closeButton {
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  background: #ff6666;
+}
+
+.pngViewerContent {
+  background: white;
+  padding: 20px;
+  border-radius: 0 0 8px 8px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pngFileItem {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  background: #f9f9f9;
+}
+
+.pngFileItem h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.pngFileItem p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.downloadLink {
+  display: inline-block;
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.downloadLink:hover {
+  background: #0056b3;
+  text-decoration: none;
+}
