@@ -22,6 +22,49 @@
   font-weight: 700;
 }
 
+.oauthSection {
+  margin-bottom: 20px;
+}
+
+.googleButton {
+  width: 100%;
+  padding: 12px;
+  font-size: 16px;
+  background-color: #4285f4;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.googleButton:hover {
+  background-color: #3367d6;
+}
+
+.divider {
+  text-align: center;
+  margin: 20px 0;
+  position: relative;
+}
+
+.divider::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: #e0e0e0;
+}
+
+.divider span {
+  background-color: white;
+  padding: 0 16px;
+  color: #666;
+  font-size: 14px;
+}
+
 .form {
   display: flex;
   flex-direction: column;
@@ -42,9 +85,42 @@
   font-size: 16px;
 }
 
+.testSection {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.testButton {
+  width: 100%;
+  padding: 8px;
+  font-size: 14px;
+  background-color: #f8f9fa;
+  color: #666;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.testButton:hover:not(:disabled) {
+  background-color: #e9ecef;
+}
+
+.testButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .error {
   color: var(--danger-color);
   text-align: center;
   margin-top: 16px;
-  height: 20px;
+  min-height: 20px;
+  padding: 8px 12px;
+  background-color: #fee;
+  border: 1px solid #fcc;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.4;
 }
