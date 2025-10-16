@@ -1,9 +1,8 @@
 /* global gapi google */
 // src/utils/googleSheetPdfExporter.js - Google Apps Script 방식
 
-// Google Apps Script Web App URL (direct access)
-// 새 배포 URL로 업데이트 필요 - Google Apps Script에서 새 배포 후 URL 복사하여 교체
-export const APPS_SCRIPT_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyIuqVhv2qvk9c9jUFevyKsHZgP3imkZ1dTw6AfZoXCFMqx-dXe9K2t2oz84z_j7Hdi/exec';
+// Google Apps Script Web App URL (.env.local에서 읽어옴)
+export const APPS_SCRIPT_WEB_APP_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbxg5gQH_YfYtiFjwRMXRfHvfalvvgbG4WXtiNIWFa4XZNin5bkhTzvXVEo_SDnCDtYX/exec';
 
 // 디버깅을 위한 URL 로그
 console.log('Apps Script URL:', APPS_SCRIPT_WEB_APP_URL);
@@ -28,6 +27,63 @@ const ERROR_TYPES = {
   AUTHENTICATION: 'AUTHENTICATION',
   VALIDATION: 'VALIDATION',
   TIMEOUT: 'TIMEOUT'
+};
+
+// ===== 시트 입력 함수들 =====
+
+/**
+ * 시트 입력 서비스 핑 테스트
+ */
+export const pingSheetInputService = async () => {
+  try {
+    const response = await fetch(`${APPS_SCRIPT_WEB_APP_URL}?action=ping`);
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error('Ping sheet input service error:', error);
+    throw new Error(`Failed to connect to sheet input service: ${error.message}`);
+  }
+};
+
+/**
+ * 시트에 새 데이터 추가 (updateGoogleSheetWithData와 동일한 방식)
+ */
+export const addDataToSheet = async (accessToken, spreadsheetId, formData, selectedEquipments) => {
+  return await retryWithBackoff(async () => {
+    console.log('addDataToSheet POST 요청 시작:', { spreadsheetId, equipmentCount: selectedEquipments.length });
+    
+    const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8',  // 단순 요청으로 CORS 우회
+      },
+      body: JSON.stringify({
+        action: 'addDataToSheet',
+        spreadsheetId: spreadsheetId,
+        formData: formData,
+        selectedEquipments: selectedEquipments,
+        accessToken: accessToken || 'apps-script-mode'
+      })
+    });
+
+    console.log('addDataToSheet 응답 상태:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new GoogleApiError(`HTTP ${response.status}: ${errorText}`, ERROR_TYPES.NETWORK);
+    }
+
+    const data = await response.json();
+    console.log('addDataToSheet 응답 데이터:', data);
+
+    if (data.error) {
+      throw new GoogleApiError(`Apps Script error: ${data.error}`, ERROR_TYPES.API);
+    }
+
+    return data.success === true;
+  });
 };
 
 /**
@@ -311,6 +367,9 @@ export const exportGoogleSheetToPng = async (accessToken, spreadsheetId, sheetGi
 
     const data = await response.json();
     console.log('exportGoogleSheetToPng 응답 데이터:', data);
+    console.log('exportGoogleSheetToPng data.data:', data.data);
+    console.log('exportGoogleSheetToPng data.data 타입:', typeof data.data);
+    console.log('exportGoogleSheetToPng data.data 내용:', JSON.stringify(data.data, null, 2));
 
     if (data.error) {
       throw new GoogleApiError(`Apps Script error: ${data.error}`, ERROR_TYPES.API);
@@ -320,12 +379,19 @@ export const exportGoogleSheetToPng = async (accessToken, spreadsheetId, sheetGi
       throw new GoogleApiError('PNG export failed', ERROR_TYPES.API);
     }
 
+    // data.data 안에 실제 결과가 있음
+    const result = data.data || data;
+    console.log('exportGoogleSheetToPng result:', result);
+    console.log('exportGoogleSheetToPng result.fileId:', result.fileId);
+    console.log('exportGoogleSheetToPng result.fileName:', result.fileName);
+    console.log('exportGoogleSheetToPng result.fileUrl:', result.fileUrl);
+
     return {
       success: true,
-      fileId: data.fileId,
-      fileName: data.fileName,
-      fileUrl: data.fileUrl,
-      method: data.method || 'unknown'
+      fileId: result.fileId || result.pngFile?.fileId,
+      fileName: result.fileName || result.pngFile?.fileName,
+      fileUrl: result.fileUrl || result.pngFile?.fileUrl,
+      method: result.method || 'unknown'
     };
   });
 };

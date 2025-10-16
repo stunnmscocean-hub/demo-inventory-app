@@ -16,23 +16,160 @@ import {
   testAppsScriptConnection
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
+import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData } from '../services/api';
 import JpgViewer from '../components/JpgViewer';
 import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
 
-// Helper function to parse dd/mm/yyyy or yyyy-mm-dd into a Date object
+// SearchBar 컴포넌트를 메인 컴포넌트 외부로 이동
+const SearchBar = React.memo(({ onSearch }) => {
+  const [term, setTerm] = useState('');
+  
+  const handleChange = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+    const newTerm = e.target.value;
+    setTerm(newTerm);
+    onSearch(newTerm); // Trigger search on each change
+  };
+
+  const handleClick = (e) => {
+    e.stopPropagation(); // Prevent event bubbling
+  };
+  
+  return (
+    <div className={styles.searchForm} onClick={handleClick}>
+      <input 
+        type="text" 
+        placeholder="장비 이름 또는 시리얼 넘버로 검색" 
+        value={term} 
+        onChange={handleChange} 
+        onClick={handleClick}
+        className={styles.searchInput}
+      />
+    </div>
+  );
+});
+
+// EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
+const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle }) => {
+  
+  const handleCheckboxChange = (e, equipment) => {
+    e.stopPropagation(); // Prevent event bubbling
+    onEquipmentToggle(equipment);
+  };
+
+  const handleRowClick = (e, equipment) => {
+    // Only toggle if clicking on the row, not the checkbox
+    if (e.target.type !== 'checkbox') {
+      onEquipmentToggle(equipment);
+    }
+  };
+  
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th style={{ width: '40px' }}>선택</th>
+          <th>장비명</th>
+          <th>시리얼 넘버</th>
+          <th>장비 위치</th>
+          <th>사용 현황</th>
+        </tr>
+      </thead>
+      <tbody>
+        {equipments.map((eq) => {
+          const isSelected = selectedEquipments.some(selected => selected.id === eq.id);
+          return (
+            <tr 
+              key={eq.id} 
+              className={styles.selectableRow}
+              onClick={(e) => handleRowClick(e, eq)}
+            >
+              <td>
+                <input
+                  type="checkbox"
+                  checked={isSelected}
+                  onChange={(e) => handleCheckboxChange(e, eq)}
+                  className={styles.equipmentCheckbox}
+                  onClick={(e) => e.stopPropagation()}
+                />
+              </td>
+              <td>{eq.name}</td>
+              <td>{eq.serial}</td>
+              <td>{eq.location}</td>
+              <td>{eq.status}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+});
+
+// SelectedEquipmentsList 컴포넌트를 메인 컴포넌트 외부로 이동
+const SelectedEquipmentsList = React.memo(({ selectedEquipments, onRemoveEquipment }) => {
+  if (selectedEquipments.length === 0) return null;
+
+  return (
+    <div className={styles.selectedEquipmentsContainer}>
+      <div className={styles.selectedEquipmentsHeader}>
+        <h3>선택된 장비 ({selectedEquipments.length}개)</h3>
+      </div>
+      <div className={styles.selectedEquipmentsList}>
+        {selectedEquipments.map((equipment) => (
+          <div key={equipment.id} className={styles.selectedEquipmentItem}>
+            <span className={styles.equipmentInfo}>
+              {equipment.name} ({equipment.serial})
+            </span>
+            <button 
+              onClick={() => onRemoveEquipment(equipment.id)}
+              className={styles.removeButton}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+// 사용자 이름 매핑 (임시 해결책)
+const getUserDisplayName = (user) => {
+  const nameMapping = {
+    'stunnmsc@gmail.com': '백두산',
+    'dpommusic@gmail.com': '홍길동',
+    'eddiem9x': '백두산' // Google OAuth 이름을 실명으로 매핑
+  };
+  
+  return nameMapping[user.email] || nameMapping[user.name] || user.name;
+};
+
+// Helper function to parse yyyy/mm/dd or yyyy-mm-dd into a Date object
 const parseDateString = (dateString) => {
   if (!dateString) return null;
+  
   // yyyy-mm-dd format (from input type="date")
   if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return new Date(dateString);
   }
-  // dd/mm/yyyy format (from CSV)
+  
+  // yyyy/mm/dd format (from CSV)
   const parts = dateString.split('/');
   if (parts.length === 3) {
-    const [day, month, year] = parts;
+    const [year, month, day] = parts;
     return new Date(`${year}-${month}-${day}`); // Convert to yyyy-mm-dd for reliable Date parsing
   }
+  
+  // Korean date format (e.g., "12월 12일")
+  const koreanMatch = dateString.match(/(\d+)월\s*(\d+)일/);
+  if (koreanMatch) {
+    const month = koreanMatch[1].padStart(2, '0');
+    const day = koreanMatch[2].padStart(2, '0');
+    const currentYear = new Date().getFullYear();
+    return new Date(`${currentYear}-${month}-${day}`);
+  }
+  
   // Fallback for other formats
   return new Date(dateString);
 };
@@ -49,13 +186,74 @@ const formatDateToYYYYMMDD = (dateInput) => {
   return `${year}/${month}/${day}`;
 };
 
+// HTML5 date input용 YYYY-MM-DD 형식
+const formatDateToHTML5Date = (dateInput) => {
+  if (!dateInput) return '';
+  const date = (dateInput instanceof Date) ? dateInput : parseDateString(dateInput);
+  if (!date || isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// 날짜를 YYYY/MM/DD 형식으로 표시하는 함수
+const formatDateForDisplay = (dateInput) => {
+  if (!dateInput) return '';
+  const date = (dateInput instanceof Date) ? dateInput : parseDateString(dateInput);
+  if (!date || isNaN(date.getTime())) return '';
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}/${month}/${day}`;
+};
+
+// 날짜 입력을 YYYY/MM/DD 형식으로 변환하는 함수
+const formatDateInput = (inputValue) => {
+  if (!inputValue) return '';
+  
+  // 이미 YYYY/MM/DD 형식인 경우
+  if (inputValue.match(/^\d{4}\/\d{2}\/\d{2}$/)) {
+    return inputValue;
+  }
+  
+  // YYYY-MM-DD 형식인 경우
+  if (inputValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return inputValue.replace(/-/g, '/');
+  }
+  
+  // DD/MM/YYYY 형식인 경우
+  if (inputValue.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+    const parts = inputValue.split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
+    }
+  }
+  
+  // MM/DD/YYYY 형식인 경우
+  if (inputValue.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+    const parts = inputValue.split('/');
+    if (parts.length === 3) {
+      const [month, day, year] = parts;
+      return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
+    }
+  }
+  
+  // 기타 형식은 그대로 반환
+  return inputValue;
+};
+
+
 
 
 // ----------------------------------------------------------------
 // Main Page Component
 // ----------------------------------------------------------------
 
-const MainPage = ({ user }) => {
+const MainPage = ({ user, onLogout }) => {
   const [myDemos, setMyDemos] = useState([]);
   const [availableEquipments, setAvailableEquipments] = useState([]);
   const [filteredEquipments, setFilteredEquipments] = useState([]);
@@ -137,32 +335,80 @@ const MainPage = ({ user }) => {
           }));
         setMyDemos(initialMyDemos);
 
-        // Fetch and parse equipment data for New Application list
-        const equipmentResponse = await fetch('/장비현황.csv');
-        const equipmentText = await equipmentResponse.text();
-        const parsedEquipmentData = parseEquipmentCsv(equipmentText);
-
-        const allEquipmentFromCsv = parsedEquipmentData.map(item => ({
-          id: item.id,
-          name: item.name,
-          serial: item.serial,
-          location: item.location,
-          status: item.status
-        }));
+        // Fetch equipment data from Google Sheet instead of CSV
+        let allEquipmentFromSheet = [];
+        try {
+          const equipmentData = await getEquipmentData();
+          allEquipmentFromSheet = equipmentData.data || [];
+          console.log('Loaded equipment data from sheet:', allEquipmentFromSheet.length, 'items');
+          console.log('Sample equipment data:', allEquipmentFromSheet[0]); // 디버깅용
+        } catch (error) {
+          console.error('Failed to load equipment data from sheet:', error);
+          // Fallback to CSV if sheet fails
+          try {
+            const equipmentResponse = await fetch('/장비현황.csv');
+            const equipmentText = await equipmentResponse.text();
+            const parsedEquipmentData = parseEquipmentCsv(equipmentText);
+            allEquipmentFromSheet = parsedEquipmentData.map(item => ({
+              id: item.id,
+              name: item.name,
+              serial: item.serial,
+              location: item.location,
+              status: item.status
+            }));
+            console.log('Fallback to CSV data:', allEquipmentFromSheet.length, 'items');
+          } catch (csvError) {
+            console.error('Failed to load CSV data as fallback:', csvError);
+            allEquipmentFromSheet = [];
+          }
+        }
         
         // Apply sorting to all equipment data
-        const sortedAllEquipment = [...allEquipmentFromCsv].sort(sortEquipment);
+        const sortedAllEquipment = [...allEquipmentFromSheet].sort(sortEquipment);
         setAllEquipments(sortedAllEquipment);
+        console.log('Sorted all equipment:', sortedAllEquipment.length, 'items');
         
         const initialFiltered = sortedAllEquipment.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
         setAvailableEquipments(initialFiltered);
         setFilteredEquipments(initialFiltered);
+        console.log('Initial filtered equipment:', initialFiltered.length, 'items');
+        console.log('Show in use equipment:', showInUseEquipment);
 
-        // Fetch and parse partner data
-        const partnerResponse = await fetch('/파트너정보.csv');
-        const partnerText = await partnerResponse.text();
-        const parsedPartnerData = parsePartnerCsv(partnerText);
-        setAllPartners(parsedPartnerData);
+        // Fetch partner data from Google Sheet instead of CSV
+        let allPartnersFromSheet = [];
+        try {
+          console.log('=== 파트너 데이터 로딩 시작 ===');
+          const partnerData = await getPartnerData();
+          console.log('Raw partnerData response:', partnerData);
+          console.log('partnerData.data:', partnerData.data);
+          console.log('partnerData.data type:', typeof partnerData.data);
+          console.log('partnerData.data length:', partnerData.data ? partnerData.data.length : 'undefined');
+          
+          // GAS에서 이미 UI 형식으로 변환된 데이터 사용
+          allPartnersFromSheet = partnerData.data || [];
+          console.log('Loaded partner data from sheet:', allPartnersFromSheet.length, 'items');
+          console.log('All partner data from GAS:', allPartnersFromSheet); // 모든 파트너 데이터
+          console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
+          
+          // 각 파트너 데이터를 개별적으로 로그
+          allPartnersFromSheet.forEach((partner, index) => {
+            console.log(`Partner ${index + 1}:`, partner);
+          });
+        } catch (error) {
+          console.error('Failed to load partner data from sheet:', error);
+          // Fallback to CSV if sheet fails
+          try {
+            const partnerResponse = await fetch('/파트너정보.csv');
+            const partnerText = await partnerResponse.text();
+            const parsedPartnerData = parsePartnerCsv(partnerText);
+            allPartnersFromSheet = parsedPartnerData;
+            console.log('Fallback to CSV partner data:', allPartnersFromSheet.length, 'items');
+          } catch (csvError) {
+            console.error('Failed to load CSV partner data as fallback:', csvError);
+            allPartnersFromSheet = [];
+          }
+        }
+        setAllPartners(allPartnersFromSheet);
 
       } catch (error) {
         console.error("Error fetching or parsing CSV:", error);
@@ -183,19 +429,23 @@ const MainPage = ({ user }) => {
     };
     initializeApis();
 
-  }, [user.name, showInUseEquipment]);
+  }, [user?.name, showInUseEquipment]);
 
   const handleSearch = useCallback((searchTerm) => {
+    console.log('Search term:', searchTerm);
+    console.log('Available equipments:', availableEquipments.length);
     // Use availableEquipments instead of allEquipments to avoid dependency issues
     const equipmentToFilter = availableEquipments;
     if (!searchTerm || searchTerm.trim() === '') {
       setFilteredEquipments(equipmentToFilter);
+      console.log('No search term, showing all available:', equipmentToFilter.length);
       return;
     }
     const filtered = equipmentToFilter.filter(eq => 
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    console.log('Filtered results:', filtered.length);
     setFilteredEquipments(filtered);
   }, [availableEquipments]);
   
@@ -381,11 +631,19 @@ const MainPage = ({ user }) => {
   // ----------------------------------------------------------------
   // Sub-components defined within the same file
   // ----------------------------------------------------------------
-  const Header = ({ userName }) => (
-    <header className={styles.header}>
-      <h1 className={styles.headerTitle}>{userName}님, 환영합니다.</h1>
-    </header>
-  );
+  const Header = ({ user, onLogout }) => {
+    const displayName = user ? getUserDisplayName(user) : '게스트';
+    return (
+      <header className={styles.header}>
+        <h1 className={styles.headerTitle}>{displayName}님, 환영합니다.</h1>
+        {user && onLogout && ( // Only show logout button if user and onLogout are provided
+          <button onClick={onLogout} className="button-secondary">
+            로그아웃
+          </button>
+        )}
+      </header>
+    );
+  };
 
   const MyDemoList = ({ demos, onReturn }) => { // Removed onFormSubmit from props
     const isOverdue = (returnDate) => {
@@ -421,117 +679,12 @@ const MainPage = ({ user }) => {
     );
   };
 
-  const SearchBar = ({ onSearch }) => {
-    const [term, setTerm] = useState('');
-    
-    const handleChange = (e) => {
-      e.stopPropagation(); // Prevent event bubbling
-      const newTerm = e.target.value;
-      setTerm(newTerm);
-      onSearch(newTerm); // Trigger search on each change
-    };
-
-    const handleClick = (e) => {
-      e.stopPropagation(); // Prevent event bubbling
-    };
-    
-    return (
-      <div className={styles.searchForm} onClick={handleClick}>
-        <input 
-          type="text" 
-          placeholder="장비 이름 또는 시리얼 넘버로 검색" 
-          value={term} 
-          onChange={handleChange} 
-          onClick={handleClick}
-          className={styles.searchInput}
-        />
-      </div>
-    );
-  };
 
 
-  const EquipmentList = ({ equipments, selectedEquipments, onEquipmentToggle }) => {
-    const handleCheckboxChange = (e, equipment) => {
-      e.stopPropagation(); // Prevent event bubbling
-      onEquipmentToggle(equipment);
-    };
 
-    const handleRowClick = (e, equipment) => {
-      // Only toggle if clicking on the row, not the checkbox
-      if (e.target.type !== 'checkbox') {
-        onEquipmentToggle(equipment);
-      }
-    };
 
-    return (
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: '40px' }}>선택</th>
-            <th>장비명</th>
-            <th>시리얼 넘버</th>
-            <th>장비 위치</th>
-            <th>사용 현황</th>
-          </tr>
-        </thead>
-        <tbody>
-          {equipments.map((eq) => {
-            const isSelected = selectedEquipments.some(selected => selected.id === eq.id);
-            return (
-              <tr 
-                key={eq.id} 
-                className={styles.selectableRow}
-                onClick={(e) => handleRowClick(e, eq)}
-              >
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={(e) => handleCheckboxChange(e, eq)}
-                    className={styles.equipmentCheckbox}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </td>
-                <td>{eq.name}</td>
-                <td>{eq.serial}</td>
-                <td>{eq.location}</td>
-                <td>{eq.status}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    );
-  };
-
-  const SelectedEquipmentsList = ({ selectedEquipments, onRemoveEquipment }) => {
-    if (selectedEquipments.length === 0) return null;
-
-    return (
-      <div className={styles.selectedEquipmentsContainer}>
-        <div className={styles.selectedEquipmentsHeader}>
-          <h3>선택된 장비 ({selectedEquipments.length}개)</h3>
-        </div>
-        <div className={styles.selectedEquipmentsList}>
-          {selectedEquipments.map((equipment) => (
-            <div key={equipment.id} className={styles.selectedEquipmentItem}>
-              <span className={styles.equipmentInfo}>
-                {equipment.name} ({equipment.serial})
-              </span>
-              <button 
-                onClick={() => onRemoveEquipment(equipment.id)}
-                className={styles.removeButton}
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const MultiEquipmentApplicationForm = ({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel, isGoogleApiLoaded, googleTokenClient, onJpgImagesGenerated }) => {
+// MultiEquipmentApplicationForm 컴포넌트를 메인 컴포넌트 외부로 이동
+const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel, isGoogleApiLoaded, googleTokenClient, onJpgImagesGenerated }) => {
     console.log("MultiEquipmentApplicationForm: isGoogleApiLoaded =", isGoogleApiLoaded);
     const todayFormatted = formatDateToYYYYMMDD(new Date());
     const [formData, setFormData] = useState({
@@ -556,22 +709,73 @@ const MainPage = ({ user }) => {
     const [showCompanyNameSearchResults, setShowCompanyNameSearchResults] = useState(false);
     const [contactPersonSearchResults, setContactPersonSearchResults] = useState([]);
     const [showContactPersonSearchResults, setShowContactPersonSearchResults] = useState(false);
+    
+    // 사용처 검색을 위한 상태
+    const [usageCompanyNameSearchResults, setUsageCompanyNameSearchResults] = useState([]);
+    const [showUsageCompanyNameSearchResults, setShowUsageCompanyNameSearchResults] = useState(false);
+    const [usageContactPersonSearchResults, setUsageContactPersonSearchResults] = useState([]);
+    const [showUsageContactPersonSearchResults, setShowUsageContactPersonSearchResults] = useState(false);
     const [memoItems] = useState(['']);
 
     const handleChange = (e) => {
       const { name, value } = e.target;
-      setFormData(prev => ({ ...prev, [name]: value }));
+      
+      // 날짜 필드의 경우 YYYY/MM/DD 형식으로 변환
+      if (name === 'checkoutDate' || name === 'returnDate') {
+        const formattedValue = formatDateInput(value);
+        setFormData(prev => ({ ...prev, [name]: formattedValue }));
+      } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
 
       if (name === 'partnerCompanyName') {
         handleCompanyNameSearch(value);
       } else if (name === 'partnerContactPerson') {
         handleContactPersonSearch(value);
+      } else if (name === 'usageCompanyName') {
+        handleUsageCompanyNameSearch(value);
+      } else if (name === 'usageContactPerson') {
+        handleUsageContactPersonSearch(value);
       }
     };
 
+    // 키보드 입력으로 숫자 선택
+    const handleKeyDown = (e) => {
+      const { name } = e.target;
+      
+      if (name === 'partnerCompanyName' && showCompanyNameSearchResults) {
+        const number = parseInt(e.key);
+        if (!isNaN(number) && number > 0 && number <= companyNameSearchResults.length) {
+          e.preventDefault();
+          handlePartnerSelectByNumber('company', number);
+        }
+      } else if (name === 'partnerContactPerson' && showContactPersonSearchResults) {
+        const number = parseInt(e.key);
+        if (!isNaN(number) && number > 0 && number <= contactPersonSearchResults.length) {
+          e.preventDefault();
+          handlePartnerSelectByNumber('contact', number);
+        }
+      } else if (name === 'usageCompanyName' && showUsageCompanyNameSearchResults) {
+        const number = parseInt(e.key);
+        if (!isNaN(number) && number > 0 && number <= usageCompanyNameSearchResults.length) {
+          e.preventDefault();
+          handleUsageSelectByNumber('company', number);
+        }
+      } else if (name === 'usageContactPerson' && showUsageContactPersonSearchResults) {
+        const number = parseInt(e.key);
+        if (!isNaN(number) && number > 0 && number <= usageContactPersonSearchResults.length) {
+          e.preventDefault();
+          handleUsageSelectByNumber('contact', number);
+        }
+      }
+    };
+
+    // 파트너 정보 검색 (파트너 정보만 검색)
     const handleCompanyNameSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
         const results = allPartners.filter(partner => 
+          partner.companyName && 
+          partner.companyName !== '-' && 
           partner.companyName.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setCompanyNameSearchResults(results);
@@ -585,6 +789,8 @@ const MainPage = ({ user }) => {
     const handleContactPersonSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
         const results = allPartners.filter(partner => 
+          partner.contactPerson && 
+          partner.contactPerson !== '-' && 
           partner.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setContactPersonSearchResults(results);
@@ -595,19 +801,101 @@ const MainPage = ({ user }) => {
       }
     };
 
+    // 사용처 정보 검색 (사용처 정보만 검색)
+    const handleUsageCompanyNameSearch = (searchTerm) => {
+      if (searchTerm.length > 0) {
+        const results = allPartners.filter(partner => 
+          partner.usageCompany && 
+          partner.usageCompany !== '-' && 
+          partner.usageCompany.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setUsageCompanyNameSearchResults(results);
+        setShowUsageCompanyNameSearchResults(true);
+      } else {
+        setUsageCompanyNameSearchResults([]);
+        setShowUsageCompanyNameSearchResults(false);
+      }
+    };
+
+    const handleUsageContactPersonSearch = (searchTerm) => {
+      if (searchTerm.length > 0) {
+        const results = allPartners.filter(partner => 
+          partner.usageContactPerson && 
+          partner.usageContactPerson !== '-' && 
+          partner.usageContactPerson.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setUsageContactPersonSearchResults(results);
+        setShowUsageContactPersonSearchResults(true);
+      } else {
+        setUsageContactPersonSearchResults([]);
+        setShowUsageContactPersonSearchResults(false);
+      }
+    };
+
+    // 파트너 정보 선택 (파트너 정보만 채움)
     const handlePartnerSelect = (partner) => {
       setFormData(prev => ({
         ...prev,
-        partnerCompanyName: partner.companyName,
-        partnerBusinessNumber: partner.businessNumber,
-        partnerContactPerson: partner.contactPerson,
-        partnerContactNumber: partner.contactNumber,
-        partnerAddress: partner.address,
+        // 파트너 정보만 자동 완성
+        partnerCompanyName: partner.companyName || '',
+        partnerBusinessNumber: partner.businessNumber || '',
+        partnerContactPerson: partner.contactPerson || '',
+        partnerContactNumber: partner.phone || '',
+        partnerAddress: partner.address || '',
       }));
       setShowCompanyNameSearchResults(false);
       setCompanyNameSearchResults([]);
       setShowContactPersonSearchResults(false);
       setContactPersonSearchResults([]);
+    };
+
+    // 사용처 정보 선택 (사용처 정보만 채움)
+    const handleUsageSelect = (partner) => {
+      setFormData(prev => ({
+        ...prev,
+        // 사용처 정보만 자동 완성
+        usageCompanyName: partner.usageCompany || '',
+        usageBusinessNumber: partner.usageBusinessNumber || '',
+        usageContactPerson: partner.usageContactPerson || '',
+        usageContactNumber: partner.usageContactNumber || '',
+        usageAddress: partner.usageAddress || '',
+      }));
+      setShowUsageCompanyNameSearchResults(false);
+      setUsageCompanyNameSearchResults([]);
+      setShowUsageContactPersonSearchResults(false);
+      setUsageContactPersonSearchResults([]);
+    };
+
+    // 숫자로 파트너 선택하는 함수
+    const handlePartnerSelectByNumber = (searchType, number) => {
+      let results;
+      
+      if (searchType === 'company') {
+        results = companyNameSearchResults;
+      } else {
+        results = contactPersonSearchResults;
+      }
+      
+      if (number > 0 && number <= results.length) {
+        const selectedPartner = results[number - 1];
+        handlePartnerSelect(selectedPartner);
+      }
+    };
+
+    // 숫자로 사용처 선택하는 함수
+    const handleUsageSelectByNumber = (searchType, number) => {
+      let results;
+      
+      if (searchType === 'company') {
+        results = usageCompanyNameSearchResults;
+      } else {
+        results = usageContactPersonSearchResults;
+      }
+      
+      if (number > 0 && number <= results.length) {
+        const selectedPartner = results[number - 1];
+        handleUsageSelect(selectedPartner);
+      }
     };
 
 
@@ -620,6 +908,38 @@ const MainPage = ({ user }) => {
       } catch (error) {
         console.error("Apps Script connection test failed:", error);
         alert(`Apps Script 연결 테스트 실패: ${error.message}`);
+      }
+    };
+
+    const initializeSheet = async () => {
+      try {
+        console.log("Initializing equipment sheet...");
+        const result = await initializeEquipmentSheet();
+        console.log("Sheet initialization result:", result);
+        alert(`시트 초기화 성공: ${result.message}`);
+        
+        // Refresh equipment data after initialization
+        window.location.reload();
+      } catch (error) {
+        console.error("Sheet initialization failed:", error);
+        alert(`시트 초기화 실패: ${error.message}`);
+      }
+    };
+
+    const handleTestSheetData = async () => {
+      try {
+        console.log('=== 시트 데이터 테스트 시작 ===');
+        const result = await testSheetData();
+        console.log('테스트 결과:', result);
+        
+        if (result.success) {
+          alert(`테스트 성공!\n\n총 행 수: ${result.totalRows}\n데이터 행 수: ${result.dataRows}\n비어있지 않은 행 수: ${result.nonEmptyRows}\n파트너 데이터 수: ${result.data.length}\n\n자세한 내용은 콘솔을 확인하세요.`);
+        } else {
+          alert(`테스트 실패: ${result.error}`);
+        }
+      } catch (error) {
+        console.error('시트 테스트 오류:', error);
+        alert('시트 테스트에 실패했습니다: ' + error.message);
       }
     };
 
@@ -736,22 +1056,34 @@ const MainPage = ({ user }) => {
             newSpreadsheetTitle
           );
           
-          if (!result || !result.pngFiles || result.pngFiles.length === 0) {
-            throw new Error("PNG export returned no files");
+          console.log('PNG export result:', result);
+          
+          // GAS에서 반환된 결과를 기존 PNG 표시 형식으로 변환
+          if (result && result.success && result.fileId && result.fileUrl) {
+            const pngFile = {
+              fileName: result.fileName || newSpreadsheetTitle,
+              fileUrl: result.fileUrl,
+              fileId: result.fileId,
+              pageNumber: 1,
+              sheetName: '장비 대여요청서'
+            };
+            
+            logOperation('exportToPng', { 
+              success: true, 
+              fileCount: 1,
+              fileId: result.fileId,
+              fileUrl: result.fileUrl
+            });
+            
+            // PNG 파일 정보를 상태에 저장 (기존 방식과 동일)
+            setPngFiles([pngFile]);
+            
+            console.log(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다.`);
+            alert(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n파일명: ${result.fileName}`);
+            
+          } else {
+            throw new Error("PNG export failed - no valid result returned");
           }
-          
-          logOperation('exportToPng', { 
-            success: true, 
-            fileCount: result.pngFiles.length
-          });
-          
-          // PNG 생성 완료
-          console.log(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다. 파일 수: ${result.pngFiles.length}`);
-          
-          // PNG 파일 정보를 상태에 저장
-          setPngFiles(result.pngFiles);
-          
-          alert(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n생성된 파일 수: ${result.pngFiles.length}개`);
           
         } catch (error) {
           logOperation('exportToPng', { success: false, error: error.message }, 'error');
@@ -795,8 +1127,8 @@ const MainPage = ({ user }) => {
           <h3>[기본정보]</h3>
           <div className={styles.formGrid}>
             <div className={styles.formField} style={{ gridColumn: '1 / -1' }}><label>요청자 :</label><input type="text" name="requester" value={formData.requester} onChange={handleChange} style={{ width: '120px' }} /></div>
-            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>반출일자 :</label><input type="text" name="checkoutDate" value={formData.checkoutDate} onChange={handleChange} placeholder="YYYY/MM/DD" style={{ width: '130px' }} /></div>
-            <div className={styles.formField} style={{ gridColumn: '2 / span 1' }}><label>회수일자 :</label><input type="text" name="returnDate" value={formData.returnDate} onChange={handleChange} required placeholder="YYYY/MM/DD" style={{ width: '130px' }} /></div>
+            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>반출일자 :</label><input type="text" name="checkoutDate" value={formData.checkoutDate} onChange={handleChange} style={{ width: '130px' }} placeholder="YYYY/MM/DD" /></div>
+            <div className={styles.formField} style={{ gridColumn: '2 / span 1' }}><label>회수일자 :</label><input type="text" name="returnDate" value={formData.returnDate} onChange={handleChange} required style={{ width: '130px' }} placeholder="YYYY/MM/DD" /></div>
             <div className={styles.formFieldFullWidth}><label>반출 사유 :</label><input type="text" name="checkoutReason" value={formData.checkoutReason} onChange={handleChange} required style={{ width: '600px', height: '60px' }} /></div>
             <div className={styles.formFieldFullWidth}><label>반출 장소 :</label><input type="text" name="checkoutLocation" value={formData.checkoutLocation} onChange={handleChange} style={{ width: '300px' }} /></div>
           </div>
@@ -808,12 +1140,26 @@ const MainPage = ({ user }) => {
             <div className={styles.formField}>
               <label>파트너 상호 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input type="text" name="partnerCompanyName" value={formData.partnerCompanyName} onChange={handleChange} style={{ width: '150px' }} />
+                <input 
+                  type="text" 
+                  name="partnerCompanyName" 
+                  value={formData.partnerCompanyName} 
+                  onChange={handleChange} 
+                  onKeyDown={handleKeyDown}
+                  style={{ width: '150px' }} 
+                />
                 {showCompanyNameSearchResults && companyNameSearchResults.length > 0 && (
                   <ul className={styles.searchResults}>
-                    {companyNameSearchResults.map(partner => (
+                    <li style={{ padding: '8px 12px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6', fontSize: '12px', color: '#6c757d' }}>
+                      💡 숫자 키를 눌러 선택하세요 (1-{companyNameSearchResults.length})
+                    </li>
+                    {companyNameSearchResults.map((partner, index) => (
                       <li key={partner.id} onClick={() => handlePartnerSelect(partner)}>
-                        {partner.companyName} ({partner.contactPerson})
+                        <div className={styles.searchResultNumber}>{index + 1}</div>
+                        <div className={styles.searchResultContent}>
+                          <div className={styles.searchResultTitle}>{partner.companyName}</div>
+                          <div className={styles.searchResultSubtitle}>{partner.contactPerson}</div>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -824,12 +1170,26 @@ const MainPage = ({ user }) => {
             <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
               <label>파트너 담당자 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input type="text" name="partnerContactPerson" value={formData.partnerContactPerson} onChange={handleChange} style={{ width: '150px' }} />
+                <input 
+                  type="text" 
+                  name="partnerContactPerson" 
+                  value={formData.partnerContactPerson} 
+                  onChange={handleChange} 
+                  onKeyDown={handleKeyDown}
+                  style={{ width: '150px' }} 
+                />
                 {showContactPersonSearchResults && contactPersonSearchResults.length > 0 && (
                   <ul className={styles.searchResults}>
-                    {contactPersonSearchResults.map(partner => (
+                    <li style={{ padding: '8px 12px', backgroundColor: '#f8f9fa', borderBottom: '1px solid #dee2e6', fontSize: '12px', color: '#6c757d' }}>
+                      💡 숫자 키를 눌러 선택하세요 (1-{contactPersonSearchResults.length})
+                    </li>
+                    {contactPersonSearchResults.map((partner, index) => (
                       <li key={partner.id} onClick={() => handlePartnerSelect(partner)}>
-                        {partner.contactPerson} ({partner.companyName})
+                        <div className={styles.searchResultNumber}>{index + 1}</div>
+                        <div className={styles.searchResultContent}>
+                          <div className={styles.searchResultTitle}>{partner.contactPerson}</div>
+                          <div className={styles.searchResultSubtitle}>{partner.companyName}</div>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -844,9 +1204,73 @@ const MainPage = ({ user }) => {
         <div className={styles.infoBox}>
           <h3>[사용처 정보]</h3>
           <div className={styles.formGrid}>
-            <div className={styles.formField}><label>사용처 상호 *(필수) :</label><input type="text" name="usageCompanyName" value={formData.usageCompanyName} onChange={handleChange} required style={{ width: '150px' }} /></div>
+            <div className={styles.formField}>
+              <label>사용처 상호 *(필수) :</label>
+              <div className={styles.inputWithResults}>
+                <input 
+                  type="text" 
+                  name="usageCompanyName" 
+                  value={formData.usageCompanyName} 
+                  onChange={handleChange}
+                  onKeyDown={handleKeyDown}
+                  required 
+                  style={{ width: '150px' }} 
+                />
+                {showUsageCompanyNameSearchResults && usageCompanyNameSearchResults.length > 0 && (
+                  <div className={styles.searchResults}>
+                    {usageCompanyNameSearchResults.map((partner, index) => (
+                      <div 
+                        key={index} 
+                        className={styles.searchResultContent}
+                        onClick={() => handleUsageSelect(partner)}
+                      >
+                        <div className={styles.searchResultNumber}>{index + 1}</div>
+                        <div>
+                          <div className={styles.searchResultTitle}>{partner.usageCompany}</div>
+                          <div className={styles.searchResultSubtitle}>
+                            {partner.usageContactPerson} | {partner.usageContactNumber}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className={styles.formField}><label>사용처 사업자번호 :</label><input type="text" name="usageBusinessNumber" value={formData.usageBusinessNumber} onChange={handleChange} style={{ width: '150px' }} /></div>
-            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>사용처 담당자 *(필수) :</label><input type="text" name="usageContactPerson" value={formData.usageContactPerson} onChange={handleChange} required style={{ width: '150px' }} /></div>
+            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
+              <label>사용처 담당자 *(필수) :</label>
+              <div className={styles.inputWithResults}>
+                <input 
+                  type="text" 
+                  name="usageContactPerson" 
+                  value={formData.usageContactPerson} 
+                  onChange={handleChange}
+                  onKeyDown={handleKeyDown}
+                  required 
+                  style={{ width: '150px' }} 
+                />
+                {showUsageContactPersonSearchResults && usageContactPersonSearchResults.length > 0 && (
+                  <div className={styles.searchResults}>
+                    {usageContactPersonSearchResults.map((partner, index) => (
+                      <div 
+                        key={index} 
+                        className={styles.searchResultContent}
+                        onClick={() => handleUsageSelect(partner)}
+                      >
+                        <div className={styles.searchResultNumber}>{index + 1}</div>
+                        <div>
+                          <div className={styles.searchResultTitle}>{partner.usageContactPerson}</div>
+                          <div className={styles.searchResultSubtitle}>
+                            {partner.usageCompany} | {partner.usageContactNumber}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className={styles.formField}><label>사용처 담당자 연락처 *(필수) :</label><input type="text" name="usageContactNumber" value={formData.usageContactNumber} onChange={handleChange} required style={{ width: '150px' }} /></div>
             <div className={styles.formFieldFullWidth}><label>사용처 주소 *(필수) :</label><input type="text" name="usageAddress" value={formData.usageAddress} onChange={handleChange} required placeholder="" style={{ width: '500px'}} /></div>
           </div>
@@ -859,6 +1283,20 @@ const MainPage = ({ user }) => {
             style={{ marginRight: '10px' }}
           >
             연결 테스트
+          </button>
+          <button 
+            onClick={initializeSheet} 
+            className="button-secondary" 
+            style={{ marginRight: '10px' }}
+          >
+            시트 초기화
+          </button>
+          <button 
+            onClick={handleTestSheetData} 
+            className="button-secondary" 
+            style={{ marginRight: '10px' }}
+          >
+            시트 데이터 테스트
           </button>
           <button 
             onClick={handleFillDummyData} 
@@ -876,9 +1314,24 @@ const MainPage = ({ user }) => {
           </button>
           <button onClick={onCancel} className="button-secondary">취소</button>
         </div>
+
+        {/* PNG 이미지 표시 영역 */}
+        {pngFiles && pngFiles.length > 0 && (
+          <div className={styles.pngDisplayArea}>
+            {pngFiles.map((pngFile, index) => (
+              <div key={index} className={styles.pngImageContainer}>
+                <img 
+                  src={pngFile.fileUrl} 
+                  alt={pngFile.fileName}
+                  className={styles.pngImage}
+                />
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     );
-  };
+  });
 
   // MainPage component return statement
   if (loading) {
@@ -892,7 +1345,7 @@ const MainPage = ({ user }) => {
 
   return (
     <div className={styles.container}>
-      <Header userName={user.name} />
+      <Header user={user} onLogout={onLogout} />
       
       <div className={styles.mainContent}>
         <div className={`${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}>
@@ -946,11 +1399,15 @@ const MainPage = ({ user }) => {
           </div>
           
           <div className={styles.tableContainer}>
-            <EquipmentList 
-              equipments={filteredEquipments} 
-              selectedEquipments={selectedEquipments}
-              onEquipmentToggle={handleEquipmentToggle}
-            />
+            {loading ? (
+              <div className={styles.loadingMessage}>장비 데이터를 불러오는 중...</div>
+            ) : (
+              <EquipmentList 
+                equipments={filteredEquipments} 
+                selectedEquipments={selectedEquipments}
+                onEquipmentToggle={handleEquipmentToggle}
+              />
+            )}
           </div>
 
           <SelectedEquipmentsList
@@ -963,7 +1420,7 @@ const MainPage = ({ user }) => {
               <h3>데모 신청 정보</h3>
               <MultiEquipmentApplicationForm 
                 selectedEquipments={selectedEquipments}
-                applicantName={user.name}
+                applicantName={getUserDisplayName(user)}
                 allPartners={allPartners}
                 onNewDemo={handleMultipleNewDemo}
                 onCancel={() => setShowApplicationForm(false)}

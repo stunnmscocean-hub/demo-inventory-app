@@ -1,42 +1,83 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { GoogleOAuthProvider } from '@react-oauth/google';
+import useAuthStore from './stores/authStore';
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage';
+import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [user, setUser] = useState(null);
+  const { isAuthenticated, user, logout, setLoading, isLoading, checkTokenExpiry, initializeFromStorage } = useAuthStore();
 
-  // Check for stored user data on initial load
-  React.useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      setIsLoggedIn(true);
+  // 앱 초기화 시 인증 상태 확인
+  useEffect(() => {
+    const initializeAuth = () => {
+      console.log('App initialized, checking auth state...');
+      console.log('Current isAuthenticated:', isAuthenticated);
+      console.log('Current user:', user);
+      
+      // localStorage에서 인증 상태 복원 확인
+      const authData = localStorage.getItem('auth-storage');
+      console.log('Raw localStorage data:', authData);
+      
+      if (authData) {
+        try {
+          const parsed = JSON.parse(authData);
+          console.log('Parsed localStorage data:', parsed);
+          
+          // 토큰 만료 검증 (인증된 상태일 때만)
+          if (parsed.state && parsed.state.isAuthenticated && parsed.state.accessToken) {
+            console.log('Checking token expiry...');
+            checkTokenExpiry();
+          }
+        } catch (error) {
+          console.error('Failed to parse auth data from localStorage:', error);
+        }
+      }
+    };
+
+    // 약간의 지연을 두고 초기화 (Zustand persist가 완료된 후)
+    const timer = setTimeout(() => {
+      initializeAuth();
+      // 수동 초기화도 시도
+      initializeFromStorage();
+    }, 100);
+    return () => clearTimeout(timer);
+  }, []); // 의존성 배열을 빈 배열로 변경
+
+  // 주기적 토큰 만료 검증 (5분마다)
+  useEffect(() => {
+    if (isAuthenticated) {
+      const interval = setInterval(() => {
+        checkTokenExpiry();
+      }, 5 * 60 * 1000); // 5분
+
+      return () => clearInterval(interval);
     }
-  }, []);
+  }, [isAuthenticated, checkTokenExpiry]);
 
-  const handleLogin = (userData) => {
-    // 실제 앱에서는 JWT 토큰 등을 저장하는 로직이 필요합니다.
-    localStorage.setItem('user', JSON.stringify(userData)); // Store user data in localStorage
-    setUser(userData);
-    setIsLoggedIn(true);
-  };
+  // 로딩 상태는 제거 (Zustand persist가 자동으로 처리)
 
   return (
-    <Router>
-      <Routes>
-        <Route 
-          path="/login" 
-          element={isLoggedIn ? <Navigate to="/" /> : <LoginPage onLogin={handleLogin} />} 
-        />
-        <Route 
-          path="/" 
-          element={isLoggedIn ? <MainPage user={user} /> : <Navigate to="/login" />} 
-        />
-      </Routes>
-    </Router>
+    <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
+      <Router>
+        <Routes>
+          <Route 
+            path="/login" 
+            element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} 
+          />
+          <Route 
+            path="/oauth/callback" 
+            element={<OAuthCallback />} 
+          />
+          <Route 
+            path="/" 
+            element={isAuthenticated ? <MainPage user={user} onLogout={logout} /> : <Navigate to="/login" />} 
+          />
+        </Routes>
+      </Router>
+    </GoogleOAuthProvider>
   );
 }
 
