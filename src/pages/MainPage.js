@@ -1127,8 +1127,16 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           <h3>[기본정보]</h3>
           <div className={styles.formGrid}>
             <div className={styles.formField} style={{ gridColumn: '1 / -1' }}><label>요청자 :</label><input type="text" name="requester" value={formData.requester} onChange={handleChange} style={{ width: '120px' }} /></div>
-            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}><label>반출일자 :</label><input type="text" name="checkoutDate" value={formData.checkoutDate} onChange={handleChange} style={{ width: '130px' }} placeholder="YYYY/MM/DD" /></div>
-            <div className={styles.formField} style={{ gridColumn: '2 / span 1' }}><label>회수일자 :</label><input type="text" name="returnDate" value={formData.returnDate} onChange={handleChange} required style={{ width: '130px' }} placeholder="YYYY/MM/DD" /></div>
+            <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
+              <label>반출일자 :</label>
+              <input type="date" name="checkoutDate" value={formatDateToHTML5Date(formData.checkoutDate)} onChange={handleChange} />
+              <span className={styles.dateDisplay}>{formData.checkoutDate}</span>
+            </div>
+            <div className={styles.formField} style={{ gridColumn: '2 / span 1' }}>
+              <label>회수일자 :</label>
+              <input type="date" name="returnDate" value={formatDateToHTML5Date(formData.returnDate)} onChange={handleChange} required />
+              <span className={styles.dateDisplay}>{formData.returnDate}</span>
+            </div>
             <div className={styles.formFieldFullWidth}><label>반출 사유 :</label><input type="text" name="checkoutReason" value={formData.checkoutReason} onChange={handleChange} required style={{ width: '600px', height: '60px' }} /></div>
             <div className={styles.formFieldFullWidth}><label>반출 장소 :</label><input type="text" name="checkoutLocation" value={formData.checkoutLocation} onChange={handleChange} style={{ width: '300px' }} /></div>
           </div>

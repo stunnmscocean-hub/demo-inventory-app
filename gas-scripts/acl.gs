@@ -90,7 +90,7 @@ function handleCheckEmail(email) {
  * ACL 시트 열기
  */
 function openAclSheet() {
-  const aclSheetId = '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ'; // ACL 권한 관리용 시트 ID
+  const aclSheetId = CONFIG.ACL_SHEET_ID;
   const ss = SpreadsheetApp.openById(aclSheetId);
   let sheet = ss.getSheetByName('ACL');
   
@@ -131,7 +131,7 @@ function readAclEntries() {
     return { error: null, entries: [] };
   }
   
-  // Assume first row is header: [Email, Role, Name, ...]
+  // Assume first row is header: [Email, Role, ...]
   const entries = [];
   for (let r = 1; r < values.length; r++) {
     const row = values[r];
@@ -139,11 +139,9 @@ function readAclEntries() {
     if (!email) continue;
     
     const roleCell = (row.length > 1 ? row[1] : '');
-    const nameCell = (row.length > 2 ? row[2] : '');
     entries.push({ 
       email: email, 
-      role: (roleCell || '').toString().trim(),
-      name: (nameCell || '').toString().trim()
+      role: (roleCell || '').toString().trim() 
     });
   }
   
@@ -177,5 +175,3 @@ function findAclEntryByEmail(email) {
 function normalizeString(value) {
   return (value || '').toString().trim().toLowerCase();
 }
-
-// createErrorResponse와 createSuccessResponse는 main.gs에서 정의됨
