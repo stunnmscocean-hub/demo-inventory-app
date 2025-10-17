@@ -6,6 +6,7 @@ import {
   exportGoogleSheetToPng,
   convertPdfToPng,
   exportSheetToPng,
+  addDataToSheet,
   TEMPLATE_SPREADSHEET_ID, 
   TEMPLATE_SHEET_GID, 
   getUserFriendlyErrorMessage,
@@ -16,7 +17,7 @@ import {
   testAppsScriptConnection
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
-import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData } from '../services/api';
+import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData, returnEquipment } from '../services/api';
 import JpgViewer from '../components/JpgViewer';
 import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
@@ -49,6 +50,85 @@ const SearchBar = React.memo(({ onSearch }) => {
     </div>
   );
 });
+
+// 스켈레톤 로딩 컴포넌트
+const SkeletonRow = () => (
+  <tr>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellSmall}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellLarge}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+  </tr>
+);
+
+const SkeletonTable = ({ rows = 5 }) => (
+  <table>
+    <thead>
+      <tr>
+        <th style={{ width: '40px' }}>선택</th>
+        <th>장비명</th>
+        <th>시리얼 넘버</th>
+        <th>장비 위치</th>
+        <th>사용 현황</th>
+      </tr>
+    </thead>
+    <tbody>
+      {Array.from({ length: rows }).map((_, index) => (
+        <SkeletonRow key={index} />
+      ))}
+    </tbody>
+  </table>
+);
+
+// 내 데모 현황용 스켈레톤 (6개 컬럼)
+const SkeletonMyDemoRow = () => (
+  <tr>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellLarge}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
+    <td><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
+  </tr>
+);
+
+const SkeletonMyDemoTable = ({ rows = 3 }) => (
+  <table>
+    <thead>
+      <tr>
+        <th>장비명</th>
+        <th>시리얼 넘버</th>
+        <th>대여 시작일</th>
+        <th>반납 예정일</th>
+        <th>신청 양식</th>
+        <th>관리</th>
+      </tr>
+    </thead>
+    <tbody>
+      {Array.from({ length: rows }).map((_, index) => (
+        <SkeletonMyDemoRow key={index} />
+      ))}
+    </tbody>
+  </table>
+);
+
+const SkeletonPartnerCard = () => (
+  <div className={styles.skeletonPartnerCard}>
+    <div className={`${styles.skeleton} ${styles.skeletonPartnerName}`} />
+    <div className={`${styles.skeleton} ${styles.skeletonPartnerInfo}`} />
+    <div className={`${styles.skeleton} ${styles.skeletonPartnerInfo}`} />
+  </div>
+);
+
+const SkeletonPartnerList = ({ count = 3 }) => (
+  <div>
+    {Array.from({ length: count }).map((_, index) => (
+      <SkeletonPartnerCard key={index} />
+    ))}
+    <div className={styles.loadingMessage}>파트너 정보를 불러오는 중...</div>
+  </div>
+);
 
 // EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
 const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle }) => {
@@ -261,7 +341,13 @@ const MainPage = ({ user, onLogout }) => {
   const [allPartners, setAllPartners] = useState([]); // New state for partner data
   const [showInUseEquipment, setShowInUseEquipment] = useState(false);
   const [isMyDemosFolded, setIsMyDemosFolded] = useState(false); // State for folding MyDemoList
-  const [loading, setLoading] = useState(true); // New loading state
+  const [loading, setLoading] = useState(false); // 전체 로딩 상태 (사용 안 함)
+  
+  // 섹션별 로딩 상태
+  const [loadingMyDemos, setLoadingMyDemos] = useState(true);
+  const [loadingEquipments, setLoadingEquipments] = useState(true);
+  const [loadingPartners, setLoadingPartners] = useState(true);
+  
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
   // const [excelImage, setExcelImage] = useState(null); // State for Excel image preview (no longer needed for direct PDF export)
   const [showApplicationForm, setShowApplicationForm] = useState(false); // State for showing application form
@@ -274,6 +360,7 @@ const MainPage = ({ user, onLogout }) => {
   const [isExportingToPng, setIsExportingToPng] = useState(false); // State for PNG export loading
   const [sheetPngFiles, setSheetPngFiles] = useState([]); // State for specific sheet PNG files
   const [isExportingSheetToPng, setIsExportingSheetToPng] = useState(false); // State for sheet PNG export loading
+  const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState(null); // State for created spreadsheet URL
 
   // Custom sorting order
   const customOrder = [
@@ -314,38 +401,112 @@ const MainPage = ({ user, onLogout }) => {
 
   useEffect(() => {
     const fetchAllCsvData = async () => {
-      setLoading(true); // Set loading to true when fetching starts
+      // 섹션별 로딩 시작
+      setLoadingMyDemos(true);
+      setLoadingEquipments(true);
+      setLoadingPartners(true);
+      
       try {
-        // Fetch and parse usage data for MyDemoList
-        const usageResponse = await fetch('/사용내역.csv');
-        const usageText = await usageResponse.text();
-        const parsedUsageData = parseUsageCsv(usageText);
-
-        const userPartnerName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-        const initialMyDemos = parsedUsageData
-          .filter(item => item.partnerName === userPartnerName && item.status === '사용중')
-          .map(item => ({
-            id: item.id,
-            name: item.name,
-            serial: item.serial,
-            startDate: item.startDate, // Keep as string for now, will be formatted for display
-            returnDate: item.returnDate, // Keep as string for now, will be formatted for display
-            formSubmitted: false,
-            location: '본사'
-          }));
-        setMyDemos(initialMyDemos);
-
-        // Fetch equipment data from Google Sheet instead of CSV
+        const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+        
+        // Fetch equipment data from Google Sheet (1번만 호출!)
         let allEquipmentFromSheet = [];
         try {
+          console.log('📦 장비 데이터 로딩 시작 (시트1)...');
           const equipmentData = await getEquipmentData();
           allEquipmentFromSheet = equipmentData.data || [];
-          console.log('Loaded equipment data from sheet:', allEquipmentFromSheet.length, 'items');
+          console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
           console.log('Sample equipment data:', allEquipmentFromSheet[0]); // 디버깅용
+          
+          // 🎯 클라이언트 사이드 필터링: 내 대여 현황
+          // Step 1: 담당자가 나인 장비만 추출
+          const myEquipments = allEquipmentFromSheet.filter(item => {
+            const assignee = (item.assignee || item['대여담당자'] || '').toString().trim();
+            return assignee === userName;
+          });
+          
+          console.log(`내가 담당한 장비 (전체 히스토리): ${myEquipments.length}건`);
+          
+          // Step 2: 시리얼넘버별로 최신 상태만 추출 (역순 검색)
+          const latestEquipmentMap = new Map();
+          
+          // 역순으로 순회 (최신이 먼저)
+          [...myEquipments].reverse().forEach((item, index) => {
+            const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+            const status = (item.status || item['대여가능여부'] || '').toString().trim();
+            
+            // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
+            if (!latestEquipmentMap.has(serial)) {
+              latestEquipmentMap.set(serial, { item, status });
+              console.log(`[최신] ${item.name} (${serial}) - 상태: ${status}`);
+            } else {
+              console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${status} (이미 최신 존재)`);
+            }
+          });
+          
+          // Step 3: 제외할 상태 필터링
+          const excludedStatuses = ['반납완료', '대여 가능', '대여가능', '반납', '완료'];
+          
+          const myDemoData = [];
+          latestEquipmentMap.forEach(({ item, status }, serial) => {
+            const isExcluded = excludedStatuses.some(excluded => 
+              status.toLowerCase().includes(excluded.toLowerCase())
+            );
+            
+            if (!isExcluded && status !== '') {
+              myDemoData.push(item);
+              console.log(`✅ [표시] ${item.name} (${serial}) - 상태: ${status}`);
+            } else {
+              console.log(`❌ [제외] ${item.name} (${serial}) - 상태: ${status}`);
+            }
+          });
+          
+          console.log(`최종 내 대여 현황: ${myDemoData.length}건`);
+          
+          // 내 데모 현황 데이터 변환
+          const initialMyDemos = myDemoData.map((item, index) => ({
+            id: index,
+            name: item.name || item['제품명'] || '',
+            serial: item.serial || item.serialNumber || item['시리얼넘버'] || '',
+            startDate: item.startDate || item['시작일'] || '',
+            returnDate: item.endDate || item.returnDate || item['종료일'] || '',
+            formSubmitted: false,
+            location: item.location || item['보관위치'] || '본사',
+            status: item.status || item['대여가능여부'] || ''
+          }));
+          
+          setMyDemos(initialMyDemos);
+          setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
+          console.log(`✅ 내 대모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
+          
         } catch (error) {
           console.error('Failed to load equipment data from sheet:', error);
+          
           // Fallback to CSV if sheet fails
           try {
+            console.log('CSV 파일로 폴백...');
+            
+            // 사용내역 CSV
+            const usageResponse = await fetch('/사용내역.csv');
+            const usageText = await usageResponse.text();
+            const parsedUsageData = parseUsageCsv(usageText);
+            
+            const userPartnerName = userName;
+            const initialMyDemos = parsedUsageData
+              .filter(item => item.partnerName === userPartnerName && item.status === '사용중')
+              .map(item => ({
+                id: item.id,
+                name: item.name,
+                serial: item.serial,
+                startDate: item.startDate,
+                returnDate: item.returnDate,
+                formSubmitted: false,
+                location: '본사'
+              }));
+            setMyDemos(initialMyDemos);
+            console.log(`CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
+            
+            // 장비현황 CSV
             const equipmentResponse = await fetch('/장비현황.csv');
             const equipmentText = await equipmentResponse.text();
             const parsedEquipmentData = parseEquipmentCsv(equipmentText);
@@ -356,10 +517,11 @@ const MainPage = ({ user, onLogout }) => {
               location: item.location,
               status: item.status
             }));
-            console.log('Fallback to CSV data:', allEquipmentFromSheet.length, 'items');
+            console.log(`CSV에서 장비 데이터 로드: ${allEquipmentFromSheet.length}건`);
           } catch (csvError) {
             console.error('Failed to load CSV data as fallback:', csvError);
             allEquipmentFromSheet = [];
+            setMyDemos([]);
           }
         }
         
@@ -371,6 +533,7 @@ const MainPage = ({ user, onLogout }) => {
         const initialFiltered = sortedAllEquipment.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
         setAvailableEquipments(initialFiltered);
         setFilteredEquipments(initialFiltered);
+        setLoadingEquipments(false); // 장비 목록 로딩 완료
         console.log('Initial filtered equipment:', initialFiltered.length, 'items');
         console.log('Show in use equipment:', showInUseEquipment);
 
@@ -409,11 +572,10 @@ const MainPage = ({ user, onLogout }) => {
           }
         }
         setAllPartners(allPartnersFromSheet);
+        setLoadingPartners(false); // 파트너 정보 로딩 완료
 
       } catch (error) {
         console.error("Error fetching or parsing CSV:", error);
-      } finally {
-        setLoading(false); // Set loading to false when fetching is complete (success or error)
       }
     };
 
@@ -449,26 +611,103 @@ const MainPage = ({ user, onLogout }) => {
     setFilteredEquipments(filtered);
   }, [availableEquipments]);
   
-  const handleReturn = (demoId) => {
+  const handleReturn = async (demoId) => {
     if (window.confirm("반납 하시겠습니까?")) {
       const returnedDemo = myDemos.find(demo => demo.id === demoId);
-      if (returnedDemo) {
-        const { id } = returnedDemo;
-        const updatedReturnedItem = { ...returnedDemo, status: '대여 가능', location: '본사' };
+      if (!returnedDemo) {
+        alert("반납할 장비를 찾을 수 없습니다.");
+        return;
+      }
+      
+      try {
+        console.log('반납 처리 시작:', returnedDemo);
+        console.log('전체 장비 데이터 개수:', allEquipments.length);
         
-        setMyDemos(prev => prev.filter(demo => demo.id !== demoId));
+        // 전체 장비 데이터에서 해당 시리얼의 최신 대여 정보 찾기 (역순 검색)
+        // 히스토리가 쌓이므로 가장 최근 것을 찾아야 함
+        const matchingEquipments = allEquipments.filter(eq => 
+          (eq.serial === returnedDemo.serial || eq.serialNumber === returnedDemo.serial)
+        );
         
-        const updatedAllEquipments = [...allEquipments.filter(eq => eq.id !== id), updatedReturnedItem].sort(sortEquipment);
-        setAllEquipments(updatedAllEquipments);
-
-        const searchTerm = document.querySelector(`.${styles.searchInput}`)?.value || '';
-        const newAvailable = updatedAllEquipments.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
-        setAvailableEquipments(newAvailable);
-        setFilteredEquipments(newAvailable.filter(eq => 
-          eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
-        ));
+        console.log(`시리얼 ${returnedDemo.serial}와 매칭되는 장비:`, matchingEquipments.length, '개');
         
-        alert("담당자에게 전달해주세요.");
+        // 가장 최근 대여 중인 데이터 찾기 (담당자가 본인이고 대여 중인 것)
+        const fullEquipmentData = matchingEquipments
+          .reverse() // 역순으로 (최신이 먼저)
+          .find(eq => {
+            const assignee = (eq.assignee || eq['대여담당자'] || '').toString().trim();
+            const status = (eq.status || eq['대여가능여부'] || '').toString().trim();
+            const isMyEquipment = assignee === user.name;
+            const isActive = status === '대여신청' || status === '대여중' || status === '사용중';
+            
+            console.log(`체크: ${eq.name} / 담당자:${assignee} / 상태:${status} / 매칭:${isMyEquipment && isActive}`);
+            
+            return isMyEquipment && isActive;
+          });
+        
+        if (!fullEquipmentData) {
+          console.error('❌ 대여 중인 상세 정보를 찾을 수 없습니다!');
+          console.log('내 데모 목록:', returnedDemo);
+          console.log('매칭 시도한 장비들:', matchingEquipments);
+          alert('대여 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.');
+          return;
+        }
+        
+        console.log('✅ 최신 대여 정보 찾음:', fullEquipmentData);
+        
+        // 반납할 장비 데이터 준비 (찾은 전체 데이터 복사)
+        const equipmentDataToReturn = {
+          // 기본 정보
+          serial: fullEquipmentData.serial || fullEquipmentData.serialNumber || returnedDemo.serial,
+          serialNumber: fullEquipmentData.serial || fullEquipmentData.serialNumber || returnedDemo.serial,
+          name: fullEquipmentData.name || fullEquipmentData['제품명'] || returnedDemo.name,
+          tag: fullEquipmentData.tag || fullEquipmentData['Tag'] || '',
+          location: fullEquipmentData.location || fullEquipmentData['보관위치'] || '본사',
+          
+          // 대여 정보 (필수!)
+          assignee: fullEquipmentData.assignee || fullEquipmentData['대여담당자'] || user.name,
+          startDate: fullEquipmentData.startDate || fullEquipmentData['시작일'] || returnedDemo.startDate,
+          returnDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || returnedDemo.returnDate,
+          endDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || returnedDemo.returnDate,
+          
+          // 파트너 정보
+          partnerName: fullEquipmentData.partnerName || fullEquipmentData['파트너명'] || '',
+          partnerContact: fullEquipmentData.partnerContact || fullEquipmentData['파트너담당자명'] || '',
+          partnerPhone: fullEquipmentData.partnerPhone || fullEquipmentData['휴대폰 번호'] || '',
+          
+          // 사용자 정보
+          userName: fullEquipmentData.userName || fullEquipmentData['사용자명'] || '',
+          userContact: fullEquipmentData.userContact || fullEquipmentData['사용자담당자명'] || '',
+          userPhone: fullEquipmentData.userPhone || '',
+          
+          // 비고
+          memo: fullEquipmentData.memo || fullEquipmentData['비고'] || ''
+        };
+        
+        console.log('📋 GAS로 전송할 반납 데이터 (전체):', equipmentDataToReturn);
+        
+        // Google Sheets에 반납 히스토리 추가
+        const result = await returnEquipment(equipmentDataToReturn);
+        
+        if (result.success) {
+          console.log('✅ 반납 처리 성공:', result);
+          
+          // 클라이언트 상태 업데이트
+          // 1. 내 데모 목록에서 제거
+          setMyDemos(prev => prev.filter(demo => demo.id !== demoId));
+          
+          // 2. 전체 장비 데이터 새로고침 (다음 로딩 시 반영)
+          // 실시간 반영을 위해 상태만 업데이트 (서버 데이터는 다음 새로고침 시 반영)
+          
+          alert(`✅ ${returnedDemo.name} 반납이 완료되었습니다!\n담당자에게 전달해주세요.`);
+          
+          // 페이지 새로고침으로 최신 데이터 반영
+          window.location.reload();
+        }
+        
+      } catch (error) {
+        console.error('반납 처리 실패:', error);
+        alert(`반납 처리 중 오류가 발생했습니다: ${error.message}`);
       }
     }
   };
@@ -564,42 +803,46 @@ const MainPage = ({ user, onLogout }) => {
       const accessToken = 'apps-script-mode';
       console.log("Apps Script mode initialized for sheet PNG export.");
 
+      // ===== PNG 변환 비활성화 (주석처리됨) =====
       // Export the specific Google Sheet to PNG images
-      logOperation('exportSheetToPng', { spreadsheetId, sheetGid, fileName });
-      try {
-        const result = await exportSheetToPng(
-          accessToken, 
-          spreadsheetId, 
-          sheetGid, 
-          fileName
-        );
-        
-        if (!result || !result.pngFiles || result.pngFiles.length === 0) {
-          throw new Error("Sheet PNG export returned no files");
-        }
-        
-        logOperation('exportSheetToPng', { 
-          success: true, 
-          fileCount: result.pngFiles.length
-        });
-        
-        console.log(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다. 파일 수: ${result.pngFiles.length}`);
-        
-        // PNG 파일 정보를 상태에 저장
-        setSheetPngFiles(result.pngFiles);
-        
-        alert(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n생성된 파일 수: ${result.pngFiles.length}개`);
-        
-      } catch (error) {
-        logOperation('exportSheetToPng', { success: false, error: error.message }, 'error');
-        
-        if (error.message.includes('Authentication') || error.message.includes('token')) {
-          clearAuthData();
-        }
-        
-        alert(getUserFriendlyErrorMessage(error));
-        return;
-      }
+      console.log('[비활성화] PNG 변환이 주석처리되어 건너뜁니다.');
+      console.log('[비활성화] 원래 실행될 액션: exportSheetToPng', { spreadsheetId, sheetGid, fileName });
+      
+      // logOperation('exportSheetToPng', { spreadsheetId, sheetGid, fileName });
+      // try {
+      //   const result = await exportSheetToPng(
+      //     accessToken, 
+      //     spreadsheetId, 
+      //     sheetGid, 
+      //     fileName
+      //   );
+      //   
+      //   if (!result || !result.pngFiles || result.pngFiles.length === 0) {
+      //     throw new Error("Sheet PNG export returned no files");
+      //   }
+      //   
+      //   logOperation('exportSheetToPng', { 
+      //     success: true, 
+      //     fileCount: result.pngFiles.length
+      //   });
+      //   
+      //   console.log(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다. 파일 수: ${result.pngFiles.length}`);
+      //   
+      //   // PNG 파일 정보를 상태에 저장
+      //   setSheetPngFiles(result.pngFiles);
+      //   
+      //   alert(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n생성된 파일 수: ${result.pngFiles.length}개`);
+      //   
+      // } catch (error) {
+      //   logOperation('exportSheetToPng', { success: false, error: error.message }, 'error');
+      //   
+      //   if (error.message.includes('Authentication') || error.message.includes('token')) {
+      //     clearAuthData();
+      //   }
+      //   
+      //   alert(getUserFriendlyErrorMessage(error));
+      //   return;
+      // }
 
     } catch (error) {
       logOperation('sheetPngWorkflowError', { error: error.message }, 'error');
@@ -946,7 +1189,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     const handleFillDummyData = () => {
       setFormData(prev => ({
         ...prev,
-        returnDate: '2025-09-26',
+        returnDate: '2025/09/26',
         checkoutReason: '고객사 기능 시연 및 제품 성능 테스트',
         checkoutLocation: '서울시 강남구 테헤란로 445, 2층',
         partnerCompanyName: '(주)테크파트너스',
@@ -993,6 +1236,27 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         const accessToken = 'apps-script-mode';
         console.log("MultiEquipmentApplicationForm: Apps Script mode initialized.");
 
+        // 0. 기존 시트에 데이터 추가 (마지막 줄에 추가)
+        const MAIN_SHEET_ID = '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
+        logOperation('addDataToMainSheet', { spreadsheetId: MAIN_SHEET_ID, equipmentCount: selectedEquipments.length });
+        try {
+          console.log('기존 시트에 데이터 추가 시작:', { spreadsheetId: MAIN_SHEET_ID });
+          const addDataSuccess = await addDataToSheet(accessToken, MAIN_SHEET_ID, formData, selectedEquipments);
+          if (!addDataSuccess) {
+            throw new Error("Main sheet data addition returned false");
+          }
+          
+          logOperation('addDataToMainSheet', { success: true });
+          console.log('✅ 기존 시트에 데이터가 추가되었습니다!');
+          alert('✅ 장비 데이터가 기존 시트에 추가되었습니다!\n\n스프레드시트: https://docs.google.com/spreadsheets/d/13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ/edit');
+          
+        } catch (error) {
+          logOperation('addDataToMainSheet', { success: false, error: error.message }, 'error');
+          console.error('기존 시트 데이터 추가 실패:', error);
+          alert(`기존 시트에 데이터 추가 실패: ${getUserFriendlyErrorMessage(error)}`);
+          // 실패해도 계속 진행 (복제 워크플로우)
+        }
+
         // 1. Duplicate the template spreadsheet
         logOperation('duplicateSpreadsheet', { requester: formData.requester });
         const newSpreadsheetTitle = `장비_대여요청서_${formData.requester}_${new Date().toISOString().slice(0, 10)}`;
@@ -1027,6 +1291,15 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           }
           
           logOperation('updateGoogleSheet', { success: true });
+          
+          // Generate Google Sheets URL
+          const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
+          setCreatedSpreadsheetUrl(spreadsheetUrl);
+          
+          console.log('✅ 스프레드시트 생성 및 업데이트 완료!');
+          console.log('📄 스프레드시트 URL:', spreadsheetUrl);
+          console.log('📋 스프레드시트 ID:', newSpreadsheetId);
+          
         } catch (error) {
           logOperation('updateGoogleSheet', { success: false, error: error.message }, 'error');
           
@@ -1046,55 +1319,75 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.warn(`Warning: Cannot access folder ${DRIVE_FOLDER_ID}. PNG files will be saved to root directory.`);
         }
 
+        // ===== PNG 변환 비활성화 (주석처리됨) =====
         // 4. Export the updated Google Sheet to PNG images
-        logOperation('exportToPng', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
-        try {
-          const result = await exportGoogleSheetToPng(
-            accessToken, 
-            newSpreadsheetId, 
-            TEMPLATE_SHEET_GID, 
-            newSpreadsheetTitle
-          );
-          
-          console.log('PNG export result:', result);
-          
-          // GAS에서 반환된 결과를 기존 PNG 표시 형식으로 변환
-          if (result && result.success && result.fileId && result.fileUrl) {
-            const pngFile = {
-              fileName: result.fileName || newSpreadsheetTitle,
-              fileUrl: result.fileUrl,
-              fileId: result.fileId,
-              pageNumber: 1,
-              sheetName: '장비 대여요청서'
-            };
-            
-            logOperation('exportToPng', { 
-              success: true, 
-              fileCount: 1,
-              fileId: result.fileId,
-              fileUrl: result.fileUrl
-            });
-            
-            // PNG 파일 정보를 상태에 저장 (기존 방식과 동일)
-            setPngFiles([pngFile]);
-            
-            console.log(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다.`);
-            alert(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n파일명: ${result.fileName}`);
-            
-          } else {
-            throw new Error("PNG export failed - no valid result returned");
+        console.log('[비활성화] PNG 변환이 주석처리되어 건너뜁니다.');
+        console.log('[비활성화] 원래 실행될 액션: exportGoogleSheetToPng', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
+        
+        // logOperation('exportToPng', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
+        // try {
+        //   const result = await exportGoogleSheetToPng(
+        //     accessToken, 
+        //     newSpreadsheetId, 
+        //     TEMPLATE_SHEET_GID, 
+        //     newSpreadsheetTitle
+        //   );
+        //   
+        //   console.log('PNG export result:', result);
+        //   
+        //   // GAS에서 반환된 결과를 기존 PNG 표시 형식으로 변환
+        //   if (result && result.success && result.fileId && result.fileUrl) {
+        //     const pngFile = {
+        //       fileName: result.fileName || newSpreadsheetTitle,
+        //       fileUrl: result.fileUrl,
+        //       fileId: result.fileId,
+        //       pageNumber: 1,
+        //       sheetName: '장비 대여요청서'
+        //     };
+        //     
+        //     logOperation('exportToPng', { 
+        //       success: true, 
+        //       fileCount: 1,
+        //       fileId: result.fileId,
+        //       fileUrl: result.fileUrl
+        //     });
+        //     
+        //     // PNG 파일 정보를 상태에 저장 (기존 방식과 동일)
+        //     setPngFiles([pngFile]);
+        //     
+        //     console.log(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다.`);
+        //     alert(`데모 신청 양식이 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n파일명: ${result.fileName}`);
+        //     
+        //   } else {
+        //     throw new Error("PNG export failed - no valid result returned");
+        //   }
+        //   
+        // } catch (error) {
+        //   logOperation('exportToPng', { success: false, error: error.message }, 'error');
+        //   
+        //   // Clear auth data if there's an authentication error
+        //   if (error.message.includes('Authentication') || error.message.includes('token')) {
+        //     clearAuthData();
+        //   }
+        //   
+        //   alert(`4. PNG 이미지 내보내기 실패: ${getUserFriendlyErrorMessage(error)}`);
+        //   return;
+        // }
+
+        // ===== 워크플로우 완료 =====
+        const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
+        console.log('🎉 전체 워크플로우 완료!');
+        console.log('📄 생성된 스프레드시트:', spreadsheetUrl);
+        console.log('📄 스프레드시트 제목:', newSpreadsheetTitle);
+        
+        // URL을 클립보드에 복사 (선택적)
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          try {
+            await navigator.clipboard.writeText(spreadsheetUrl);
+            console.log('📋 URL이 클립보드에 복사되었습니다!');
+          } catch (clipboardError) {
+            console.log('클립보드 복사 실패:', clipboardError);
           }
-          
-        } catch (error) {
-          logOperation('exportToPng', { success: false, error: error.message }, 'error');
-          
-          // Clear auth data if there's an authentication error
-          if (error.message.includes('Authentication') || error.message.includes('token')) {
-            clearAuthData();
-          }
-          
-          alert(`4. PNG 이미지 내보내기 실패: ${getUserFriendlyErrorMessage(error)}`);
-          return;
         }
 
       } catch (error) {
@@ -1323,6 +1616,44 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           <button onClick={onCancel} className="button-secondary">취소</button>
         </div>
 
+        {/* 생성된 스프레드시트 결과 표시 */}
+        {createdSpreadsheetUrl && (
+          <div className={styles.spreadsheetResultBox}>
+            <div className={styles.spreadsheetResultHeader}>
+              <span className={styles.successIcon}>✅</span>
+              <h4>스프레드시트가 생성되었습니다!</h4>
+            </div>
+            <div className={styles.spreadsheetResultContent}>
+              <p className={styles.spreadsheetResultDescription}>
+                생성된 장비 대여요청서를 확인하세요.
+              </p>
+              <a 
+                href={createdSpreadsheetUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className={styles.spreadsheetResultButton}
+              >
+                📄 Google Sheets에서 열기
+              </a>
+              <div className={styles.spreadsheetResultUrl}>
+                <code>{createdSpreadsheetUrl}</code>
+              </div>
+              <button 
+                onClick={() => {
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(createdSpreadsheetUrl)
+                      .then(() => alert('URL이 클립보드에 복사되었습니다!'))
+                      .catch(err => console.error('클립보드 복사 실패:', err));
+                  }
+                }}
+                className={styles.copyUrlButtonInline}
+              >
+                📋 URL 복사
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* PNG 이미지 표시 영역 */}
         {pngFiles && pngFiles.length > 0 && (
           <div className={styles.pngDisplayArea}>
@@ -1342,15 +1673,6 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
   });
 
   // MainPage component return statement
-  if (loading) {
-    return (
-      <div className={styles.loadingContainer}>
-        <div className={styles.loadingSpinner}></div>
-        <p>데이터를 불러오는 중...</p>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.container}>
       <Header user={user} onLogout={onLogout} />
@@ -1362,7 +1684,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           </div>
           {!isMyDemosFolded && (
             <div className={styles.tableContainer}>
-              {myDemos.length > 0 ? (
+              {loadingMyDemos ? (
+                <SkeletonMyDemoTable rows={3} />
+              ) : myDemos.length > 0 ? (
                 <MyDemoList demos={myDemos} onReturn={handleReturn} />
               ) : (
                 <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
@@ -1407,8 +1731,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           </div>
           
           <div className={styles.tableContainer}>
-            {loading ? (
-              <div className={styles.loadingMessage}>장비 데이터를 불러오는 중...</div>
+            {loadingEquipments ? (
+              <SkeletonTable rows={5} />
             ) : (
               <EquipmentList 
                 equipments={filteredEquipments} 

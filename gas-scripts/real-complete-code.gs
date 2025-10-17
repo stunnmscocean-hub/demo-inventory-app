@@ -92,6 +92,11 @@ function doGet(e) {
       return handleGetPartnerData();
     case 'getInitialData':
       return handleGetInitialData();
+    case 'getMyDemoData':
+      return handleGetMyDemoData(e.parameter.userName);
+    
+    case 'returnEquipment':
+      return handleReturnEquipment(e.parameter.equipmentData);
     
     case 'testSheetData':
       return handleTestSheetData();
@@ -357,14 +362,14 @@ function updateSpreadsheet(spreadsheetId, formData, selectedEquipments) {
     }
 
     // 장비 목록 (최대 5개)
-    var equipmentRowStart = 30; // B30, F30, M30, O30 for first item
+    var equipmentRowStart = 28; // B28부터 시작 (28, 29, 30, 31, 32)
     for (var j = 0; j < Math.min(selectedEquipments.length, 5); j++) {
       var equipment = selectedEquipments[j];
       var row = equipmentRowStart + j;
-      sheet.getRange('B' + row).setValue(equipment.name || '');
-      sheet.getRange('F' + row).setValue(equipment.name || '');
-      sheet.getRange('M' + row).setValue(1);
-      sheet.getRange('O' + row).setValue('');
+      sheet.getRange('B' + row).setValue(equipment.serial || equipment.serialNumber || ''); // B열: 시리얼 넘버
+      sheet.getRange('F' + row).setValue(equipment.name || ''); // F열: 장비명
+      sheet.getRange('M' + row).setValue(1); // M열: 수량
+      sheet.getRange('O' + row).setValue(''); // O열: 비고
     }
 
     return ContentService.createTextOutput(JSON.stringify({
@@ -985,6 +990,264 @@ function handleGetPartnerData() {
   } catch (error) {
     console.error('Error in handleGetPartnerData:', error);
     return createErrorResponse('data_fetch_error', error.toString());
+  }
+}
+
+/**
+ * 특정 사용자의 데모 현황 조회 (최신 상태만 반환)
+ * 히스토리가 쌓이는 구조에서 가장 최신 데이터만 필터링
+ * 
+ * @param {string} userName - 대여담당자 이름
+ * @return {Object} 사용자의 현재 대여 중인 장비 목록
+ */
+function handleGetMyDemoData(userName) {
+  try {
+    console.log(`=== handleGetMyDemoData 시작 (사용자: ${userName}) ===`);
+    
+    if (!userName) {
+      return createErrorResponse('invalid_parameter', '사용자 이름이 필요합니다.');
+    }
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    const sheet = spreadsheet.getSheetByName('시트1');
+    
+    if (!sheet) {
+      return createErrorResponse('sheet_not_found', '시트1을 찾을 수 없습니다.');
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow <= 1) {
+      console.log('데이터가 없습니다.');
+      return createSuccessResponse({ 
+        data: [], 
+        count: 0,
+        userName: userName 
+      });
+    }
+    
+    // 헤더와 데이터 가져오기
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+    
+    console.log(`전체 데이터 ${data.length}행 조회 완료`);
+    console.log('📋 시트 헤더:', headers);
+    
+    // 필요한 컬럼 인덱스 찾기
+    const serialIndex = headers.indexOf('시리얼넘버');
+    const nameIndex = headers.indexOf('제품명');
+    const managerIndex = headers.indexOf('대여담당자');
+    const statusIndex = headers.indexOf('대여가능여부');
+    const startDateIndex = headers.indexOf('시작일');
+    const endDateIndex = headers.indexOf('종료일');
+    const locationIndex = headers.indexOf('보관위치');
+    
+    console.log('🔍 컬럼 인덱스:', {
+      시리얼넘버: serialIndex,
+      제품명: nameIndex,
+      대여담당자: managerIndex,
+      대여가능여부: statusIndex,
+      시작일: startDateIndex,
+      종료일: endDateIndex,
+      보관위치: locationIndex
+    });
+    
+    if (serialIndex === -1 || managerIndex === -1 || statusIndex === -1) {
+      console.error('❌ 필수 컬럼을 찾을 수 없습니다!');
+      console.error('찾은 헤더:', headers);
+      return createErrorResponse('column_not_found', `필수 컬럼을 찾을 수 없습니다. 헤더: ${headers.join(', ')}`);
+    }
+    
+    // 역순으로 데이터 읽기 (최신 데이터가 아래에 있다고 가정)
+    const reversedData = data.reverse();
+    
+    // Map을 사용해서 시리얼넘버별 최신 상태만 유지
+    const latestDataMap = new Map();
+    
+    reversedData.forEach((row, index) => {
+      const serial = row[serialIndex];
+      const manager = row[managerIndex];
+      const status = row[statusIndex];
+      
+      // 빈 행 건너뛰기
+      if (!serial || !manager) return;
+      
+      // 해당 사용자의 데이터만 처리
+      if (manager !== userName) return;
+      
+      // 시리얼넘버를 키로 사용 (같은 장비의 최신 상태만 유지)
+      const key = serial.toString().trim();
+      
+      // 아직 이 시리얼넘버를 본 적이 없으면 추가 (가장 최신)
+      if (!latestDataMap.has(key)) {
+        latestDataMap.set(key, {
+          row: row,
+          status: status,
+          originalIndex: data.length - 1 - index // 원래 행 번호
+        });
+        console.log(`[최신] 시리얼: ${key}, 상태: ${status}, 담당자: ${manager}`);
+      } else {
+        console.log(`[건너뜀] 시리얼: ${key} (이미 최신 데이터 존재)`);
+      }
+    });
+    
+    // "대여신청" 또는 "대여중" 상태인 것만 필터링
+    const activeDemos = [];
+    
+    latestDataMap.forEach((value, key) => {
+      const status = value.status;
+      const row = value.row;
+      
+      // "대여신청" 또는 "대여중"인 경우만 추가
+      if (status === '대여신청' || status === '대여중') {
+        activeDemos.push({
+          시리얼넘버: row[serialIndex] || '',
+          제품명: row[nameIndex] || '',
+          대여담당자: row[managerIndex] || '',
+          대여가능여부: status,
+          시작일: row[startDateIndex] || '',
+          종료일: row[endDateIndex] || '',
+          보관위치: row[locationIndex] || '',
+          // UI용 추가 필드
+          serial: row[serialIndex] || '',
+          name: row[nameIndex] || '',
+          startDate: row[startDateIndex] || '',
+          returnDate: row[endDateIndex] || '',
+          location: row[locationIndex] || '',
+          status: status
+        });
+        
+        console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]})`);
+      } else {
+        console.log(`[제외] ${row[nameIndex]} (${row[serialIndex]}) - 상태: ${status}`);
+      }
+    });
+    
+    console.log(`=== 최종 결과: ${activeDemos.length}건 (사용자: ${userName}) ===`);
+    
+    // createSuccessResponse가 한 번 더 래핑하므로, 직접 배열을 전달
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      data: activeDemos,  // 배열 직접 전달 (중첩 방지)
+      count: activeDemos.length,
+      userName: userName,
+      totalProcessed: data.length,
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('Error in handleGetMyDemoData:', error);
+    return createErrorResponse('data_fetch_error', error.toString());
+  }
+}
+
+/**
+ * 장비 반납 처리 (히스토리 추가)
+ * 기존 대여 정보를 복사하고 "대여가능여부"만 "반납완료"로 변경하여 새 행 추가
+ * 
+ * @param {string} equipmentDataJson - JSON 문자열로 전달된 장비 데이터
+ * @return {Object} 성공/실패 응답
+ */
+function handleReturnEquipment(equipmentDataJson) {
+  try {
+    console.log('=== handleReturnEquipment 시작 ===');
+    
+    if (!equipmentDataJson) {
+      return createErrorResponse('invalid_parameter', '장비 데이터가 필요합니다.');
+    }
+    
+    // JSON 문자열을 객체로 파싱
+    const equipmentData = typeof equipmentDataJson === 'string' 
+      ? JSON.parse(equipmentDataJson) 
+      : equipmentDataJson;
+    
+    console.log('반납할 장비 데이터:', equipmentData);
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    const sheet = spreadsheet.getSheetByName('시트1');
+    
+    if (!sheet) {
+      return createErrorResponse('sheet_not_found', '시트1을 찾을 수 없습니다.');
+    }
+    
+    // 헤더 가져오기
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    console.log('시트 헤더:', headers);
+    
+    // 새 행 데이터 생성 (기존 데이터 복사 + 상태 변경)
+    let phoneNumberCount = 0; // 휴대폰 번호 카운터
+    
+    const newRow = headers.map((header, index) => {
+      const trimmedHeader = (header || '').toString().trim();
+      
+      // 대여가능여부만 "반납완료"로 변경
+      if (trimmedHeader === '대여가능여부') {
+        return '반납완료';
+      }
+      
+      // 휴대폰 번호 처리 (2개를 구분)
+      if (trimmedHeader === '휴대폰 번호') {
+        phoneNumberCount++;
+        console.log(`휴대폰 번호 ${phoneNumberCount}번째 처리 중...`);
+        
+        if (phoneNumberCount === 1) {
+          // 첫 번째 휴대폰 번호 = 파트너 연락처
+          return equipmentData.partnerPhone || equipmentData['휴대폰 번호'] || '';
+        } else if (phoneNumberCount === 2) {
+          // 두 번째 휴대폰 번호 = 사용자 연락처
+          return equipmentData.userPhone || '';
+        }
+        return '';
+      }
+      
+      // 나머지 필드는 기존 데이터 그대로 매핑
+      const fieldMapping = {
+        '시리얼넘버': equipmentData.serial || equipmentData.serialNumber || '',
+        '제품명': equipmentData.name || '',
+        'Tag': equipmentData.tag || '',
+        '보관위치': equipmentData.location || '',
+        '대여담당자': equipmentData.assignee || '',
+        '시작일': equipmentData.startDate || '',
+        '종료일': equipmentData.returnDate || equipmentData.endDate || '',
+        '파트너명': equipmentData.partnerName || '',
+        '파트너담당자명': equipmentData.partnerContact || '',
+        '사용자명': equipmentData.userName || '',
+        '사용자담당자명': equipmentData.userContact || '',
+        '비고': equipmentData.memo || ''
+      };
+      
+      const value = fieldMapping[trimmedHeader] || '';
+      
+      // 디버깅: 중요 필드 로그
+      if (trimmedHeader === '대여담당자' || trimmedHeader === '파트너명' || trimmedHeader === '사용자명') {
+        console.log(`  ${trimmedHeader}: "${value}"`);
+      }
+      
+      return value;
+    });
+    
+    console.log('생성된 반납 행 데이터:', newRow);
+    
+    // 새 행 추가 (마지막 줄에)
+    sheet.appendRow(newRow);
+    console.log('반납 히스토리 추가 완료:', newRow);
+    
+    // 캐시 삭제
+    const cache = CacheService.getScriptCache();
+    cache.remove('equipmentData');
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      message: '장비 반납이 완료되었습니다.',
+      serial: equipmentData.serial || equipmentData.serialNumber,
+      name: equipmentData.name,
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('Error in handleReturnEquipment:', error);
+    return createErrorResponse('return_error', error.toString());
   }
 }
 
@@ -1945,9 +2208,12 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
       
       // 각 장비에 대해 새 행 추가
       selectedEquipments.forEach(equipment => {
-        const newRow = headers.map(header => {
+        // 휴대폰 번호가 2개 나오므로 인덱스로 구분
+        let phoneNumberIndex = 0;
+        
+        const newRow = headers.map((header, index) => {
           const keyMapping = {
-            '시리얼넘버': equipment.serialNumber || '',
+            '시리얼넘버': equipment.serialNumber || equipment.serial || '',
             '제품명': equipment.name || '',
             'Tag': equipment.tag || '',
             '보관위치': equipment.location || '',
@@ -1957,12 +2223,20 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
             '종료일': formData.returnDate || '',
             '파트너명': formData.partnerCompanyName || '',
             '파트너담당자명': formData.partnerContactPerson || '',
-            '휴대폰 번호': formData.partnerContactNumber || '',
             '사용자명': formData.usageCompanyName || '',
             '사용자담당자명': formData.usageContactPerson || '',
-            '사용자 휴대폰 번호': formData.usageContactNumber || '',
             '비고': formData.checkoutReason || ''
           };
+          
+          // 휴대폰 번호는 2개가 있음 (11번째: 파트너, 14번째: 사용자)
+          if (header === '휴대폰 번호') {
+            phoneNumberIndex++;
+            if (phoneNumberIndex === 1) {
+              return formData.partnerContactNumber || '';
+            } else if (phoneNumberIndex === 2) {
+              return formData.usageContactNumber || '';
+            }
+          }
           
           return keyMapping[header] || '';
         });
@@ -1974,64 +2248,62 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
     
     // 파트너정보 시트에 파트너 데이터 추가
     const partnerSheet = spreadsheet.getSheetByName('파트너정보');
-    if (partnerSheet && formData.partnerCompanyName) {
+    if (partnerSheet) {
       const partnerHeaders = partnerSheet.getRange(1, 1, 1, partnerSheet.getLastColumn()).getValues()[0];
       console.log('Partner sheet headers:', partnerHeaders);
       
-      // 파트너 정보 행 생성
+      // 파트너 정보 행 생성 (파트너 필드만 채우고 사용처는 '-')
       if (formData.partnerCompanyName || formData.partnerContactPerson || formData.partnerContactNumber || formData.partnerAddress) {
         const partnerRow = partnerHeaders.map(header => {
-          const keyMapping = {
-            '파트너 상호': formData.partnerCompanyName || '',
-            '파트너 사업자번호': formData.partnerBusinessNumber || '',
-            '파트너 담당자': formData.partnerContactPerson || '',
-            '파트너 연락처': formData.partnerContactNumber || '',
-            '파트너 주소': formData.partnerAddress || '',
-            '사용처 상호': formData.usageCompanyName || '',
-            '사용처 사업자번호': formData.usageBusinessNumber || '',
-            '사용처 담당자': formData.usageContactPerson || '',
-            '사용처 담당자 연락처': formData.usageContactNumber || '',
-            '사용처 주소': formData.usageAddress || ''
-          };
+          const trimmedHeader = (header || '').toString().trim();
           
-          const englishKey = keyMapping[header];
-          if (englishKey && englishKey.startsWith('partner')) {
-            return englishKey;
-          } else if (englishKey && englishKey.startsWith('usage')) {
-            return '-'; // 사용처 정보는 파트너 행에서는 '-'로 표시
+          // 파트너 관련 필드
+          if (trimmedHeader.includes('파트너')) {
+            if (trimmedHeader.includes('상호')) return formData.partnerCompanyName || '';
+            if (trimmedHeader.includes('사업자번호')) return formData.partnerBusinessNumber || '';
+            if (trimmedHeader.includes('담당자')) return formData.partnerContactPerson || '';
+            if (trimmedHeader.includes('연락처')) return formData.partnerContactNumber || '';
+            if (trimmedHeader.includes('주소')) return formData.partnerAddress || '';
           }
+          
+          // 사용처 관련 필드는 '-'
+          if (trimmedHeader.includes('사용처')) {
+            return '-';
+          }
+          
           return '';
         });
+        
         partnerSheet.appendRow(partnerRow);
-        console.log('Added partner row');
+        console.log('Added partner row:', partnerRow);
       }
       
-      // 사용처 정보 행 생성
+      // 사용처 정보 행 생성 (사용처 필드만 채우고 파트너는 '-')
       if (formData.usageCompanyName || formData.usageContactPerson || formData.usageContactNumber || formData.usageAddress) {
         const userRow = partnerHeaders.map(header => {
-          const keyMapping = {
-            '파트너 상호': formData.partnerCompanyName || '',
-            '파트너 사업자번호': formData.partnerBusinessNumber || '',
-            '파트너 담당자': formData.partnerContactPerson || '',
-            '파트너 연락처': formData.partnerContactNumber || '',
-            '파트너 주소': formData.partnerAddress || '',
-            '사용처 상호': formData.usageCompanyName || '',
-            '사용처 사업자번호': formData.usageBusinessNumber || '',
-            '사용처 담당자': formData.usageContactPerson || '',
-            '사용처 담당자 연락처': formData.usageContactNumber || '',
-            '사용처 주소': formData.usageAddress || ''
-          };
+          const trimmedHeader = (header || '').toString().trim();
           
-          const englishKey = keyMapping[header];
-          if (englishKey && englishKey.startsWith('usage')) {
-            return englishKey;
-          } else if (englishKey && englishKey.startsWith('partner')) {
-            return '-'; // 파트너 정보는 사용처 행에서는 '-'로 표시
+          // 파트너 관련 필드는 '-'
+          if (trimmedHeader.includes('파트너')) {
+            return '-';
           }
+          
+          // 사용처 관련 필드
+          if (trimmedHeader.includes('사용처')) {
+            if (trimmedHeader.includes('상호')) return formData.usageCompanyName || '';
+            if (trimmedHeader.includes('사업자번호')) return formData.usageBusinessNumber || '';
+            if (trimmedHeader.includes('담당자') && trimmedHeader.includes('연락처')) {
+              return formData.usageContactNumber || '';
+            }
+            if (trimmedHeader.includes('담당자')) return formData.usageContactPerson || '';
+            if (trimmedHeader.includes('주소')) return formData.usageAddress || '';
+          }
+          
           return '';
         });
+        
         partnerSheet.appendRow(userRow);
-        console.log('Added user row');
+        console.log('Added usage row:', userRow);
       }
     }
     

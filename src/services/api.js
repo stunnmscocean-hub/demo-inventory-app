@@ -2,7 +2,6 @@
 
 // Google Apps Script 배포 URL (.env.local에서 읽어옴)
 const GAS_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbyX8DtKe0BGugzw-Ycs6jsEP733UmidYWAi2DK0tftJbYwTYC1mMyMiIyfh_LsPeis3/exec';
-const GAS_URL2 = process.env.REACT_APP_GAS_URL2;
 
 // ===== Step 1: 기본 연결 테스트 =====
 export const pingGAS = async () => {
@@ -242,6 +241,103 @@ export const getPartnerData = async () => {
   }
 };
 
+// ===== 내 데모 현황 조회 (특정 사용자의 대여 중인 장비) =====
+export const getMyDemoData = async (userName) => {
+  try {
+    console.log(`getMyDemoData 호출: 사용자=${userName}`);
+    
+    if (!userName) {
+      throw new Error('사용자 이름이 필요합니다.');
+    }
+    
+    const response = await fetch(`${GAS_URL}?action=getMyDemoData&userName=${encodeURIComponent(userName)}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('getMyDemoData 응답:', data);
+    
+    if (data.success === false) {
+      throw new Error(data.message || data.error);
+    }
+    
+    // GAS 응답 구조: { success: true, data: [...], count: 5, userName: 'xxx' }
+    // data.data가 배열인지 확인하고, 중첩 구조 처리
+    let actualData = [];
+    let actualCount = 0;
+    let actualUserName = userName;
+    
+    if (Array.isArray(data.data)) {
+      // 정상 구조: data.data가 배열
+      actualData = data.data;
+      actualCount = data.count || data.data.length;
+      actualUserName = data.userName || userName;
+    } else if (data.data && typeof data.data === 'object' && Array.isArray(data.data.data)) {
+      // 중첩 구조: data.data.data가 배열 (이중 래핑)
+      console.log('⚠️ 중첩된 응답 구조 감지, 언래핑 중...');
+      actualData = data.data.data;
+      actualCount = data.data.count || data.data.data.length;
+      actualUserName = data.data.userName || userName;
+    } else {
+      console.error('예상치 못한 응답 구조:', data);
+    }
+    
+    console.log('📊 최종 데이터:', {
+      dataLength: actualData.length,
+      count: actualCount,
+      userName: actualUserName
+    });
+    
+    return {
+      data: actualData,
+      count: actualCount,
+      userName: actualUserName
+    };
+  } catch (error) {
+    console.error('Get my demo data error:', error);
+    throw new Error(`Failed to get my demo data: ${error.message}`);
+  }
+};
+
+// ===== 장비 반납 (히스토리 추가) =====
+export const returnEquipment = async (equipmentData) => {
+  try {
+    console.log('returnEquipment 호출:', equipmentData);
+    
+    if (!equipmentData) {
+      throw new Error('장비 데이터가 필요합니다.');
+    }
+    
+    // 장비 데이터를 JSON 문자열로 변환
+    const equipmentDataJson = JSON.stringify(equipmentData);
+    
+    const response = await fetch(`${GAS_URL}?action=returnEquipment&equipmentData=${encodeURIComponent(equipmentDataJson)}`);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('returnEquipment 응답:', data);
+    
+    if (data.success === false) {
+      throw new Error(data.message || data.error);
+    }
+    
+    return {
+      success: true,
+      message: data.message,
+      serial: data.serial,
+      name: data.name
+    };
+  } catch (error) {
+    console.error('Return equipment error:', error);
+    throw new Error(`Failed to return equipment: ${error.message}`);
+  }
+};
+
 // ===== 초기 데이터 조회 (장비 + 파트너 데이터 통합) =====
 export const getInitialData = async () => {
   try {
@@ -335,89 +431,5 @@ export const addPartner = async (partnerData) => {
   } catch (error) {
     console.error('Add partner error:', error);
     throw new Error(`Failed to add partner: ${error.message}`);
-  }
-};
-
-// ===== 시트 입력 서비스 API 함수들 =====
-
-// 시트 입력 서비스 핑 테스트 (REACT_APP_GAS_URL2 사용)
-export const pingSheetInputService = async () => {
-  if (!GAS_URL2) {
-    throw new Error('REACT_APP_GAS_URL2 is not configured');
-  }
-  
-  try {
-    const response = await fetch(`${GAS_URL2}?action=ping`);
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Ping sheet input service error:', error);
-    throw new Error(`Failed to connect to sheet input service: ${error.message}`);
-  }
-};
-
-// 시트1에 장비 데이터 추가 (REACT_APP_GAS_URL2 사용)
-export const addEquipmentToSheet = async (equipmentData) => {
-  if (!GAS_URL2) {
-    throw new Error('REACT_APP_GAS_URL2 is not configured');
-  }
-  
-  try {
-    const response = await fetch(`${GAS_URL2}?action=addEquipment`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(equipmentData)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.success === false) {
-      throw new Error(data.error?.message || data.message);
-    }
-    
-    return data.data || data;
-  } catch (error) {
-    console.error('Add equipment to sheet error:', error);
-    throw new Error(`Failed to add equipment to sheet: ${error.message}`);
-  }
-};
-
-// 파트너정보 시트에 파트너 데이터 추가 (REACT_APP_GAS_URL2 사용)
-export const addPartnerToSheet = async (partnerData) => {
-  if (!GAS_URL2) {
-    throw new Error('REACT_APP_GAS_URL2 is not configured');
-  }
-  
-  try {
-    const response = await fetch(`${GAS_URL2}?action=addPartner`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(partnerData)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    if (data.success === false) {
-      throw new Error(data.error?.message || data.message);
-    }
-    
-    return data.data || data;
-  } catch (error) {
-    console.error('Add partner to sheet error:', error);
-    throw new Error(`Failed to add partner to sheet: ${error.message}`);
   }
 };
