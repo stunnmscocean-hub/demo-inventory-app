@@ -7,6 +7,7 @@ import MainPage from './pages/MainPage';
 import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
+// This is a temporary change to trigger Vercel redeploy
 function App() {
   const { isAuthenticated, user, logout, checkTokenExpiry, initializeFromStorage } = useAuthStore();
 
