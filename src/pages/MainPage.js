@@ -442,28 +442,43 @@ const MainPage = ({ user, onLogout }) => {
           
           // 같은 대여건 그룹핑 및 제출 상태 동기화
           // 그룹 기준: 같은 담당자, 같은 시작일, 같은 비고
+          console.log('🔍 그룹핑 시작 - 총 장비:', initialMyDemos.length);
+          
           const groupMap = new Map();
           
-          initialMyDemos.forEach(demo => {
-            const groupKey = `${demo.assignee}_${demo.startDate}_${demo.memo}`;
+          initialMyDemos.forEach((demo, index) => {
+            // 날짜 정규화 (YYYY/MM/DD 형식으로 통일)
+            const normalizedStartDate = demo.startDate ? demo.startDate.toString().split('T')[0] : '';
+            const groupKey = `${demo.assignee}_${normalizedStartDate}_${demo.memo || ''}`;
+            
+            console.log(`  [${index}] ${demo.serial}: 담당자=${demo.assignee}, 시작일=${normalizedStartDate}, 비고=${demo.memo}, 제출=${demo.formSubmitted}, 그룹키=${groupKey}`);
+            
             if (!groupMap.has(groupKey)) {
               groupMap.set(groupKey, []);
             }
             groupMap.get(groupKey).push(demo);
           });
           
+          console.log(`📦 생성된 그룹 수: ${groupMap.size}`);
+          
           // 각 그룹에서 하나라도 제출 완료면 전체를 제출 완료로 처리
           groupMap.forEach((group, groupKey) => {
             const hasSubmitted = group.some(demo => demo.formSubmitted);
             const submittedDemo = group.find(demo => demo.formSubmitted);
             
+            console.log(`  📦 그룹 "${groupKey}": ${group.length}개 장비, 제출 완료=${hasSubmitted}`);
+            
             if (hasSubmitted && submittedDemo) {
-              console.log(`[그룹 제출 동기화] ${groupKey}: ${group.length}개 장비, 파일 URL: ${submittedDemo.fileUrl}`);
+              console.log(`    ✅ [그룹 제출 동기화] ${group.length}개 장비를 제출 완료로 처리, 파일 URL: ${submittedDemo.fileUrl}`);
               
               // 같은 그룹의 모든 장비를 제출 완료로 표시
               group.forEach(demo => {
+                const wasPending = !demo.formSubmitted;
                 demo.formSubmitted = true;
                 demo.fileUrl = submittedDemo.fileUrl; // 같은 파일 URL 공유
+                if (wasPending) {
+                  console.log(`      → ${demo.serial}: 제출 대기 → 제출 완료`);
+                }
               });
             }
           });
