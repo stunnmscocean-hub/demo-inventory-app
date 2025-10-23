@@ -1125,6 +1125,9 @@ function handleGetMyDemoData(userName) {
         const partnerNameValue = partnerNameIndex !== -1 ? row[partnerNameIndex] : '';
         const memoValue = memoIndex !== -1 ? row[memoIndex] : '';
         
+        // 디버깅: 파트너명 확인
+        console.log(`📦 [장비 추가] ${row[nameIndex]} (${row[serialIndex]}): 파트너명="${partnerNameValue}", 파트너명인덱스=${partnerNameIndex}, 원본값="${row[partnerNameIndex]}"`);
+        
         activeDemos.push({
           시리얼넘버: row[serialIndex] || '',
           제품명: row[nameIndex] || '',
@@ -1150,7 +1153,7 @@ function handleGetMyDemoData(userName) {
           memo: memoValue
         });
         
-        console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]})`);
+        console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]}), 제출상태: ${submissionValue ? '제출완료' : '미제출'}, URL: ${submissionValue}`);
       } else {
         console.log(`[제외] ${row[nameIndex]} (${row[serialIndex]}) - 상태: ${status}`);
       }

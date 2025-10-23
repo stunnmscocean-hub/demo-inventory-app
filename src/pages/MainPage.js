@@ -378,6 +378,12 @@ const MainPage = ({ user, onLogout }) => {
           allEquipmentFromSheet = equipmentData.data || [];
           console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
           console.log('Sample equipment data:', allEquipmentFromSheet[0]); // 디버깅용
+          console.log('파트너명 필드 확인:', {
+            '첫번째 장비': allEquipmentFromSheet[0]?.partnerName || '없음',
+            '두번째 장비': allEquipmentFromSheet[1]?.partnerName || '없음',
+            '세번째 장비': allEquipmentFromSheet[2]?.partnerName || '없음',
+            '샘플 장비 전체 키': allEquipmentFromSheet[0] ? Object.keys(allEquipmentFromSheet[0]) : '없음'
+          });
           
           // 🎯 클라이언트 사이드 필터링: 내 대여 현황
           // Step 1: 담당자가 나인 장비만 추출
@@ -762,18 +768,49 @@ const MainPage = ({ user, onLogout }) => {
         
         // 파일명 생성: 장비대여신청서_{대여담당자}_{시작일}_{파트너명}
         // 시트에서 직접 조회한 데이터 사용 (allEquipments에서 해당 장비 찾기)
-        const fullEquipmentData = allEquipments.find(eq => 
-          eq.serial === demo.serial || 
-          eq.serialNumber === demo.serial || 
-          eq.id === demo.id
-        );
+        console.log('🔍 [파일명 생성] 검색 대상 시리얼:', demo.serial);
+        console.log('🔍 [파일명 생성] 전체 장비 수:', allEquipments.length);
+        console.log('🔍 [파일명 생성] 샘플 장비 데이터:', allEquipments[0]);
         
-        console.log('시트에서 조회한 장비 데이터:', fullEquipmentData);
+        const fullEquipmentData = allEquipments.find(eq => {
+          const match = eq.serial === demo.serial || 
+                       eq.serialNumber === demo.serial || 
+                       eq['시리얼넘버'] === demo.serial ||
+                       eq.id === demo.id;
+          if (match) {
+            console.log('✅ [파일명 생성] 매칭된 장비:', eq);
+          }
+          return match;
+        });
+        
+        if (!fullEquipmentData) {
+          console.error('❌ [파일명 생성] 장비를 찾을 수 없습니다!');
+          console.error('검색 조건:', { 
+            serial: demo.serial, 
+            id: demo.id,
+            availableSerials: allEquipments.slice(0, 5).map(eq => ({
+              serial: eq.serial,
+              serialNumber: eq.serialNumber,
+              '시리얼넘버': eq['시리얼넘버']
+            }))
+          });
+        } else {
+          console.log('✅ [파일명 생성] 시트에서 조회한 장비 데이터:', fullEquipmentData);
+        }
         
         // 시트 데이터에서 파일명에 필요한 정보 추출
-        const assignee = fullEquipmentData?.assignee || fullEquipmentData?.대여담당자 || user?.name || '담당자';
-        const rawStartDate = fullEquipmentData?.startDate || fullEquipmentData?.시작일 || '';
-        const partnerName = fullEquipmentData?.partnerName || fullEquipmentData?.파트너명 || '파트너미정';
+        const assignee = fullEquipmentData?.assignee || fullEquipmentData?.['대여담당자'] || user?.name || '담당자';
+        const rawStartDate = fullEquipmentData?.startDate || fullEquipmentData?.['시작일'] || '';
+        const partnerName = fullEquipmentData?.partnerName || fullEquipmentData?.['파트너명'] || '파트너미정';
+        
+        console.log('📝 [파일명 생성] 추출된 정보:', {
+          assignee,
+          rawStartDate,
+          partnerName,
+          '원본 partnerName 필드': fullEquipmentData?.partnerName,
+          '원본 파트너명 필드': fullEquipmentData?.['파트너명'],
+          '전체 필드 목록': fullEquipmentData ? Object.keys(fullEquipmentData) : '없음'
+        });
         
         // 날짜를 YYYYMMDD 형식으로 변환 (시트 원본 데이터 그대로 사용)
         let startDateFormatted = '';
