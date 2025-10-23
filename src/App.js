@@ -8,7 +8,7 @@ import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
 function App() {
-  const { isAuthenticated, user, logout, setLoading, isLoading, checkTokenExpiry, initializeFromStorage } = useAuthStore();
+  const { isAuthenticated, user, logout, checkTokenExpiry, initializeFromStorage } = useAuthStore();
 
   // 앱 초기화 시 인증 상태 확인
   useEffect(() => {
@@ -44,7 +44,8 @@ function App() {
       initializeFromStorage();
     }, 100);
     return () => clearTimeout(timer);
-  }, []); // 의존성 배열을 빈 배열로 변경
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkTokenExpiry, initializeFromStorage]); // isAuthenticated와 user는 초기화 시에만 실행되도록 의도적으로 제외
 
   // 주기적 토큰 만료 검증 (5분마다)
   useEffect(() => {

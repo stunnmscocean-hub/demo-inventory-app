@@ -433,3 +433,120 @@ export const addPartner = async (partnerData) => {
     throw new Error(`Failed to add partner: ${error.message}`);
   }
 };
+
+// ===== 파일 업로드 (Google Drive) =====
+/**
+ * 파일을 Google Drive에 업로드
+ * @param {File} file - 업로드할 파일 (File 객체)
+ * @param {string} fileName - 저장할 파일명 (확장자 포함)
+ * @returns {Promise<Object>} 업로드 결과 (fileId, fileUrl 포함)
+ */
+export const uploadFile = async (file, fileName) => {
+  try {
+    console.log('uploadFile 호출:', { fileName, fileType: file.type, fileSize: file.size });
+    
+    // 파일을 Base64로 변환
+    const base64Data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        // Data URL에서 Base64 부분만 추출 (data:image/png;base64, 제거)
+        const base64 = reader.result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    
+    console.log('Base64 변환 완료, 길이:', base64Data.length);
+    
+    // GAS로 POST 요청
+    const response = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8'
+      },
+      body: JSON.stringify({
+        action: 'uploadFile',
+        fileName: fileName,
+        fileData: base64Data,
+        mimeType: file.type
+      })
+    });
+    
+    console.log('uploadFile 응답 상태:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('uploadFile 응답 데이터:', data);
+    
+    if (data.success === false) {
+      throw new Error(data.message || data.error);
+    }
+    
+    return {
+      success: true,
+      fileId: data.fileId,
+      fileName: data.fileName,
+      fileUrl: data.fileUrl,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Upload file error:', error);
+    throw new Error(`Failed to upload file: ${error.message}`);
+  }
+};
+
+// ===== 신청 양식 제출 상태 업데이트 =====
+/**
+ * 시트의 신청 양식 제출 칼럼 업데이트
+ * @param {string} serialNumber - 장비 시리얼 번호
+ * @param {string} fileUrl - 업로드된 파일 URL
+ * @returns {Promise<Object>} 업데이트 결과
+ */
+export const updateFormSubmission = async (serialNumber, fileUrl) => {
+  try {
+    console.log('updateFormSubmission 호출:', { serialNumber, fileUrl });
+    
+    if (!serialNumber) {
+      throw new Error('시리얼 번호가 필요합니다.');
+    }
+    
+    const response = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=UTF-8'
+      },
+      body: JSON.stringify({
+        action: 'updateFormSubmission',
+        serialNumber: serialNumber,
+        fileUrl: fileUrl || '제출완료'
+      })
+    });
+    
+    console.log('updateFormSubmission 응답 상태:', response.status);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    console.log('updateFormSubmission 응답 데이터:', data);
+    
+    if (data.success === false) {
+      throw new Error(data.message || data.error);
+    }
+    
+    return {
+      success: true,
+      serialNumber: data.serialNumber,
+      rowNumber: data.rowNumber,
+      message: data.message
+    };
+  } catch (error) {
+    console.error('Update form submission error:', error);
+    throw new Error(`Failed to update form submission: ${error.message}`);
+  }
+};

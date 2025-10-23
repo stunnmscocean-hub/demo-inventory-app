@@ -3,12 +3,8 @@ import {
   duplicateSpreadsheet, 
   updateGoogleSheetWithData, 
   initGoogleApis, 
-  exportGoogleSheetToPng,
-  convertPdfToPng,
-  exportSheetToPng,
   addDataToSheet,
   TEMPLATE_SPREADSHEET_ID, 
-  TEMPLATE_SHEET_GID, 
   getUserFriendlyErrorMessage,
   logOperation,
   checkFolderAccess,
@@ -17,7 +13,7 @@ import {
   testAppsScriptConnection
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
-import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData, returnEquipment } from '../services/api';
+import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
 import JpgViewer from '../components/JpgViewer';
 import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
@@ -113,23 +109,6 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => (
   </table>
 );
 
-const SkeletonPartnerCard = () => (
-  <div className={styles.skeletonPartnerCard}>
-    <div className={`${styles.skeleton} ${styles.skeletonPartnerName}`} />
-    <div className={`${styles.skeleton} ${styles.skeletonPartnerInfo}`} />
-    <div className={`${styles.skeleton} ${styles.skeletonPartnerInfo}`} />
-  </div>
-);
-
-const SkeletonPartnerList = ({ count = 3 }) => (
-  <div>
-    {Array.from({ length: count }).map((_, index) => (
-      <SkeletonPartnerCard key={index} />
-    ))}
-    <div className={styles.loadingMessage}>파트너 정보를 불러오는 중...</div>
-  </div>
-);
-
 // EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
 const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle }) => {
   
@@ -214,15 +193,10 @@ const SelectedEquipmentsList = React.memo(({ selectedEquipments, onRemoveEquipme
   );
 });
 
-// 사용자 이름 매핑 (임시 해결책)
+// 사용자 이름 표시 (ACL 시트에서 가져온 이름 사용)
 const getUserDisplayName = (user) => {
-  const nameMapping = {
-    'stunnmsc@gmail.com': '백두산',
-    'dpommusic@gmail.com': '홍길동',
-    'eddiem9x': '백두산' // Google OAuth 이름을 실명으로 매핑
-  };
-  
-  return nameMapping[user.email] || nameMapping[user.name] || user.name;
+  // OAuth 로그인 시 GAS에서 ACL 시트의 name을 user.name에 설정
+  return user?.name || user?.email || '게스트';
 };
 
 // Helper function to parse yyyy/mm/dd or yyyy-mm-dd into a Date object
@@ -278,18 +252,6 @@ const formatDateToHTML5Date = (dateInput) => {
   return `${year}-${month}-${day}`;
 };
 
-// 날짜를 YYYY/MM/DD 형식으로 표시하는 함수
-const formatDateForDisplay = (dateInput) => {
-  if (!dateInput) return '';
-  const date = (dateInput instanceof Date) ? dateInput : parseDateString(dateInput);
-  if (!date || isNaN(date.getTime())) return '';
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}/${month}/${day}`;
-};
-
 // 날짜 입력을 YYYY/MM/DD 형식으로 변환하는 함수
 const formatDateInput = (inputValue) => {
   if (!inputValue) return '';
@@ -341,12 +303,11 @@ const MainPage = ({ user, onLogout }) => {
   const [allPartners, setAllPartners] = useState([]); // New state for partner data
   const [showInUseEquipment, setShowInUseEquipment] = useState(false);
   const [isMyDemosFolded, setIsMyDemosFolded] = useState(false); // State for folding MyDemoList
-  const [loading, setLoading] = useState(false); // 전체 로딩 상태 (사용 안 함)
   
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
   const [loadingEquipments, setLoadingEquipments] = useState(true);
-  const [loadingPartners, setLoadingPartners] = useState(true);
+  const [, setLoadingPartners] = useState(true); // loadingPartners는 사용하지 않지만 setLoadingPartners는 사용
   
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
   // const [excelImage, setExcelImage] = useState(null); // State for Excel image preview (no longer needed for direct PDF export)
@@ -464,20 +425,57 @@ const MainPage = ({ user, onLogout }) => {
           console.log(`최종 내 대여 현황: ${myDemoData.length}건`);
           
           // 내 데모 현황 데이터 변환
-          const initialMyDemos = myDemoData.map((item, index) => ({
+          let initialMyDemos = myDemoData.map((item, index) => ({
             id: index,
             name: item.name || item['제품명'] || '',
             serial: item.serial || item.serialNumber || item['시리얼넘버'] || '',
+            assignee: item.assignee || item['대여담당자'] || '',
             startDate: item.startDate || item['시작일'] || '',
             returnDate: item.endDate || item.returnDate || item['종료일'] || '',
-            formSubmitted: false,
+            partnerName: item.partnerName || item['파트너명'] || '',
+            memo: item.memo || item['비고'] || '',
+            formSubmitted: item.formSubmitted || false, // 시트에서 받아온 제출 여부
+            fileUrl: item.fileUrl || item['신청양식제출'] || '', // 제출된 파일 URL
             location: item.location || item['보관위치'] || '본사',
             status: item.status || item['대여가능여부'] || ''
           }));
           
+          // 같은 대여건 그룹핑 및 제출 상태 동기화
+          // 그룹 기준: 같은 담당자, 같은 시작일, 같은 비고
+          const groupMap = new Map();
+          
+          initialMyDemos.forEach(demo => {
+            const groupKey = `${demo.assignee}_${demo.startDate}_${demo.memo}`;
+            if (!groupMap.has(groupKey)) {
+              groupMap.set(groupKey, []);
+            }
+            groupMap.get(groupKey).push(demo);
+          });
+          
+          // 각 그룹에서 하나라도 제출 완료면 전체를 제출 완료로 처리
+          groupMap.forEach((group, groupKey) => {
+            const hasSubmitted = group.some(demo => demo.formSubmitted);
+            const submittedDemo = group.find(demo => demo.formSubmitted);
+            
+            if (hasSubmitted && submittedDemo) {
+              console.log(`[그룹 제출 동기화] ${groupKey}: ${group.length}개 장비, 파일 URL: ${submittedDemo.fileUrl}`);
+              
+              // 같은 그룹의 모든 장비를 제출 완료로 표시
+              group.forEach(demo => {
+                demo.formSubmitted = true;
+                demo.fileUrl = submittedDemo.fileUrl; // 같은 파일 URL 공유
+              });
+            }
+          });
+          
           setMyDemos(initialMyDemos);
           setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
-          console.log(`✅ 내 대모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
+          console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
+          console.log('제출 상태:', initialMyDemos.map(d => ({ 
+            serial: d.serial, 
+            formSubmitted: d.formSubmitted, 
+            fileUrl: d.fileUrl 
+          })));
           
         } catch (error) {
           console.error('Failed to load equipment data from sheet:', error);
@@ -590,8 +588,8 @@ const MainPage = ({ user, onLogout }) => {
       console.log("MainPage: Google API and GIS are ready!");
     };
     initializeApis();
-
-  }, [user?.name, showInUseEquipment]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.name, showInUseEquipment]); // sortEquipment는 존재하지 않는 함수
 
   const handleSearch = useCallback((searchTerm) => {
     console.log('Search term:', searchTerm);
@@ -712,10 +710,127 @@ const MainPage = ({ user, onLogout }) => {
     }
   };
 
-  const handleFormSubmit = (demoId) => {
-    alert(`(ID: ${demoId}) 신청 양식을 제출합니다.`);
-    const updatedDemos = myDemos.map(demo => demo.id === demoId ? { ...demo, formSubmitted: true } : demo);
-    setMyDemos(updatedDemos);
+  const handleFormSubmit = async (demoId) => {
+    try {
+      // 해당 데모 정보 찾기
+      const demo = myDemos.find(d => d.id === demoId);
+      if (!demo) {
+        alert('데모 정보를 찾을 수 없습니다.');
+        return;
+      }
+
+      console.log('제출할 데모 정보:', demo);
+
+      // 파일 선택 input 생성 (숨김)
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = '.pdf,.png,.jpg,.jpeg'; // PDF, PNG, JPG 파일만 허용
+      fileInput.style.display = 'none';
+      
+      // 파일 선택 이벤트 리스너
+      fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) {
+          return;
+        }
+
+        console.log('선택된 파일:', file.name, file.type, file.size);
+
+        // 파일 크기 확인 (10MB 제한)
+        if (file.size > 10 * 1024 * 1024) {
+          alert('파일 크기는 10MB 이하여야 합니다.');
+          return;
+        }
+
+        // 파일 확장자 추출
+        const fileExtension = file.name.split('.').pop();
+        
+        // 파일명 생성: 장비대여신청서_{대여담당자}_{시작일}_{파트너명}
+        // 시트에서 직접 조회한 데이터 사용 (allEquipments에서 해당 장비 찾기)
+        const fullEquipmentData = allEquipments.find(eq => 
+          eq.serial === demo.serial || 
+          eq.serialNumber === demo.serial || 
+          eq.id === demo.id
+        );
+        
+        console.log('시트에서 조회한 장비 데이터:', fullEquipmentData);
+        
+        // 시트 데이터에서 파일명에 필요한 정보 추출
+        const assignee = fullEquipmentData?.assignee || fullEquipmentData?.대여담당자 || user?.name || '담당자';
+        const rawStartDate = fullEquipmentData?.startDate || fullEquipmentData?.시작일 || '';
+        const partnerName = fullEquipmentData?.partnerName || fullEquipmentData?.파트너명 || '파트너미정';
+        
+        // 날짜를 YYYYMMDD 형식으로 변환 (시트 원본 데이터 그대로 사용)
+        let startDateFormatted = '';
+        if (rawStartDate) {
+          const dateStr = rawStartDate.toString();
+          // 모든 구분자 제거하고 숫자만 추출 (YYYY/MM/DD -> YYYYMMDD)
+          startDateFormatted = dateStr.replace(/[^\d]/g, '').slice(0, 8);
+        } else {
+          // 시작일이 없으면 오늘 날짜 사용
+          const today = new Date();
+          const year = today.getFullYear();
+          const month = String(today.getMonth() + 1).padStart(2, '0');
+          const day = String(today.getDate()).padStart(2, '0');
+          startDateFormatted = `${year}${month}${day}`;
+        }
+        
+        const newFileName = `장비대여신청서_${assignee}_${startDateFormatted}_${partnerName}.${fileExtension}`;
+        
+        console.log('생성된 파일명:', newFileName);
+
+        // 업로드 확인
+        if (!window.confirm(`다음 파일을 업로드하시겠습니까?\n\n파일명: ${newFileName}\n크기: ${(file.size / 1024).toFixed(2)} KB`)) {
+          return;
+        }
+
+        try {
+          // 로딩 표시
+          const loadingMessage = alert('파일을 업로드하는 중입니다. 잠시만 기다려주세요...');
+          
+          // 파일 업로드
+          const result = await uploadFile(file, newFileName);
+          
+          console.log('업로드 결과:', result);
+
+          if (result.success) {
+            // 시트에 제출 상태 업데이트
+            try {
+              const updateResult = await updateFormSubmission(demo.serial, result.fileUrl);
+              console.log('시트 업데이트 결과:', updateResult);
+              
+              // 성공 시 로컬 상태 업데이트
+              const updatedDemos = myDemos.map(d => 
+                d.id === demoId ? { ...d, formSubmitted: true, fileUrl: result.fileUrl } : d
+              );
+              setMyDemos(updatedDemos);
+
+              alert(`✅ 파일이 성공적으로 업로드되었습니다!\n\n파일명: ${result.fileName}\n\n시트에 제출 상태가 기록되었습니다.\n\nGoogle Drive에서 확인하세요:\n${result.fileUrl}`);
+            } catch (updateError) {
+              console.error('시트 업데이트 실패:', updateError);
+              // 파일은 업로드되었지만 시트 업데이트 실패
+              alert(`⚠️ 파일은 업로드되었으나 시트 업데이트에 실패했습니다.\n\n파일: ${result.fileName}\n오류: ${updateError.message}\n\n관리자에게 문의하세요.`);
+            }
+          } else {
+            throw new Error('업로드에 실패했습니다.');
+          }
+        } catch (error) {
+          console.error('파일 업로드 실패:', error);
+          alert(`파일 업로드 중 오류가 발생했습니다:\n${error.message}`);
+        } finally {
+          // input 엘리먼트 제거
+          document.body.removeChild(fileInput);
+        }
+      });
+
+      // input을 DOM에 추가하고 클릭
+      document.body.appendChild(fileInput);
+      fileInput.click();
+
+    } catch (error) {
+      console.error('handleFormSubmit 오류:', error);
+      alert(`오류가 발생했습니다: ${error.message}`);
+    }
   };
   
   const handleEquipmentToggle = (equipment) => {
@@ -786,7 +901,7 @@ const MainPage = ({ user, onLogout }) => {
   // 새로운 함수: 특정 Google Sheets를 PNG로 변환
   const handleExportSheetToPng = async () => {
     // 사용자가 제공한 Google Sheets URL에서 ID와 GID 추출
-    const sheetUrl = 'https://docs.google.com/spreadsheets/d/1SrMKt20djDcs4zYJZfnfi_yQmQN-OEaId5ZHP3wWqLU/edit?gid=1326732411#gid=1326732411';
+    // const sheetUrl = 'https://docs.google.com/spreadsheets/d/1SrMKt20djDcs4zYJZfnfi_yQmQN-OEaId5ZHP3wWqLU/edit?gid=1326732411#gid=1326732411';
     const spreadsheetId = '1SrMKt20djDcs4zYJZfnfi_yQmQN-OEaId5ZHP3wWqLU';
     const sheetGid = '1326732411';
     const fileName = '행사장비요청서_PNG';
@@ -800,7 +915,7 @@ const MainPage = ({ user, onLogout }) => {
       await initGoogleApis();
       
       // For Apps Script mode, we don't need access token
-      const accessToken = 'apps-script-mode';
+      // const accessToken = 'apps-script-mode';
       console.log("Apps Script mode initialized for sheet PNG export.");
 
       // ===== PNG 변환 비활성화 (주석처리됨) =====
@@ -1232,7 +1347,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         // Initialize Google APIs (simplified for Apps Script)
         await initGoogleApis();
         
-        // For Apps Script mode, we don't need access token
+        // For Apps Script mode, we don't need real access token
         const accessToken = 'apps-script-mode';
         console.log("MultiEquipmentApplicationForm: Apps Script mode initialized.");
 
@@ -1436,7 +1551,104 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         </div>
 
         <div className={styles.infoBox}>
-          <h3>[파트너 정보]</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ margin: 0 }}>[파트너 정보]</h3>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const formText = `[파트너 정보]
+파트너 상호 *(필수) :
+파트너 사업자번호 *(필수) :
+파트너 담당자 *(필수) :
+파트너 연락처 *(필수) :
+파트너 주소 *(필수) :`;
+                  
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(formText)
+                      .then(() => alert('✅ 파트너 정보 양식이 클립보드에 복사되었습니다!'))
+                      .catch(err => {
+                        console.error('클립보드 복사 실패:', err);
+                        alert('❌ 클립보드 복사에 실패했습니다.');
+                      });
+                  } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = formText;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert('✅ 파트너 정보 양식이 클립보드에 복사되었습니다!');
+                    } catch (err) {
+                      console.error('클립보드 복사 실패:', err);
+                      alert('❌ 클립보드 복사에 실패했습니다.');
+                    }
+                    document.body.removeChild(textarea);
+                  }
+                }}
+                className="button-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+              >
+                📋 양식 복사
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    let clipboardText = '';
+                    
+                    // 클립보드에서 텍스트 읽기
+                    if (navigator.clipboard && navigator.clipboard.readText) {
+                      clipboardText = await navigator.clipboard.readText();
+                    } else {
+                      // 폴백: prompt 사용
+                      clipboardText = prompt('클립보드 내용을 붙여넣으세요:');
+                      if (!clipboardText) return;
+                    }
+                    
+                    console.log('클립보드 내용:', clipboardText);
+                    
+                    // 파트너 정보 파싱
+                    const patterns = {
+                      partnerCompanyName: /파트너\s*상호[^:]*:\s*(.+)/i,
+                      partnerBusinessNumber: /파트너\s*사업자번호[^:]*:\s*(.+)/i,
+                      partnerContactPerson: /파트너\s*담당자[^:]*:\s*(.+)/i,
+                      partnerContactNumber: /파트너\s*연락처[^:]*:\s*(.+)/i,
+                      partnerAddress: /파트너\s*주소[^:]*:\s*(.+)/i
+                    };
+                    
+                    const newData = {};
+                    let foundCount = 0;
+                    
+                    Object.keys(patterns).forEach(key => {
+                      const match = clipboardText.match(patterns[key]);
+                      if (match && match[1]) {
+                        newData[key] = match[1].trim();
+                        foundCount++;
+                      }
+                    });
+                    
+                    if (foundCount > 0) {
+                      setFormData(prev => ({ ...prev, ...newData }));
+                      alert(`✅ ${foundCount}개 항목이 자동으로 입력되었습니다!`);
+                    } else {
+                      alert('❌ 파트너 정보 양식을 찾을 수 없습니다.\n\n올바른 양식 형식인지 확인해주세요.');
+                    }
+                    
+                  } catch (err) {
+                    console.error('붙여넣기 실패:', err);
+                    alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
+                  }
+                }}
+                className="button-primary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+              >
+                📥 정보 붙여넣기
+              </button>
+            </div>
+          </div>
           <div className={styles.formGrid}>
             <div className={styles.formField}>
               <label>파트너 상호 *(필수) :</label>
@@ -1503,7 +1715,104 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         </div>
 
         <div className={styles.infoBox}>
-          <h3>[사용처 정보]</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ margin: 0 }}>[사용처 정보]</h3>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  const formText = `[사용처 정보]
+사용처 상호 *(필수) :
+사용처 사업자번호 :
+사용처 담당자 *(필수) :
+사용처 담당자 연락처 *(필수) :
+사용처 주소 *(필수) :`;
+                  
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(formText)
+                      .then(() => alert('✅ 사용처 정보 양식이 클립보드에 복사되었습니다!'))
+                      .catch(err => {
+                        console.error('클립보드 복사 실패:', err);
+                        alert('❌ 클립보드 복사에 실패했습니다.');
+                      });
+                  } else {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = formText;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                      document.execCommand('copy');
+                      alert('✅ 사용처 정보 양식이 클립보드에 복사되었습니다!');
+                    } catch (err) {
+                      console.error('클립보드 복사 실패:', err);
+                      alert('❌ 클립보드 복사에 실패했습니다.');
+                    }
+                    document.body.removeChild(textarea);
+                  }
+                }}
+                className="button-secondary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+              >
+                📋 양식 복사
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    let clipboardText = '';
+                    
+                    // 클립보드에서 텍스트 읽기
+                    if (navigator.clipboard && navigator.clipboard.readText) {
+                      clipboardText = await navigator.clipboard.readText();
+                    } else {
+                      // 폴백: prompt 사용
+                      clipboardText = prompt('클립보드 내용을 붙여넣으세요:');
+                      if (!clipboardText) return;
+                    }
+                    
+                    console.log('클립보드 내용:', clipboardText);
+                    
+                    // 사용처 정보 파싱
+                    const patterns = {
+                      usageCompanyName: /사용처\s*상호[^:]*:\s*(.+)/i,
+                      usageBusinessNumber: /사용처\s*사업자번호[^:]*:\s*(.+)/i,
+                      usageContactPerson: /사용처\s*담당자[^:연락]*:\s*(.+)/i,
+                      usageContactNumber: /사용처\s*담당자\s*연락처[^:]*:\s*(.+)/i,
+                      usageAddress: /사용처\s*주소[^:]*:\s*(.+)/i
+                    };
+                    
+                    const newData = {};
+                    let foundCount = 0;
+                    
+                    Object.keys(patterns).forEach(key => {
+                      const match = clipboardText.match(patterns[key]);
+                      if (match && match[1]) {
+                        newData[key] = match[1].trim();
+                        foundCount++;
+                      }
+                    });
+                    
+                    if (foundCount > 0) {
+                      setFormData(prev => ({ ...prev, ...newData }));
+                      alert(`✅ ${foundCount}개 항목이 자동으로 입력되었습니다!`);
+                    } else {
+                      alert('❌ 사용처 정보 양식을 찾을 수 없습니다.\n\n올바른 양식 형식인지 확인해주세요.');
+                    }
+                    
+                  } catch (err) {
+                    console.error('붙여넣기 실패:', err);
+                    alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
+                  }
+                }}
+                className="button-primary"
+                style={{ fontSize: '13px', padding: '6px 12px' }}
+              >
+                📥 정보 붙여넣기
+              </button>
+            </div>
+          </div>
           <div className={styles.formGrid}>
             <div className={styles.formField}>
               <label>사용처 상호 *(필수) :</label>
@@ -1578,6 +1887,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         </div>
 
         <div className={styles.formActions}>
+          {/* 테스트 버튼들 (주석처리 - 개발 완료) */}
+          {/* 
           <button 
             onClick={testConnection} 
             className="button-secondary" 
@@ -1606,12 +1917,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           >
             입력 테스트
           </button>
+          */}
           <button 
             onClick={handleDownloadPng} 
             className="button-primary" 
             disabled={!isGoogleApiLoaded || isExportingToPng}
           >
-            {isExportingToPng ? 'PNG 이미지 생성 중...' : 'PNG 이미지로 출력'}
+            {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
           </button>
           <button onClick={onCancel} className="button-secondary">취소</button>
         </div>
@@ -1715,6 +2027,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 />
                 사용 중인 장비도 보기
               </label>
+              {/* Google Sheets PNG 변환 버튼 (주석처리 - 사용 안 함) */}
+              {/* 
               <button 
                 onClick={handleExportSheetToPng}
                 className="button-primary"
@@ -1723,6 +2037,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               >
                 {isExportingSheetToPng ? 'Google Sheets PNG 변환 중...' : 'Google Sheets PNG 변환'}
               </button>
+              */}
             </div>
           </div>
           

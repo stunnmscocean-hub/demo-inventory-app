@@ -24,7 +24,7 @@ const CONFIG = {
   DEFAULT_SHEET_ID: '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ', // 장비 관리 메인 시트
   TEMPLATE_SPREADSHEET_ID: '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0lht0',
   TEMPLATE_SHEET_GID: '1326732411',
-  DRIVE_FOLDER_ID: '1idch4gNgL0LuBbPVv6dfKQxyGjQSm3bN',
+  DRIVE_FOLDER_ID: '1Ah66GAuU_cln6uvtR-apgLG-38zwa1Px', // 장비 대여신청서 저장 폴더
   
   get CLIENT_ID() {
     return PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || 
@@ -100,6 +100,12 @@ function doGet(e) {
     
     case 'testSheetData':
       return handleTestSheetData();
+    
+    case 'uploadFile':
+      return handleUploadFile(e.parameter.fileName, e.parameter.fileData, e.parameter.mimeType);
+    
+    case 'updateFormSubmission':
+      return handleUpdateFormSubmission(e.parameter.serialNumber, e.parameter.fileUrl);
       
       default:
         return createErrorResponse('invalid_action', 'No valid action specified.');
@@ -157,6 +163,14 @@ function doPost(e) {
       case 'addDataToSheet':
         console.log('doPost: Calling addDataToSheet function.');
         return handleAddDataToSheet(params.spreadsheetId, params.formData, params.selectedEquipments);
+      
+      case 'uploadFile':
+        console.log('doPost: Calling uploadFile function.');
+        return handleUploadFile(params.fileName, params.fileData, params.mimeType);
+      
+      case 'updateFormSubmission':
+        console.log('doPost: Calling updateFormSubmission function.');
+        return handleUpdateFormSubmission(params.serialNumber, params.fileUrl);
       
       default:
         return createErrorResponse('invalid_action', 'No valid action specified.');
@@ -1042,6 +1056,9 @@ function handleGetMyDemoData(userName) {
     const startDateIndex = headers.indexOf('시작일');
     const endDateIndex = headers.indexOf('종료일');
     const locationIndex = headers.indexOf('보관위치');
+    const partnerNameIndex = headers.indexOf('파트너명');
+    const submissionIndex = headers.indexOf('신청양식제출');
+    const memoIndex = headers.indexOf('비고');
     
     console.log('🔍 컬럼 인덱스:', {
       시리얼넘버: serialIndex,
@@ -1050,7 +1067,10 @@ function handleGetMyDemoData(userName) {
       대여가능여부: statusIndex,
       시작일: startDateIndex,
       종료일: endDateIndex,
-      보관위치: locationIndex
+      보관위치: locationIndex,
+      파트너명: partnerNameIndex,
+      신청양식제출: submissionIndex,
+      비고: memoIndex
     });
     
     if (serialIndex === -1 || managerIndex === -1 || statusIndex === -1) {
@@ -1101,6 +1121,10 @@ function handleGetMyDemoData(userName) {
       
       // "대여신청" 또는 "대여중"인 경우만 추가
       if (status === '대여신청' || status === '대여중') {
+        const submissionValue = submissionIndex !== -1 ? row[submissionIndex] : '';
+        const partnerNameValue = partnerNameIndex !== -1 ? row[partnerNameIndex] : '';
+        const memoValue = memoIndex !== -1 ? row[memoIndex] : '';
+        
         activeDemos.push({
           시리얼넘버: row[serialIndex] || '',
           제품명: row[nameIndex] || '',
@@ -1109,13 +1133,21 @@ function handleGetMyDemoData(userName) {
           시작일: row[startDateIndex] || '',
           종료일: row[endDateIndex] || '',
           보관위치: row[locationIndex] || '',
+          파트너명: partnerNameValue,
+          신청양식제출: submissionValue,
+          비고: memoValue,
           // UI용 추가 필드
           serial: row[serialIndex] || '',
           name: row[nameIndex] || '',
+          assignee: row[managerIndex] || '',
           startDate: row[startDateIndex] || '',
           returnDate: row[endDateIndex] || '',
           location: row[locationIndex] || '',
-          status: status
+          partnerName: partnerNameValue,
+          status: status,
+          formSubmitted: submissionValue ? true : false,
+          fileUrl: submissionValue || '',
+          memo: memoValue
         });
         
         console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]})`);
@@ -1807,10 +1839,10 @@ function initializeEquipmentSheet() {
       sheet = spreadsheet.getSheets()[0]; // 첫 번째 시트 사용
     }
     
-    // 새로운 헤더 설정
+    // 새로운 헤더 설정 (신청 양식 제출 칼럼 추가)
     const headers = [
       '시리얼넘버', '제품명', 'Tag', '보관위치', '대여가능여부', '대여담당자', '시작일', '종료일', 
-      '파트너명', '파트너담당자명', '휴대폰 번호', '사용자명', '사용자담당자명', '휴대폰 번호', '비고'
+      '파트너명', '파트너담당자명', '휴대폰 번호', '사용자명', '사용자담당자명', '휴대폰 번호', '비고', '신청양식제출'
     ];
     
     // 헤더 행 설정
@@ -1923,7 +1955,9 @@ function convertEquipmentDataForUI(equipmentData) {
     userName: item['사용자명'] || '',
     userContact: item['사용자담당자명'] || '',
     userPhone: item['휴대폰 번호'] || '',
-    memo: item['비고'] || ''
+    memo: item['비고'] || '',
+    formSubmitted: item['신청양식제출'] ? true : false, // 제출 여부
+    fileUrl: item['신청양식제출'] || '' // 제출된 파일 URL
   }));
 }
 
@@ -2323,5 +2357,321 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
   } catch (error) {
     console.error('Error in handleAddDataToSheet:', error);
     return createErrorResponse('add_data_error', error.toString());
+  }
+}
+
+// ===== ACL 관련 함수들 =====
+
+/**
+ * ACL 테스트
+ */
+function handleTestACL(email) {
+  try {
+    if (!email) {
+      return createErrorResponse('email_required', 'Email parameter is required');
+    }
+    
+    console.log('Testing ACL for email:', email);
+    
+    const aclEntry = findAclEntryByEmail(email);
+    
+    if (!aclEntry) {
+      return createErrorResponse('unauthorized', `Email ${email} not found in ACL`);
+    }
+    
+    return createSuccessResponse({
+      authorized: true,
+      email: aclEntry.email,
+      role: aclEntry.role,
+      message: 'Email found in ACL'
+    });
+    
+  } catch (error) {
+    console.error('Error in handleTestACL:', error);
+    return createErrorResponse('acl_test_error', error.toString());
+  }
+}
+
+/**
+ * 모든 ACL 엔트리 가져오기 요청 처리
+ */
+function handleGetAllAclEntries() {
+  try {
+    console.log('Fetching all ACL entries...');
+    const result = readAclEntries();
+    
+    if (result.error) {
+      return createErrorResponse('acl_read_error', result.error);
+    }
+    
+    console.log(`Found ${result.entries.length} ACL entries`);
+    
+    return createSuccessResponse({
+      entries: result.entries,
+      count: result.entries.length,
+      message: `Retrieved ${result.entries.length} ACL entries`
+    });
+    
+  } catch (error) {
+    console.error('Error in handleGetAllAclEntries:', error);
+    return createErrorResponse('get_all_acl_error', error.toString());
+  }
+}
+
+/**
+ * 이메일 확인 요청 처리
+ */
+function handleCheckEmail(email) {
+  try {
+    console.log('Checking email:', email);
+    
+    const aclEntry = findAclEntryByEmail(email);
+    if (!aclEntry) {
+      console.log('Unauthorized email:', email);
+      return createErrorResponse('unauthorized', 'Email not authorized');
+    }
+    
+    console.log('Authorized email:', email);
+    return createSuccessResponse({
+      authorized: true, 
+      role: aclEntry.role || 'viewer'
+    });
+    
+  } catch (error) {
+    console.error('Error in handleCheckEmail:', error);
+    return createErrorResponse('email_check_error', error.toString());
+  }
+}
+
+/**
+ * ACL 시트 열기
+ */
+function openAclSheet() {
+  const aclSheetId = CONFIG.ACL_SHEET_ID;
+  const ss = SpreadsheetApp.openById(aclSheetId);
+  let sheet = ss.getSheetByName('ACL');
+  
+  if (sheet) return sheet;
+  
+  // Fallback: case-insensitive lookup
+  const sheets = ss.getSheets();
+  for (let i = 0; i < sheets.length; i++) {
+    if (normalizeString(sheets[i].getName()) === 'acl') {
+      return sheets[i];
+    }
+  }
+  
+  // Fallback: find sheet with headers Email, Role in first row
+  for (let j = 0; j < sheets.length; j++) {
+    const rng = sheets[j].getRange(1, 1, 1, 2).getValues();
+    const h1 = normalizeString(rng[0][0]);
+    const h2 = normalizeString(rng[0][1]);
+    if (h1 === 'email' && h2 === 'role') {
+      return sheets[j];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * ACL 엔트리 읽기
+ */
+function readAclEntries() {
+  const sheet = openAclSheet();
+  if (!sheet) {
+    return { error: 'ACL sheet not found', entries: [] };
+  }
+  
+  const values = sheet.getDataRange().getValues();
+  if (!values || values.length === 0) {
+    return { error: null, entries: [] };
+  }
+  
+  // Assume first row is header: [Email, Role, Name, ...]
+  const entries = [];
+  for (let r = 1; r < values.length; r++) {
+    const row = values[r];
+    const email = normalizeString(row[0]);
+    if (!email) continue;
+    
+    const roleCell = (row.length > 1 ? row[1] : '');
+    const nameCell = (row.length > 2 ? row[2] : '');
+    entries.push({ 
+      email: email, 
+      role: (roleCell || '').toString().trim(),
+      name: (nameCell || '').toString().trim()
+    });
+  }
+  
+  return { error: null, entries: entries };
+}
+
+/**
+ * 이메일로 ACL 엔트리 찾기
+ */
+function findAclEntryByEmail(email) {
+  const normalizedEmail = normalizeString(email);
+  const result = readAclEntries();
+  
+  if (result.error) {
+    console.error(result.error);
+    return null;
+  }
+  
+  for (let i = 0; i < result.entries.length; i++) {
+    if (result.entries[i].email === normalizedEmail) {
+      return result.entries[i];
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * 문자열 정규화
+ */
+function normalizeString(value) {
+  return (value || '').toString().trim().toLowerCase();
+}
+
+/**
+ * 파일 업로드 핸들러
+ * @param {string} fileName - 저장할 파일명
+ * @param {string} fileData - Base64로 인코딩된 파일 데이터
+ * @param {string} mimeType - 파일 MIME 타입
+ */
+function handleUploadFile(fileName, fileData, mimeType) {
+  try {
+    console.log('=== handleUploadFile 시작 ===');
+    console.log('파일명:', fileName);
+    console.log('MIME 타입:', mimeType);
+    
+    if (!fileName || !fileData) {
+      return createErrorResponse('invalid_parameter', '파일명과 파일 데이터가 필요합니다.');
+    }
+    
+    // Base64 데이터를 Blob으로 변환
+    const decodedData = Utilities.base64Decode(fileData);
+    const blob = Utilities.newBlob(decodedData, mimeType, fileName);
+    
+    console.log('Blob 생성 완료, 크기:', blob.getBytes().length, 'bytes');
+    
+    // Drive 폴더에 파일 저장
+    const folderId = CONFIG.DRIVE_FOLDER_ID;
+    let file;
+    
+    try {
+      const folder = DriveApp.getFolderById(folderId);
+      file = folder.createFile(blob);
+      console.log('파일이 폴더에 저장됨:', folderId);
+    } catch (folderError) {
+      console.error('폴더 접근 실패, 루트 폴더에 저장:', folderError);
+      file = DriveApp.createFile(blob);
+    }
+    
+    const fileId = file.getId();
+    const fileUrl = file.getUrl();
+    
+    console.log('✅ 파일 업로드 완료!');
+    console.log('파일 ID:', fileId);
+    console.log('파일 URL:', fileUrl);
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      fileId: fileId,
+      fileName: file.getName(),
+      fileUrl: fileUrl,
+      message: '파일이 성공적으로 업로드되었습니다.',
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('Error in handleUploadFile:', error);
+    return createErrorResponse('upload_error', error.toString());
+  }
+}
+
+/**
+ * 신청 양식 제출 상태 업데이트
+ * @param {string} serialNumber - 장비 시리얼 번호
+ * @param {string} fileUrl - 업로드된 파일 URL
+ */
+function handleUpdateFormSubmission(serialNumber, fileUrl) {
+  try {
+    console.log('=== handleUpdateFormSubmission 시작 ===');
+    console.log('시리얼 번호:', serialNumber);
+    console.log('파일 URL:', fileUrl);
+    
+    if (!serialNumber) {
+      return createErrorResponse('invalid_parameter', '시리얼 번호가 필요합니다.');
+    }
+    
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    const sheet = spreadsheet.getSheetByName('시트1');
+    
+    if (!sheet) {
+      return createErrorResponse('sheet_not_found', '시트1을 찾을 수 없습니다.');
+    }
+    
+    const lastRow = sheet.getLastRow();
+    const lastCol = sheet.getLastColumn();
+    
+    if (lastRow <= 1) {
+      return createErrorResponse('no_data', '시트에 데이터가 없습니다.');
+    }
+    
+    // 헤더 가져오기
+    const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+    const serialColIndex = headers.indexOf('시리얼넘버');
+    const submissionColIndex = headers.indexOf('신청양식제출');
+    
+    console.log('시리얼넘버 칼럼 인덱스:', serialColIndex);
+    console.log('신청양식제출 칼럼 인덱스:', submissionColIndex);
+    
+    if (serialColIndex === -1) {
+      return createErrorResponse('column_not_found', '시리얼넘버 칼럼을 찾을 수 없습니다.');
+    }
+    
+    if (submissionColIndex === -1) {
+      return createErrorResponse('column_not_found', '신청양식제출 칼럼을 찾을 수 없습니다.');
+    }
+    
+    // 시리얼 번호로 행 찾기 (역순으로 검색 - 최신 데이터 우선)
+    let targetRow = -1;
+    for (let i = lastRow; i >= 2; i--) {
+      const cellValue = sheet.getRange(i, serialColIndex + 1).getValue();
+      if (cellValue && cellValue.toString().trim() === serialNumber.toString().trim()) {
+        targetRow = i;
+        break;
+      }
+    }
+    
+    if (targetRow === -1) {
+      console.error('시리얼 번호를 찾을 수 없습니다:', serialNumber);
+      return createErrorResponse('not_found', `시리얼 번호 "${serialNumber}"를 찾을 수 없습니다.`);
+    }
+    
+    console.log('대상 행 찾음:', targetRow);
+    
+    // 제출 상태 업데이트
+    const submissionValue = fileUrl || '제출완료';
+    sheet.getRange(targetRow, submissionColIndex + 1).setValue(submissionValue);
+    
+    console.log('✅ 제출 상태 업데이트 완료!');
+    console.log('행:', targetRow, '값:', submissionValue);
+    
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      serialNumber: serialNumber,
+      rowNumber: targetRow,
+      submissionValue: submissionValue,
+      message: '제출 상태가 업데이트되었습니다.',
+      timestamp: new Date().toISOString()
+    })).setMimeType(ContentService.MimeType.JSON);
+    
+  } catch (error) {
+    console.error('Error in handleUpdateFormSubmission:', error);
+    return createErrorResponse('update_error', error.toString());
   }
 }

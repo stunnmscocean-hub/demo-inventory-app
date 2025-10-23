@@ -1,6 +1,6 @@
 // src/components/JpgViewer.js
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import styles from './JpgViewer.module.css';
 
 /**
@@ -24,31 +24,27 @@ const JpgViewer = ({
   const [isLoading, setIsLoading] = useState(false);
   const viewerRef = useRef(null);
 
-  // Define handler functions first
-  const handlePreviousPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
+  // Define handler functions with useCallback to prevent unnecessary re-renders
+  const handlePreviousPage = useCallback(() => {
+    setCurrentPage((prev) => (prev > 0 ? prev - 1 : prev));
+  }, []);
 
-  const handleNextPage = () => {
-    if (currentPage < images.length - 1) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
+  const handleNextPage = useCallback(() => {
+    setCurrentPage((prev) => (prev < images.length - 1 ? prev + 1 : prev));
+  }, [images.length]);
 
-  const handlePageSelect = (pageNumber) => {
+  const handlePageSelect = useCallback((pageNumber) => {
     setCurrentPage(pageNumber);
-  };
+  }, []);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     setIsFullscreen(false);
     if (onClose) onClose();
-  };
+  }, [onClose]);
 
-  const toggleFullscreen = () => {
-    setIsFullscreen(!isFullscreen);
-  };
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
 
   // Reset to first page when images change
   useEffect(() => {

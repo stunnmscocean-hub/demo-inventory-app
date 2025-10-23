@@ -938,7 +938,27 @@ input[name="returnDate"] {
   cursor: text;
   font-family: 'Courier New', monospace; /* 고정폭 폰트로 날짜 형식 명확화 */
   text-align: center;
-  width: 40px;
+  width: 13% !important; /* 사용자 설정 너비 */
+}
+
+/* 날짜 선택기 달력 아이콘 크기 조정 */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[name="checkoutDate"]::-webkit-calendar-picker-indicator,
+input[name="returnDate"]::-webkit-calendar-picker-indicator {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[name="checkoutDate"]::-webkit-calendar-picker-indicator:hover,
+input[name="returnDate"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(27%) sepia(95%) saturate(7471%) hue-rotate(354deg) brightness(95%) contrast(118%);
 }
 
 input[name="checkoutDate"]:focus, 
@@ -967,6 +987,7 @@ input[name="returnDate"]::placeholder {
   font-size: 14px;
   color: #555;
   white-space: nowrap;
+  display: inline-block;
 }
 
 /* 스프레드시트 링크 컨테이너 */
@@ -1281,4 +1302,221 @@ input[name="returnDate"]::placeholder {
   padding: 20px;
   color: #666;
   font-size: 14px;
+}
+
+/* ===== 모바일 반응형 스타일 (600px 이하) ===== */
+@media (max-width: 600px) {
+  /* 컨테이너 패딩 줄이기 */
+  .container {
+    padding: 16px;
+  }
+
+  /* 섹션 패딩 줄이기 */
+  .section {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  /* 폼 컨테이너 */
+  .formContainer {
+    padding: 16px;
+  }
+
+  /* 폼 그리드를 1열로 변경 */
+  .formGrid {
+    grid-template-columns: 1fr; /* 1열 그리드 */
+    gap: 12px;
+  }
+
+  /* 폼 필드를 세로로 배치 */
+  .formField {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 6px !important;
+    grid-column: 1 / -1 !important; /* 모든 필드를 전체 너비로 */
+  }
+
+  .formField label {
+    white-space: normal !important;
+    text-align: left !important;
+  }
+
+  .formField input {
+    width: 100% !important; /* 인라인 스타일 덮어쓰기 */
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  
+  .formField span {
+    width: 100% !important;
+  }
+
+  /* Full width 필드도 세로로 */
+  .formFieldFullWidth {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .formFieldFullWidth label {
+    white-space: normal;
+    text-align: left;
+  }
+
+  .formFieldFullWidth input {
+    width: 100% !important;
+    max-width: 100%;
+  }
+
+  /* 인포 박스 패딩 줄이기 */
+  .infoBox {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  
+  /* 인포 박스 헤더 (양식 복사/붙여넣기 버튼 포함) */
+  .infoBox > div[style*="display: flex"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px;
+  }
+  
+  .infoBox > div[style*="display: flex"] > div {
+    width: 100%;
+    flex-direction: column !important;
+  }
+  
+  .infoBox > div[style*="display: flex"] button {
+    width: 100%;
+  }
+
+  /* 버튼 액션 영역 */
+  .formActions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .formActions button {
+    width: 100%;
+  }
+
+  /* 헤더 */
+  .headerTitle {
+    font-size: 22px;
+  }
+
+  /* 섹션 헤더 */
+  .sectionHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .sectionHeader h2 {
+    font-size: 18px;
+  }
+
+  /* 필터 컨트롤 */
+  .filterControls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    width: 100%;
+  }
+
+  /* 선택된 장비 요약 */
+  .selectedEquipmentsSummary {
+    padding: 12px;
+  }
+
+  .selectedEquipmentsSummary h4 {
+    font-size: 15px;
+  }
+
+  /* 테이블 컨테이너 */
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 검색 결과 */
+  .searchResults {
+    max-height: 150px;
+  }
+
+  /* 날짜 입력 필드 모바일 최적화 */
+  .formField input[name="checkoutDate"], 
+  .formField input[name="returnDate"],
+  input[type="date"][name="checkoutDate"],
+  input[type="date"][name="returnDate"] {
+    width: 13% !important;
+    box-sizing: border-box !important;
+    flex: 0 0 auto;
+  }
+  
+  /* 모바일에서도 아이콘 크기 유지 */
+  .formField input[type="date"]::-webkit-calendar-picker-indicator,
+  .formField input[name="checkoutDate"]::-webkit-calendar-picker-indicator,
+  .formField input[name="returnDate"]::-webkit-calendar-picker-indicator,
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    width: 40px !important;
+    height: 40px !important;
+    min-width: 40px !important;
+    min-height: 40px !important;
+  }
+
+  /* 날짜 표시 영역 - 모바일에서는 같은 줄에 */
+  .dateDisplay {
+    font-size: 13px;
+    margin-left: 8px;
+    margin-top: 0;
+    display: inline-block;
+    width: auto;
+    flex-shrink: 0;
+  }
+  
+  /* 날짜 필드만 가로 배치 */
+  .formField:has(input[name="checkoutDate"]),
+  .formField:has(input[name="returnDate"]) {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+  }
+  
+  .formField:has(input[name="checkoutDate"]) label,
+  .formField:has(input[name="returnDate"]) label {
+    width: 100%;
+    flex-basis: 100%;
+  }
+  
+  /* 날짜 필드 컨테이너 모바일 최적화 */
+  .formField[style*="gridColumn"] {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* 스프레드시트 결과 박스 */
+  .spreadsheetResultBox {
+    padding: 16px;
+  }
+
+  .spreadsheetResultHeader h4 {
+    font-size: 18px;
+  }
+
+  .spreadsheetResultButton,
+  .copyUrlButtonInline {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* PNG 뷰어 */
+  .pngViewer {
+    padding: 10px;
+  }
+
+  .pngViewerHeader,
+  .pngViewerContent {
+    max-width: 100%;
+  }
 }

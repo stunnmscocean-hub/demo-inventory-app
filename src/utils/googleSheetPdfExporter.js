@@ -1,4 +1,4 @@
-/* global gapi google */
+/* global */
 // src/utils/googleSheetPdfExporter.js - Google Apps Script 방식
 
 // Google Apps Script Web App URL (.env.local에서 읽어옴)
@@ -13,12 +13,12 @@ export const TEMPLATE_SPREADSHEET_ID = '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0
 export const TEMPLATE_SHEET_GID = '1326732411'; // This is the gid for the specific sheet/tab
 
 // Google Drive folder ID for saving PDFs (optional)
-export const DRIVE_FOLDER_ID = '1idch4gNgL0LuBbPVv6dfKQxyGjQSm3bN'; // PDF를 저장할 Google Drive 폴더 ID
+export const DRIVE_FOLDER_ID = '1Ah66GAuU_cln6uvtR-apgLG-38zwa1Px'; // 장비 대여신청서 저장 폴더
 
 // Configuration constants
 const MAX_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
-const API_TIMEOUT_MS = 30000;
+// const API_TIMEOUT_MS = 30000; // Unused for now
 
 // Error types for better error handling
 const ERROR_TYPES = {
