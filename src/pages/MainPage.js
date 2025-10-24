@@ -80,34 +80,48 @@ const SkeletonTable = ({ rows = 5 }) => (
 // 내 데모 현황용 스켈레톤 (6개 컬럼)
 const SkeletonMyDemoRow = () => (
   <tr>
-    <td><div className={`${styles.skeleton} ${styles.skeletonCellLarge}`} /></td>
-    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
-    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
-    <td><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
-    <td><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
-    <td><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
+    <td data-label="장비명"><div className={`${styles.skeleton} ${styles.skeletonCellLarge}`} /></td>
+    <td data-label="시리얼 넘버"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td data-label="대여 시작일"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td data-label="반납 예정일"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td data-label="신청 양식"><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
+    <td data-label="관리"><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
   </tr>
 );
 
-const SkeletonMyDemoTable = ({ rows = 3 }) => (
-  <table>
-    <thead>
-      <tr>
-        <th>장비명</th>
-        <th>시리얼 넘버</th>
-        <th>대여 시작일</th>
-        <th>반납 예정일</th>
-        <th>신청 양식</th>
-        <th>관리</th>
-      </tr>
-    </thead>
-    <tbody>
-      {Array.from({ length: rows }).map((_, index) => (
-        <SkeletonMyDemoRow key={index} />
-      ))}
-    </tbody>
-  </table>
-);
+const SkeletonMyDemoTable = ({ rows = 3 }) => {
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth <= 600);
+  const [isTablet, setIsTablet] = React.useState(window.innerWidth <= 720 && window.innerWidth > 600);
+
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth <= 600);
+      setIsTablet(window.innerWidth <= 720 && window.innerWidth > 600);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>{isMobile ? '장비' : (isTablet ? '장비' : '장비명')}</th>
+          <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
+          <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
+          <th>{isMobile ? '반납일' : (isTablet ? '반납일' : '반납 예정일')}</th>
+          <th>{isMobile ? '양식' : (isTablet ? '양식' : '신청 양식')}</th>
+          <th>{isMobile ? '관리' : '관리'}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: rows }).map((_, index) => (
+          <SkeletonMyDemoRow key={index} />
+        ))}
+      </tbody>
+    </table>
+  );
+};
 
 // EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
 const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle }) => {
@@ -123,16 +137,42 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       onEquipmentToggle(equipment);
     }
   };
+
+  // 모바일 여부 확인 (600px 이하)
+  const [isMobile, setIsMobile] = React.useState(window.innerWidth <= 600);
+
+  React.useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth <= 600);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // 상태 텍스트 변환 (모바일에서 짧게)
+  const getStatusText = (status) => {
+    if (!isMobile) return status;
+    
+    // 모바일에서 텍스트 축약
+    const statusMap = {
+      '대여가능': '가능',
+      '대여 가능': '가능',
+      '대여신청': '신청',
+      '대여중': '사용중',
+      '사용중': '사용중',
+      '반납완료': '완료'
+    };
+    
+    return statusMap[status] || status;
+  };
   
   return (
     <table>
       <thead>
         <tr>
           <th style={{ width: '40px' }}>선택</th>
-          <th>장비명</th>
-          <th>시리얼 넘버</th>
-          <th>장비 위치</th>
-          <th>사용 현황</th>
+          <th>{isMobile ? '장비' : '장비명'}</th>
+          <th>{isMobile ? '시리얼' : '시리얼 넘버'}</th>
+          <th>{isMobile ? '위치' : '장비 위치'}</th>
+          <th>{isMobile ? '현황' : '사용 현황'}</th>
         </tr>
       </thead>
       <tbody>
@@ -156,7 +196,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
               <td>{eq.name}</td>
               <td>{eq.serial}</td>
               <td>{eq.location}</td>
-              <td>{eq.status}</td>
+              <td>{getStatusText(eq.status)}</td>
             </tr>
           );
         })}
@@ -1062,26 +1102,68 @@ const MainPage = ({ user, onLogout }) => {
       const parsedReturnDate = parseDateString(returnDate);
       return parsedReturnDate && parsedReturnDate < today;
     };
+
+    // 화면 크기 확인 (모바일: 600px 이하, 태블릿: 720px 이하)
+    const [isMobile, setIsMobile] = React.useState(window.innerWidth <= 600);
+    const [isTablet, setIsTablet] = React.useState(window.innerWidth <= 720 && window.innerWidth > 600);
+
+    React.useEffect(() => {
+      const handleResize = () => {
+        setIsMobile(window.innerWidth <= 600);
+        setIsTablet(window.innerWidth <= 720 && window.innerWidth > 600);
+      };
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    // 날짜 포맷 (모바일: MM/DD, 웹: YYYY/MM/DD)
+    const formatDate = (dateStr) => {
+      if (!dateStr) return '';
+      const formatted = formatDateToYYYYMMDD(dateStr);
+      if (isMobile && formatted) {
+        // YYYY/MM/DD -> MM/DD
+        const parts = formatted.split('/');
+        if (parts.length === 3) {
+          return `${parts[1]}/${parts[2]}`;
+        }
+      }
+      return formatted;
+    };
     
     return (
       <table>
         <thead>
           <tr>
-            <th>장비명</th><th>시리얼 넘버</th><th>대여 시작일</th><th>반납 예정일</th><th>신청 양식</th><th>관리</th>
+            <th>{isMobile ? '장비' : (isTablet ? '장비' : '장비명')}</th>
+            <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
+            <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
+            <th>{isMobile ? '반납일' : (isTablet ? '반납일' : '반납 예정일')}</th>
+            <th>{isMobile ? '양식' : (isTablet ? '양식' : '신청 양식')}</th>
+            <th>{isMobile ? '관리' : '관리'}</th>
           </tr>
         </thead>
         <tbody>
           {demos.map((demo) => (
             <tr key={demo.id}>
-              <td>{demo.name}</td>
-              <td>{demo.serial}</td>
-              <td>{formatDateToYYYYMMDD(demo.startDate)}</td>
-              <td className={isOverdue(demo.returnDate) ? styles.overdue : ''}>
-                {formatDateToYYYYMMDD(demo.returnDate)}
+              <td data-label="장비명">{demo.name}</td>
+              <td data-label="시리얼 넘버">{demo.serial}</td>
+              <td data-label="대여 시작일">{formatDate(demo.startDate)}</td>
+              <td data-label="반납 예정일" className={isOverdue(demo.returnDate) ? styles.overdue : ''}>
+                {formatDate(demo.returnDate)}
                 {isOverdue(demo.returnDate) && <span className={styles.overdueText}>(반납일 초과)</span>}
               </td>
-              <td>{demo.formSubmitted ? '제출 완료' : <button onClick={() => handleFormSubmit(demo.id)} className="button-primary">제출하기</button>}</td>
-              <td><button onClick={() => onReturn(demo.id)} className="button-secondary">반납하기</button></td>
+              <td data-label="신청 양식">
+                {demo.formSubmitted ? (isMobile ? '완료' : (isTablet ? '완료' : '제출 완료')) : (
+                  <button onClick={() => handleFormSubmit(demo.id)} className="button-primary">
+                    {isMobile ? '제출' : (isTablet ? '제출' : '제출하기')}
+                  </button>
+                )}
+              </td>
+              <td data-label="관리">
+                <button onClick={() => onReturn(demo.id)} className="button-secondary">
+                  {isMobile ? '반납' : (isTablet ? '반납' : '반납하기')}
+                </button>
+              </td>
             </tr>
           ))}
         </tbody>
