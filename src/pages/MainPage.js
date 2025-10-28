@@ -4,7 +4,9 @@ import {
   updateGoogleSheetWithData, 
   initGoogleApis, 
   addDataToSheet,
-  TEMPLATE_SPREADSHEET_ID, 
+  exportGoogleSheetToPdfAndConvertToJpg,
+  TEMPLATE_SPREADSHEET_ID,
+  TEMPLATE_SHEET_GID,
   getUserFriendlyErrorMessage,
   logOperation,
   checkFolderAccess,
@@ -498,6 +500,9 @@ const MainPage = ({ user, onLogout }) => {
   const [sheetPngFiles, setSheetPngFiles] = useState([]); // State for specific sheet PNG files
   const [isExportingSheetToPng, setIsExportingSheetToPng] = useState(false); // State for sheet PNG export loading
   const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState(null); // State for created spreadsheet URL
+  const [createdPdfUrl, setCreatedPdfUrl] = useState(null); // State for created PDF URL
+  const [createdPdfDownloadUrl, setCreatedPdfDownloadUrl] = useState(null); // State for PDF download URL
+  const [createdPdfFileName, setCreatedPdfFileName] = useState(null); // State for PDF file name
 
   // Custom sorting order
   const customOrder = [
@@ -2087,6 +2092,19 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.log('📋 스프레드시트 ID:', newSpreadsheetId);
           setProcessMessage('✅ 신청 정보 입력 완료!');
           
+          // 스프레드시트 생성 완료 alert
+          alert(`✅ 스프레드시트가 생성되었습니다!\n\n생성된 스프레드시트:\n${spreadsheetUrl}\n\n※ URL이 클립보드에 복사되었습니다.`);
+          
+          // 스프레드시트 URL을 클립보드에 복사
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+              await navigator.clipboard.writeText(spreadsheetUrl);
+              console.log('📋 스프레드시트 URL이 클립보드에 복사되었습니다!');
+            } catch (clipboardError) {
+              console.log('클립보드 복사 실패:', clipboardError);
+            }
+          }
+          
         } catch (error) {
           logOperation('updateGoogleSheet', { success: false, error: error.message }, 'error');
           
@@ -2162,26 +2180,91 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         //   return;
         // }
 
+        // ===== PDF 변환 추가 =====
+        let pdfFileUrl = null;
+        try {
+          setProcessMessage('📄 PDF 변환 중...');
+          logOperation('exportToPdf', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
+          
+          const pdfResult = await exportGoogleSheetToPdfAndConvertToJpg(
+            accessToken, 
+            newSpreadsheetId, 
+            TEMPLATE_SHEET_GID, 
+            newSpreadsheetTitle
+          );
+          
+          console.log('=== PDF Export 응답 상세 ===');
+          console.log('전체 응답:', pdfResult);
+          console.log('success:', pdfResult?.success);
+          console.log('fileId:', pdfResult?.fileId);
+          console.log('fileUrl:', pdfResult?.fileUrl);
+          console.log('fileName:', pdfResult?.fileName);
+          console.log('pdfUrl:', pdfResult?.pdfUrl);
+          console.log('error:', pdfResult?.error);
+          
+          if (pdfResult && pdfResult.success && pdfResult.fileId && pdfResult.fileUrl) {
+            pdfFileUrl = pdfResult.fileUrl;
+            const pdfDownloadUrl = pdfResult.pdfUrl || pdfResult.fileUrl;
+            const pdfFileName = pdfResult.fileName || `${newSpreadsheetTitle}.pdf`;
+            
+            setCreatedPdfUrl(pdfFileUrl); // PDF URL을 state에 저장
+            setCreatedPdfDownloadUrl(pdfDownloadUrl); // PDF 다운로드 URL 저장
+            setCreatedPdfFileName(pdfFileName); // PDF 파일명 저장
+            
+            logOperation('exportToPdf', { 
+              success: true, 
+              fileId: pdfResult.fileId,
+              fileUrl: pdfResult.fileUrl,
+              downloadUrl: pdfDownloadUrl,
+              actualSheetGid: pdfResult.actualSheetGid
+            });
+            console.log('✅ PDF 변환 완료!');
+            console.log('📄 PDF URL:', pdfFileUrl);
+            console.log('📥 PDF 다운로드 URL:', pdfDownloadUrl);
+            console.log('📋 실제 시트 GID:', pdfResult.actualSheetGid);
+            setProcessMessage('✅ PDF 변환 완료!');
+            
+            // PDF 생성 완료 alert (다운로드 안내)
+            alert(`✅ PDF가 생성되었습니다!\n\n파일명: ${pdfFileName}\n\n※ 아래 UI에서 다운로드 버튼을 클릭하여 PDF를 저장하세요.`);
+          } else {
+            // pdfResult에 에러가 있으면 상세 로그
+            if (pdfResult && pdfResult.error) {
+              console.error('=== PDF 변환 서버 에러 ===');
+              console.error('에러:', pdfResult.error);
+              console.error('에러 이름:', pdfResult.errorName);
+              console.error('에러 메시지:', pdfResult.errorMessage);
+              if (pdfResult.stack) {
+                console.error('스택 트레이스:', pdfResult.stack);
+              }
+              throw new Error(`PDF export failed: ${pdfResult.errorMessage || pdfResult.error}`);
+            } else {
+              console.error('PDF 결과 없음:', pdfResult);
+              throw new Error("PDF export failed - no valid result returned");
+            }
+          }
+        } catch (pdfError) {
+          logOperation('exportToPdf', { success: false, error: pdfError.message }, 'error');
+          console.error('=== ⚠️ PDF 변환 실패 (신청은 완료됨) ===');
+          console.error('에러:', pdfError);
+          console.error('에러 메시지:', pdfError.message);
+          console.error('에러 스택:', pdfError.stack);
+          setProcessMessage('⚠️ PDF 변환 실패 (신청은 완료됨)');
+          // PDF 변환 실패해도 신청은 완료된 것으로 간주
+        }
+        
         // ===== 워크플로우 완료 =====
         const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
         console.log('🎉 전체 워크플로우 완료!');
         console.log('📄 생성된 스프레드시트:', spreadsheetUrl);
         console.log('📄 스프레드시트 제목:', newSpreadsheetTitle);
+        if (pdfFileUrl) {
+          console.log('📄 생성된 PDF:', pdfFileUrl);
+        }
         
         setProcessMessage('🎉 데모 신청이 완료되었습니다!');
         
-        // URL을 클립보드에 복사 (선택적)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          try {
-            await navigator.clipboard.writeText(spreadsheetUrl);
-            console.log('📋 URL이 클립보드에 복사되었습니다!');
-          } catch (clipboardError) {
-            console.log('클립보드 복사 실패:', clipboardError);
-          }
-        }
-        
-        // 완료 alert만 표시
-        alert(`✅ 데모 신청이 완료되었습니다!\n\n생성된 스프레드시트:\n${spreadsheetUrl}\n\n※ URL이 클립보드에 복사되었습니다.`);
+        // 최종 완료 메시지 (간단하게)
+        alert('🎉 모든 작업이 완료되었습니다!');
 
       } catch (error) {
         logOperation('workflowError', { error: error.message }, 'error');
@@ -2677,6 +2760,58 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 className={styles.copyUrlButtonInline}
               >
                 📋 URL 복사
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {/* 생성된 PDF 결과 표시 */}
+        {createdPdfUrl && (
+          <div className={styles.spreadsheetResultBox}>
+            <div className={styles.spreadsheetResultHeader}>
+              <span className={styles.successIcon}>📄</span>
+              <h4>PDF가 생성되었습니다!</h4>
+            </div>
+            <div className={styles.spreadsheetResultContent}>
+              <p className={styles.spreadsheetResultDescription}>
+                생성된 PDF 파일을 확인하세요.
+              </p>
+              <a 
+                href={createdPdfUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className={styles.spreadsheetResultButton}
+              >
+                📄 Google Drive에서 PDF 열기
+              </a>
+              <div className={styles.spreadsheetResultUrl}>
+                <code>{createdPdfFileName || 'PDF 파일'}</code>
+              </div>
+              <button 
+                onClick={() => {
+                  try {
+                    const downloadUrl = createdPdfDownloadUrl || createdPdfUrl;
+                    const fileName = createdPdfFileName || 'demo_application.pdf';
+                    
+                    console.log('PDF 다운로드 시작:', { downloadUrl, fileName });
+                    
+                    // Google Drive 다운로드 URL을 새 창에서 열기
+                    const downloadWindow = window.open(downloadUrl, '_blank');
+                    
+                    if (downloadWindow) {
+                      console.log('✅ PDF 다운로드 창 열림');
+                    } else {
+                      console.warn('⚠️ 팝업이 차단되었을 수 있습니다');
+                      alert('팝업 차단을 해제하거나 위의 "Google Drive에서 PDF 열기" 버튼을 이용해주세요.');
+                    }
+                  } catch (error) {
+                    console.error('PDF 다운로드 실패:', error);
+                    alert('PDF 다운로드에 실패했습니다. Google Drive에서 직접 열어주세요.');
+                  }
+                }}
+                className={styles.copyUrlButtonInline}
+              >
+                📥 PDF 다운로드
               </button>
             </div>
           </div>

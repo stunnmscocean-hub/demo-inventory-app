@@ -12,8 +12,12 @@ console.log('URL 접근 테스트를 위해 브라우저에서 직접 접속해�
 export const TEMPLATE_SPREADSHEET_ID = '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0lht0';
 export const TEMPLATE_SHEET_GID = '1326732411'; // This is the gid for the specific sheet/tab
 
-// Google Drive folder ID for saving PDFs (optional)
-export const DRIVE_FOLDER_ID = '1Ah66GAuU_cln6uvtR-apgLG-38zwa1Px'; // 장비 대여신청서 저장 폴더
+// Google Drive folder ID for saving PDFs
+export const PDF_FOLDER_ID = '1x4dl_uWgrIcHbI19Il3xQzSEqY5Q68S4'; // PDF 저장 폴더
+export const SHEET_FOLDER_ID = '1kwlO_ECacC1KDThPnZWpxXvLEqGUALvl'; // 복제된 스프레드시트 저장 폴더
+
+// 하위 호환성을 위한 별칭
+export const DRIVE_FOLDER_ID = PDF_FOLDER_ID;
 
 // Configuration constants
 const MAX_RETRY_ATTEMPTS = 3;
@@ -188,7 +192,7 @@ export const testAppsScriptConnection = async () => {
  */
 export const duplicateSpreadsheet = async (accessToken, templateId, newTitle) => {
   return await retryWithBackoff(async () => {
-    console.log('duplicateSpreadsheet POST 요청 시작:', { templateId, newTitle });
+    console.log('duplicateSpreadsheet POST 요청 시작:', { templateId, newTitle, targetFolder: SHEET_FOLDER_ID });
     
     const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
       method: 'POST',
@@ -199,6 +203,7 @@ export const duplicateSpreadsheet = async (accessToken, templateId, newTitle) =>
         action: 'duplicateSpreadsheet',
         templateId: templateId,
         newTitle: newTitle,
+        targetFolderId: SHEET_FOLDER_ID, // 복제된 시트 저장 폴더
         accessToken: accessToken || 'apps-script-mode'
       })
     });
@@ -283,7 +288,7 @@ export const exportGoogleSheetToPdfAndConvertToJpg = async (accessToken, spreads
         spreadsheetId: spreadsheetId,
         sheetGid: sheetGid,
         fileName: fileName,
-        folderId: DRIVE_FOLDER_ID,
+        folderId: PDF_FOLDER_ID, // PDF 저장 폴더
         accessToken: accessToken
       })
     });
@@ -297,6 +302,16 @@ export const exportGoogleSheetToPdfAndConvertToJpg = async (accessToken, spreads
 
     const result = await response.json();
     
+    console.log('=== GAS PDF Export 응답 ===');
+    console.log('전체 result:', result);
+    console.log('result.success:', result.success);
+    console.log('result.fileId:', result.fileId);
+    console.log('result.fileName:', result.fileName);
+    console.log('result.fileUrl:', result.fileUrl);
+    console.log('result.pdfUrl:', result.pdfUrl);
+    console.log('result.viewerDownloadUrl:', result.viewerDownloadUrl);
+    console.log('result.error:', result.error);
+    
     if (result.error) {
       throw new GoogleApiError(
         `Apps Script error: ${result.error}`,
@@ -305,15 +320,19 @@ export const exportGoogleSheetToPdfAndConvertToJpg = async (accessToken, spreads
     }
 
     // Apps Script가 fileId를 반환했는지 확인
-    if (!result.fileId && !result.pdfUrl) {
-      throw new GoogleApiError('PDF export returned no file ID', ERROR_TYPES.API);
+    if (!result.fileId && !result.pdfUrl && !result.fileUrl) {
+      console.error('PDF export 응답에 파일 정보 없음:', result);
+      throw new GoogleApiError('PDF export returned no file ID or URL', ERROR_TYPES.API);
     }
 
     return {
       success: true,
       fileId: result.fileId,
       fileName: result.fileName,
-      pdfUrl: result.pdfUrl,
+      fileUrl: result.fileUrl,  // ✅ GAS에서 받은 fileUrl 추가
+      pdfUrl: result.pdfUrl,  // 다운로드 URL
+      viewerDownloadUrl: result.viewerDownloadUrl,  // 뷰어 다운로드 URL
+      actualSheetGid: result.actualSheetGid,  // 실제 시트 GID
       jpgImages: result.jpgImages || [],
       conversionError: result.conversionError || null
     };
