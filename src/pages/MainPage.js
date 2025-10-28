@@ -503,6 +503,7 @@ const MainPage = ({ user, onLogout }) => {
   const [createdPdfUrl, setCreatedPdfUrl] = useState(null); // State for created PDF URL
   const [createdPdfDownloadUrl, setCreatedPdfDownloadUrl] = useState(null); // State for PDF download URL
   const [createdPdfFileName, setCreatedPdfFileName] = useState(null); // State for PDF file name
+  const [isSheetBoxExpanded, setIsSheetBoxExpanded] = useState(false); // State for sheet box expand/collapse
 
   // Custom sorting order
   const customOrder = [
@@ -2092,9 +2093,6 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.log('📋 스프레드시트 ID:', newSpreadsheetId);
           setProcessMessage('✅ 신청 정보 입력 완료!');
           
-          // 스프레드시트 생성 완료 alert
-          alert(`✅ 스프레드시트가 생성되었습니다!\n\n생성된 스프레드시트:\n${spreadsheetUrl}\n\n※ URL이 클립보드에 복사되었습니다.`);
-          
           // 스프레드시트 URL을 클립보드에 복사
           if (navigator.clipboard && navigator.clipboard.writeText) {
             try {
@@ -2223,9 +2221,6 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             console.log('📥 PDF 다운로드 URL:', pdfDownloadUrl);
             console.log('📋 실제 시트 GID:', pdfResult.actualSheetGid);
             setProcessMessage('✅ PDF 변환 완료!');
-            
-            // PDF 생성 완료 alert (다운로드 안내)
-            alert(`✅ PDF가 생성되었습니다!\n\n파일명: ${pdfFileName}\n\n※ 아래 UI에서 다운로드 버튼을 클릭하여 PDF를 저장하세요.`);
           } else {
             // pdfResult에 에러가 있으면 상세 로그
             if (pdfResult && pdfResult.error) {
@@ -2730,38 +2725,45 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         {/* 생성된 스프레드시트 결과 표시 */}
         {createdSpreadsheetUrl && (
           <div className={styles.spreadsheetResultBox}>
-            <div className={styles.spreadsheetResultHeader}>
-              <span className={styles.successIcon}>✅</span>
-              <h4>스프레드시트가 생성되었습니다!</h4>
-            </div>
-            <div className={styles.spreadsheetResultContent}>
-              <p className={styles.spreadsheetResultDescription}>
-                생성된 장비 대여요청서를 확인하세요.
-              </p>
-              <a 
-                href={createdSpreadsheetUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={styles.spreadsheetResultButton}
-              >
-                📄 Google Sheets에서 열기
-              </a>
-              <div className={styles.spreadsheetResultUrl}>
-                <code>{createdSpreadsheetUrl}</code>
+            <div className={styles.spreadsheetResultHeader} style={{ cursor: 'pointer' }} onClick={() => setIsSheetBoxExpanded(!isSheetBoxExpanded)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className={styles.successIcon}>✅</span>
+                <h4>스프레드시트가 생성되었습니다!</h4>
               </div>
               <button 
-                onClick={() => {
-                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(createdSpreadsheetUrl)
-                      .then(() => alert('URL이 클립보드에 복사되었습니다!'))
-                      .catch(err => console.error('클립보드 복사 실패:', err));
-                  }
-                }}
-                className={styles.copyUrlButtonInline}
+                className={styles.foldButtonInline}
+                style={{ marginLeft: 'auto' }}
               >
-                📋 URL 복사
+                {isSheetBoxExpanded ? '▲ 접기' : '▼ 시트 수정 하기'}
               </button>
             </div>
+            {isSheetBoxExpanded && (
+              <div className={styles.spreadsheetResultContent}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <a 
+                    href={createdSpreadsheetUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={styles.spreadsheetResultButton}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    📄 열기
+                  </a>
+                  <button 
+                    onClick={() => {
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(createdSpreadsheetUrl)
+                          .then(() => alert('URL이 클립보드에 복사되었습니다!'))
+                          .catch(err => console.error('클립보드 복사 실패:', err));
+                      }
+                    }}
+                    className={styles.copyUrlButtonInline}
+                  >
+                    📋 링크 복사
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
         
@@ -2773,46 +2775,39 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <h4>PDF가 생성되었습니다!</h4>
             </div>
             <div className={styles.spreadsheetResultContent}>
-              <p className={styles.spreadsheetResultDescription}>
-                생성된 PDF 파일을 확인하세요.
-              </p>
-              <a 
-                href={createdPdfUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={styles.spreadsheetResultButton}
-              >
-                📄 Google Drive에서 PDF 열기
-              </a>
-              <div className={styles.spreadsheetResultUrl}>
-                <code>{createdPdfFileName || 'PDF 파일'}</code>
-              </div>
-              <button 
-                onClick={() => {
-                  try {
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <a 
+                  href={createdPdfUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={styles.spreadsheetResultButton}
+                  style={{ textDecoration: 'none' }}
+                >
+                  📄 열기
+                </a>
+                <button 
+                  onClick={() => {
                     const downloadUrl = createdPdfDownloadUrl || createdPdfUrl;
-                    const fileName = createdPdfFileName || 'demo_application.pdf';
-                    
-                    console.log('PDF 다운로드 시작:', { downloadUrl, fileName });
-                    
-                    // Google Drive 다운로드 URL을 새 창에서 열기
-                    const downloadWindow = window.open(downloadUrl, '_blank');
-                    
-                    if (downloadWindow) {
-                      console.log('✅ PDF 다운로드 창 열림');
-                    } else {
-                      console.warn('⚠️ 팝업이 차단되었을 수 있습니다');
-                      alert('팝업 차단을 해제하거나 위의 "Google Drive에서 PDF 열기" 버튼을 이용해주세요.');
+                    window.open(downloadUrl, '_blank');
+                  }}
+                  className={styles.spreadsheetResultButton}
+                >
+                  📥 다운로드
+                </button>
+                <button 
+                  onClick={() => {
+                    const urlToCopy = createdPdfUrl || createdPdfDownloadUrl;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(urlToCopy)
+                        .then(() => alert('PDF URL이 클립보드에 복사되었습니다!'))
+                        .catch(err => console.error('클립보드 복사 실패:', err));
                     }
-                  } catch (error) {
-                    console.error('PDF 다운로드 실패:', error);
-                    alert('PDF 다운로드에 실패했습니다. Google Drive에서 직접 열어주세요.');
-                  }
-                }}
-                className={styles.copyUrlButtonInline}
-              >
-                📥 PDF 다운로드
-              </button>
+                  }}
+                  className={styles.copyUrlButtonInline}
+                >
+                  📋 링크 복사
+                </button>
+              </div>
             </div>
           </div>
         )}

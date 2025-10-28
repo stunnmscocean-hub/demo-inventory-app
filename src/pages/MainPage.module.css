@@ -46,6 +46,7 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 8px;
+  padding-bottom: 60vh; /* 하단 고정 영역을 위한 여유 공간 */
   min-height: 200px; /* 최소 높이 보장 */
 }
 
@@ -77,15 +78,25 @@
 
 /* 하단 고정 영역 (선택된 장비 + 데모 신청 정보) */
 .bottomFixedArea {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  transform: translateX(-50%);
+  z-index: 9999 !important;
+  width: calc(100% - 32px) !important;
+  max-width: 1400px !important; /* 최대 너비 제한 */
   flex-shrink: 0;
   max-height: 60vh; /* 최대 높이 제한 */
+  min-height: 50px !important; /* 최소 높이 보장 */
   overflow-y: auto;
   overflow-x: hidden;
-  background-color: #f8f9fa;
+  background-color: #f8f9fa !important;
   border-top: 2px solid #dee2e6;
-  padding: 16px 8px 16px 16px;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-  transition: max-height 0.3s ease, padding 0.3s ease;
+  padding: 16px 16px 16px 16px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.15);
+  transition: max-height 0.3s ease, padding 0.3s ease, transform 0s;
+  display: block !important;
+  visibility: visible !important;
 }
 
 /* 하단 영역 - 살짝 줄어든 상태 */
@@ -1465,6 +1476,7 @@ input[name="returnDate"]::placeholder {
 .spreadsheetResultHeader {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -1670,6 +1682,12 @@ input[name="returnDate"]::placeholder {
     max-width: 96%;
   }
 
+  /* 하단 고정 영역 너비 조정 (태블릿) */
+  .bottomFixedArea {
+    width: calc(100% - 24px) !important;
+    padding: 12px 12px 12px 12px;
+  }
+
   /* 태블릿에서도 선택 칼럼 스타일 적용 */
   .categoryTable thead th:nth-child(1),
   .categoryTable tbody td:nth-child(1) {
@@ -1873,6 +1891,12 @@ input[name="returnDate"]::placeholder {
   /* 내 데모 섹션 패딩 */
   .myDemoSection {
     padding: 10px;
+  }
+
+  /* 하단 고정 영역 너비 조정 (모바일) */
+  .bottomFixedArea {
+    width: calc(100% - 16px) !important;
+    padding: 10px 10px 10px 10px;
   }
 
   /* 스크롤 영역 설정 */

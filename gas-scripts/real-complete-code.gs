@@ -345,6 +345,16 @@ function duplicateSpreadsheet(templateId, newTitle, targetFolderId) {
       }
     }
     
+    // 스프레드시트 권한 설정 - 링크가 있는 모든 사용자가 수정 가능하도록
+    try {
+      console.log('🔓 스프레드시트 권한 설정 중...');
+      newSpreadsheet.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+      console.log('✅ 스프레드시트 권한 설정 완료: 링크가 있는 사람 전체 수정 가능');
+    } catch (sharingError) {
+      console.warn('⚠️ 스프레드시트 권한 설정 실패 (계속 진행):', sharingError.toString());
+      // 권한 설정 실패해도 스프레드시트는 생성되었으므로 계속 진행
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       spreadsheetId: newSpreadsheetId,
@@ -628,6 +638,16 @@ function exportToPdfAndJpg(spreadsheetId, sheetGid, fileName, folderId) {
     if (!ok) {
       console.warn('⚠️ 파일 전파 확인 실패했지만 계속 진행');
       // throw하지 않고 계속 진행 (파일은 생성되었을 가능성 높음)
+    }
+
+    // 10-1) 파일 권한 설정 - 링크가 있는 모든 사용자가 볼 수 있도록
+    try {
+      console.log('🔓 파일 권한 설정 중...');
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      console.log('✅ 파일 권한 설정 완료: 링크가 있는 사람 전체 열람 가능');
+    } catch (sharingError) {
+      console.warn('⚠️ 권한 설정 실패 (계속 진행):', sharingError.toString());
+      // 권한 설정 실패해도 파일은 생성되었으므로 계속 진행
     }
 
     // 11) Base64 인코딩 (선택적)
