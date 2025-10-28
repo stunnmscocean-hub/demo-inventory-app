@@ -1,0 +1,2438 @@
+/* --- Page Layout --- */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+.loadingMessage {
+  text-align: center;
+  padding: 40px;
+  font-size: 16px;
+  color: #666;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.section {
+  background-color: white;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+}
+
+/* 고정 영역 스타일 */
+.fixedArea {
+  flex-shrink: 0; /* 크기 고정 */
+  overflow: visible;
+}
+
+/* 검색 영역 고정 */
+.searchFixedSection {
+  background-color: white;
+  padding: 16px 24px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 16px;
+  flex-shrink: 0;
+}
+
+/* 스크롤 가능한 영역 (장비 목록만) */
+.scrollableArea {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 8px;
+  min-height: 200px; /* 최소 높이 보장 */
+}
+
+/* 스크롤바 스타일 */
+.scrollableArea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollableArea::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.scrollableArea::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.scrollableArea::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 하단 고정 영역 (선택된 장비 + 데모 신청 정보) */
+.bottomFixedArea {
+  flex-shrink: 0;
+  max-height: 60vh; /* 최대 높이 제한 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  background-color: #f8f9fa;
+  border-top: 2px solid #dee2e6;
+  padding: 16px 8px 16px 16px;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
+  transition: max-height 0.3s ease, padding 0.3s ease;
+}
+
+/* 하단 영역 - 살짝 줄어든 상태 */
+.bottomFixedAreaCompact {
+  max-height: 40vh !important;
+}
+
+/* 하단 영역 - 완전히 접힌 상태 */
+.bottomFixedAreaFolded {
+  max-height: 60px !important;
+  overflow: hidden !important;
+  padding: 12px 8px 12px 16px !important;
+  cursor: pointer; /* 클릭 가능함을 표시 */
+}
+
+/* 하단 영역 - 스크롤 시 높이 확장 */
+.bottomFixedAreaExpanded {
+  max-height: 77vh !important;
+}
+
+/* 접힌/축소 상태일 때 클릭 유도 */
+.bottomFixedAreaFolded:hover,
+.bottomFixedAreaCompact:hover {
+  background-color: #e9ecef;
+}
+
+/* 하단 영역 스크롤바 */
+.bottomFixedArea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bottomFixedArea::-webkit-scrollbar-track {
+  background: #e9ecef;
+  border-radius: 4px;
+}
+
+.bottomFixedArea::-webkit-scrollbar-thumb {
+  background: #6c757d;
+  border-radius: 4px;
+}
+
+.bottomFixedArea::-webkit-scrollbar-thumb:hover {
+  background: #495057;
+}
+
+/* 하단 영역이 비어있을 때 숨김 */
+.bottomFixedArea:empty {
+  display: none;
+  padding: 0;
+  border: none;
+}
+
+.myDemoSection {
+  background-color: #f0f8f0; /* 옅은 초록색 배경 */
+  border: 1px solid #d4edda; /* 연한 초록색 테두리 */
+  position: relative;
+}
+
+.myDemoSection.folded {
+  padding-bottom: 16px; /* 접기된 상태에서 하단 패딩 줄이기 */
+}
+
+.sectionTitle {
+  margin-top: 0;
+  margin-bottom: 20px;
+  font-size: 22px;
+}
+
+/* --- Header --- */
+.header {
+  margin-bottom: 24px;
+}
+
+.headerTitle {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* --- MyDemoList Table --- */
+.overdue {
+  color: var(--danger-color);
+  font-weight: 700;
+}
+
+.overdueText {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+/* --- SearchBar --- */
+.searchForm {
+  display: flex;
+  gap: 8px;
+  margin: 0;
+  width: 100%;
+}
+
+.searchInput {
+  flex-grow: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 14px;
+  min-width: 0; /* flex 자식이 축소될 수 있도록 */
+}
+
+/* --- EquipmentList Table --- */
+.clickableRow {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.clickableRow:hover {
+  background-color: var(--light-gray-color);
+}
+
+/* --- NewApplicationForm --- */
+.formContainer {
+  padding: 24px;
+  background-color: #fdfdfe;
+}
+
+.infoBox {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: #ffffff;
+}
+
+.formTitle {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, min-content 1fr); /* Two pairs of label (min-content) and input (1fr) */
+  gap: 16px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+
+.formField {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.formField label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0; /* Prevent label from shrinking */
+}
+
+.formField input {
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  /* Removed flex-grow to allow inline styles to take full effect */
+}
+
+/* Full width field for items like '반출 사유' and '파트너 주소' */
+.formFieldFullWidth {
+  grid-column: 1 / -1; /* Spans all columns */
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.formFieldFullWidth label {
+  margin-bottom: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.formFieldFullWidth input {
+  padding: 8px;
+  font-size: 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  /* Removed width and flex-grow to allow inline styles to take full effect */
+}
+
+.formFieldFullWidth button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.foldButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 24px;
+  background-color: #28a745; /* 초록색 배경 */
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.foldButton:hover {
+  background-color: #218838; /* 더 진한 초록색 */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+.foldButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* Page fold effect */
+.foldButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  border-width: 0 15px 15px 0; /* Adjust size of the fold */
+  border-style: solid;
+  border-color: #f0f0f0 #f0f0f0 #ccc #ccc; /* Colors for the fold effect */
+  display: block;
+  transform: translateY(-50%) translateX(50%) rotate(45deg); /* Position and rotate */
+  box-shadow: -2px 2px 2px rgba(0, 0, 0, 0.1); /* Shadow for the fold */
+}
+
+.searchResults {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: white;
+  max-height: 150px;
+  overflow-y: auto;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.searchResults li {
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.searchResults li:hover {
+  background-color: var(--light-gray-color);
+}
+
+/* --- Input with Search Results --- */
+.inputWithResults {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.inputWithResults .searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  margin-top: 2px;
+  width: 100%;
+  min-width: 200px;
+}
+
+/* --- Loading Styles --- */
+.loadingContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: 16px;
+}
+
+.loadingSpinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.loadingMessage {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text-color);
+  margin: 0;
+}
+
+.loadingSubMessage {
+  font-size: 14px;
+  color: var(--text-color-secondary);
+  margin: 0;
+  opacity: 0.8;
+}
+
+.searchInputDisabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #f5f5f5;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --- Main Content Layout --- */
+.mainContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  height: calc(100vh - 120px); /* 헤더 높이 제외한 전체 높이 */
+  position: relative;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.sectionHeader h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+/* 제목과 버튼을 한 줄에 */
+.sectionHeaderWithButton {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  gap: 12px;
+}
+
+.sectionHeaderWithButton h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  flex: 1;
+}
+
+/* 인라인 접기 버튼 */
+.foldButtonInline {
+  padding: 6px 16px;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.foldButtonInline:hover {
+  background-color: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(40, 167, 69, 0.4);
+}
+
+.foldButtonInline:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(40, 167, 69, 0.3);
+}
+
+/* 컴팩트 검색 헤더 (한 줄) */
+.compactSearchHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.compactTitle {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.searchBarCompact {
+  flex: 1;
+  min-width: 150px;
+}
+
+.filterLabelCompact {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.filterLabelCompact input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+
+.filterLabelCompact span {
+  user-select: none;
+}
+
+.sectionFooter {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #d4edda;
+}
+
+.myDemoSection.folded .sectionFooter {
+  margin-top: 0;
+  padding-top: 12px;
+  border-top: none;
+}
+
+.filterControls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filterLabel {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.filterLabel input[type="checkbox"] {
+  margin: 0;
+}
+
+.searchSection {
+  margin-bottom: 20px;
+}
+
+.tableContainer {
+  overflow-x: auto;
+}
+
+.tableContainer table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0;
+}
+
+.tableContainer th,
+.tableContainer td {
+  padding: 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tableContainer th {
+  background-color: var(--light-gray-color);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.tableContainer td {
+  font-size: 14px;
+}
+
+.noData {
+  text-align: center;
+  color: #666;
+  font-style: italic;
+  padding: 40px;
+  margin: 0;
+}
+
+/* --- Button Styles --- */
+.button-primary {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.button-primary:hover {
+  background-color: var(--primary-dark-color);
+}
+
+.button-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.button-secondary:hover {
+  background-color: #5a6268;
+}
+
+/* --- Equipment Selection Styles --- */
+.selectableRow {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.selectableRow:hover {
+  background-color: var(--light-gray-color);
+}
+
+.equipmentCheckbox {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+/* --- Selected Equipments List --- */
+.selectedEquipmentsContainer {
+  margin-bottom: 16px;
+  padding: 16px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.selectedEquipmentsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.selectedEquipmentsHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.applicationButton {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.applicationButton:hover:not(:disabled) {
+  background-color: #0056b3;
+}
+
+.applicationButton:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.selectedEquipmentsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.selectedEquipmentItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background-color: white;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.equipmentInfo {
+  font-size: 14px;
+  font-weight: 500;
+  color: #495057;
+}
+
+.removeButton {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-size: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease;
+}
+
+.removeButton:hover {
+  background-color: #c82333;
+}
+
+/* --- Application Form Container --- */
+.applicationFormContainer {
+  margin-top: 0;
+  padding: 16px;
+  background-color: #ffffff;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.applicationFormHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.applicationFormHeader h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #495057;
+  flex: 1;
+}
+
+.formControlButtons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.foldFormButton,
+.expandButton {
+  padding: 6px 14px;
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+  white-space: nowrap;
+  min-width: 60px;
+}
+
+.foldFormButton:hover,
+.expandButton:hover {
+  background-color: #5a6268;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(108, 117, 125, 0.4);
+}
+
+.foldFormButton:active,
+.expandButton:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(108, 117, 125, 0.3);
+}
+
+.expandButton {
+  background-color: #28a745;
+}
+
+.expandButton:hover {
+  background-color: #218838;
+}
+
+.selectedEquipmentsSummary {
+  margin-bottom: 24px;
+  padding: 16px;
+  background-color: #e9ecef;
+  border-radius: 6px;
+}
+
+.selectedEquipmentsSummary h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #495057;
+}
+
+.selectedEquipmentsSummary ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.selectedEquipmentsSummary li {
+  margin-bottom: 4px;
+  font-size: 14px;
+  color: #6c757d;
+}
+
+.formActions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #dee2e6;
+}
+
+/* Excel 이미지 미리보기 스타일 */
+.excelImageContainer {
+  margin-top: 30px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+}
+
+.excelImageContainer h3 {
+  margin: 0 0 20px 0;
+  color: #495057;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.imageWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.excelImage {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.imageActions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.downloadButton {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.downloadButton:hover {
+  background: #0056b3;
+}
+
+.closeButton {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.closeButton:hover {
+  background: #545b62;
+}
+
+/* PDF 미리보기 스타일 */
+.pdfPreviewContainer {
+  margin-top: 20px;
+  padding: 20px;
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+}
+
+.pdfPreviewContainer h3 {
+  margin: 0 0 15px 0;
+  color: #495057;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.pdfPreviewImages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.pdfPreviewPage {
+  background-color: white;
+  border-radius: 6px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.pdfPreviewPage h4 {
+  margin: 0;
+  padding: 10px 15px;
+  background-color: #e9ecef;
+  color: #495057;
+  font-size: 14px;
+  font-weight: 600;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.pdfPreviewImage {
+  text-align: center;
+  padding: 15px;
+}
+
+/* JPG 이미지 미리보기 스타일 */
+.pdfPreviewContainer {
+  margin-top: 20px;
+  padding: 20px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.pdfPreviewContainer h3 {
+  margin: 0 0 15px 0;
+  color: #333;
+  text-align: center;
+}
+
+.pdfImagesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  align-items: center;
+}
+
+.pdfImageWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.pdfImage {
+  max-width: 100%;
+  max-height: 600px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.pdfImageInfo {
+  font-size: 14px;
+  color: #666;
+  font-weight: bold;
+}
+
+/* PNG Viewer Styles */
+.pngViewer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.pngViewerHeader {
+  background: white;
+  padding: 20px;
+  border-radius: 8px 8px 0 0;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pngViewerHeader h3 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+}
+
+.closeButton {
+  background: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.closeButton:hover {
+  background: #ff6666;
+}
+
+.pngViewerContent {
+  background: white;
+  padding: 20px;
+  border-radius: 0 0 8px 8px;
+  width: 100%;
+  max-width: 800px;
+  max-height: 70vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pngFileItem {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 15px;
+  background: #f9f9f9;
+}
+
+.pngFileItem h4 {
+  margin: 0 0 10px 0;
+  color: #333;
+  font-size: 16px;
+}
+
+.pngFileItem p {
+  margin: 5px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.downloadLink {
+  display: inline-block;
+  background: #007bff;
+  color: white;
+  text-decoration: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.downloadLink:hover {
+  background: #0056b3;
+  text-decoration: none;
+}
+
+/* 파트너 검색 결과 스타일 */
+.searchResults {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.searchResults li {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.searchResults li:hover {
+  background-color: #f5f5f5;
+}
+
+.searchResults li:last-child {
+  border-bottom: none;
+}
+
+.searchResultNumber {
+  background: #007bff;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.searchResultContent {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.searchResultTitle {
+  font-weight: bold;
+  color: #333;
+}
+
+.searchResultSubtitle {
+  font-size: 12px;
+  color: #666;
+}
+
+.inputWithResults {
+  position: relative;
+}
+
+/* PNG 이미지 표시 영역 */
+.pngDisplayArea {
+  margin-top: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.pngImageContainer {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.pngImage {
+  max-width: 100%;
+  height: auto;
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  display: block;
+}
+
+/* 날짜 입력 필드 스타일 */
+input[name="checkoutDate"], 
+input[name="returnDate"] {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: #fff;
+  color: #333;
+  cursor: text;
+  font-family: 'Courier New', monospace; /* 고정폭 폰트로 날짜 형식 명확화 */
+  text-align: center;
+  width: 13% !important; /* 사용자 설정 너비 */
+}
+
+/* 날짜 선택기 달력 아이콘 크기 조정 */
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[name="checkoutDate"]::-webkit-calendar-picker-indicator,
+input[name="returnDate"]::-webkit-calendar-picker-indicator {
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: all 0.2s ease;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover,
+input[name="checkoutDate"]::-webkit-calendar-picker-indicator:hover,
+input[name="returnDate"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  filter: invert(27%) sepia(95%) saturate(7471%) hue-rotate(354deg) brightness(95%) contrast(118%);
+}
+
+input[name="checkoutDate"]:focus, 
+input[name="returnDate"]:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+input[name="checkoutDate"]:hover, 
+input[name="returnDate"]:hover {
+  border-color: #007bff;
+}
+
+/* 날짜 입력 필드에 YYYY/MM/DD 형식 힌트 추가 */
+input[name="checkoutDate"]::placeholder, 
+input[name="returnDate"]::placeholder {
+  color: #999;
+  font-size: 12px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+}
+
+.dateDisplay {
+  margin-left: 10px;
+  font-size: 14px;
+  color: #555;
+  white-space: nowrap;
+  display: inline-block;
+}
+
+/* 스프레드시트 링크 컨테이너 */
+.spreadsheetLinkContainer {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  width: 90%;
+  max-width: 600px;
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -45%);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+.spreadsheetLinkHeader {
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  padding: 20px;
+  border-radius: 12px 12px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.spreadsheetLinkHeader h3 {
+  margin: 0;
+  color: white;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.spreadsheetLinkContent {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.spreadsheetLinkDescription {
+  margin: 0;
+  color: #555;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.spreadsheetLinkButton {
+  display: inline-block;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  text-decoration: none;
+  padding: 14px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+.spreadsheetLinkButton:hover {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.spreadsheetUrlDisplay {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.spreadsheetUrlDisplay code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #333;
+  word-break: break-all;
+}
+
+.copyUrlButton {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  border-radius: 6px;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px rgba(0, 123, 255, 0.3);
+}
+
+.copyUrlButton:hover {
+  background: #0056b3;
+  box-shadow: 0 4px 10px rgba(0, 123, 255, 0.4);
+  transform: translateY(-1px);
+}
+
+/* 인라인 스프레드시트 결과 박스 */
+.spreadsheetResultBox {
+  margin-top: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #4CAF50;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.15);
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.spreadsheetResultHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.successIcon {
+  font-size: 28px;
+  animation: bounce 0.5s ease-out;
+}
+
+@keyframes bounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.spreadsheetResultHeader h4 {
+  margin: 0;
+  color: #2d5016;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.spreadsheetResultContent {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.spreadsheetResultDescription {
+  margin: 0;
+  color: #555;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.spreadsheetResultButton {
+  display: inline-block;
+  background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+  color: white;
+  text-decoration: none;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+  width: fit-content;
+}
+
+.spreadsheetResultButton:hover {
+  background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+  transform: translateY(-2px);
+  text-decoration: none;
+}
+
+.spreadsheetResultUrl {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 12px;
+  overflow-x: auto;
+}
+
+.spreadsheetResultUrl code {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  color: #1e40af;
+  word-break: break-all;
+}
+
+.copyUrlButtonInline {
+  background: #0ea5e9;
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 6px rgba(14, 165, 233, 0.3);
+  width: fit-content;
+}
+
+.copyUrlButtonInline:hover {
+  background: #0284c7;
+  box-shadow: 0 4px 10px rgba(14, 165, 233, 0.4);
+  transform: translateY(-1px);
+}
+
+/* ===== 스켈레톤 로딩 UI ===== */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 0%,
+    #e0e0e0 20%,
+    #f0f0f0 40%,
+    #f0f0f0 100%
+  );
+  background-size: 200% 100%;
+  animation: skeletonLoading 1.5s ease-in-out infinite;
+  border-radius: 4px;
+  height: 20px;
+  display: block;
+}
+
+@keyframes skeletonLoading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeletonRow {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #eee;
+  align-items: center;
+}
+
+.skeletonCell {
+  height: 20px;
+  border-radius: 4px;
+}
+
+.skeletonCellSmall {
+  width: 40px;
+  height: 20px;
+}
+
+.skeletonCellMedium {
+  width: 120px;
+  height: 20px;
+}
+
+.skeletonCellLarge {
+  width: 180px;
+  height: 20px;
+}
+
+.skeletonButton {
+  width: 70px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.skeletonPartnerCard {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+
+.skeletonPartnerName {
+  height: 24px;
+  width: 200px;
+  margin-bottom: 12px;
+  border-radius: 4px;
+}
+
+.skeletonPartnerInfo {
+  height: 16px;
+  width: 150px;
+  margin-bottom: 8px;
+  border-radius: 4px;
+}
+
+.loadingMessage {
+  text-align: center;
+  padding: 20px;
+  color: #666;
+  font-size: 14px;
+}
+
+/* ===== 태블릿 반응형 스타일 (720px 이하) ===== */
+@media (max-width: 720px) {
+  /* 메인 콘텐츠 높이 조정 */
+  .mainContent {
+    height: calc(100vh - 100px);
+  }
+
+  /* 고정 영역 여백 조정 */
+  .fixedArea {
+    margin-bottom: 12px;
+  }
+
+  .searchFixedSection {
+    padding: 12px 16px;
+    margin-bottom: 12px;
+  }
+
+  /* 스크롤 영역 패딩 조정 */
+  .scrollableArea {
+    padding-right: 4px;
+  }
+
+  /* 하단 고정 영역 */
+  .bottomFixedArea {
+    max-height: 50vh;
+    padding: 12px 6px 12px 12px;
+  }
+
+  .bottomFixedAreaCompact {
+    max-height: 35vh !important;
+  }
+
+  .bottomFixedAreaFolded {
+    max-height: 50px !important;
+  }
+
+  .bottomFixedAreaExpanded {
+    max-height: 77vh !important;
+  }
+
+  /* 폼 헤더 */
+  .applicationFormHeader h3 {
+    font-size: 16px;
+  }
+
+  .foldFormButton,
+  .expandButton {
+    padding: 5px 12px;
+    font-size: 12px;
+    min-width: 55px;
+  }
+
+  /* 제목과 버튼 한 줄 (태블릿) */
+  .sectionHeaderWithButton {
+    margin-bottom: 12px;
+    gap: 10px;
+  }
+
+  .sectionHeaderWithButton h2 {
+    font-size: 16px;
+  }
+
+  /* 인라인 접기 버튼 (태블릿) */
+  .foldButtonInline {
+    padding: 6px 14px;
+    font-size: 12px;
+  }
+
+  /* 컴팩트 검색 헤더 (태블릿) */
+  .compactSearchHeader {
+    gap: 10px;
+  }
+
+  .compactTitle {
+    font-size: 16px;
+  }
+
+  .searchBarCompact {
+    min-width: 120px;
+  }
+
+  .filterLabelCompact {
+    font-size: 12px;
+    gap: 5px;
+  }
+
+  /* 내 데모 현황 - 버튼 여백 최소화 */
+  .myDemoSection .tableContainer th,
+  .myDemoSection .tableContainer td {
+    padding: 8px 4px;
+  }
+
+  /* 버튼 패딩 최소화 */
+  .myDemoSection .tableContainer td button {
+    padding: 6px 8px;
+    font-size: 12px;
+  }
+
+  /* 데모 신청 정보 - 입력 필드 비율 조정 */
+  .formGrid {
+    gap: 10px;
+  }
+
+  .formField {
+    gap: 6px;
+  }
+
+  .formField label {
+    min-width: 100px;
+    max-width: 100px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .formField input,
+  .formField select,
+  .formField span {
+    font-size: 12px;
+    padding: 7px;
+  }
+
+  /* 전체 너비 필드 */
+  .formFieldFullWidth label {
+    min-width: 100px;
+    max-width: 100px;
+    font-size: 12px;
+  }
+
+  .formFieldFullWidth input,
+  .formFieldFullWidth textarea {
+    font-size: 12px;
+    padding: 7px;
+  }
+
+  /* 인포 박스 패딩 */
+  .infoBox {
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+
+  /* 섹션 헤더 */
+  .sectionHeader h2 {
+    font-size: 18px;
+  }
+
+  .infoBox h3 {
+    font-size: 14px;
+  }
+
+  /* 날짜 입력 필드 */
+  input[name="checkoutDate"],
+  input[name="returnDate"] {
+    width: 15% !important;
+  }
+
+  /* 날짜 표시 */
+  .dateDisplay {
+    font-size: 12px;
+  }
+
+  /* 달력 아이콘 크기 */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+  }
+
+  /* 버튼 크기 조정 */
+  .formActions button {
+    font-size: 13px;
+    padding: 9px 16px;
+  }
+
+  /* 양식 복사/붙여넣기 버튼 */
+  .infoBox button {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+}
+
+/* ===== 모바일 반응형 스타일 (600px 이하) ===== */
+@media (max-width: 600px) {
+  /* 컨테이너 패딩 최소화 */
+  .container {
+    padding: 8px;
+  }
+
+  /* 메인 콘텐츠 높이 조정 */
+  .mainContent {
+    height: calc(100vh - 60px);
+  }
+
+  /* 고정 영역 여백 최소화 */
+  .fixedArea {
+    margin-bottom: 6px;
+  }
+
+  .searchFixedSection {
+    padding: 8px 10px;
+    margin-bottom: 6px;
+  }
+
+  /* 섹션 패딩 최소화 */
+  .section {
+    padding: 8px;
+    margin-bottom: 6px;
+    border-radius: 6px;
+  }
+
+  /* 내 데모 섹션 패딩 */
+  .myDemoSection {
+    padding: 10px;
+  }
+
+  /* 스크롤 영역 설정 */
+  .scrollableArea {
+    padding-right: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 스크롤바 숨김 (모바일) */
+  .scrollableArea::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  /* 하단 고정 영역 모바일 최적화 */
+  .bottomFixedArea {
+    max-height: 55vh;
+    padding: 8px 4px 8px 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* 하단 영역 스크롤바 숨김 (모바일) */
+  .bottomFixedArea::-webkit-scrollbar {
+    width: 3px;
+  }
+
+  .bottomFixedAreaExpanded {
+    max-height: 77vh !important;
+  }
+
+  /* 선택된 장비 컨테이너 */
+  .selectedEquipmentsContainer {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  /* 선택된 장비 헤더 */
+  .selectedEquipmentsHeader h3 {
+    font-size: 14px;
+    margin: 0;
+  }
+
+  /* 선택된 장비 아이템 */
+  .selectedEquipmentItem {
+    padding: 6px 10px;
+    gap: 6px;
+  }
+
+  .equipmentInfo {
+    font-size: 12px;
+  }
+
+  .removeButton {
+    width: 20px;
+    height: 20px;
+    font-size: 11px;
+  }
+
+  /* 내 데모 현황 - 모바일에서 테이블 최적화 */
+  .myDemoSection .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .myDemoSection .tableContainer table {
+    width: 100%;
+    font-size: 11px;
+    table-layout: fixed;
+  }
+
+  .myDemoSection .tableContainer th,
+  .myDemoSection .tableContainer td {
+    padding: 6px 2px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.3;
+  }
+
+  /* 칼럼 너비 최적화 */
+  .myDemoSection .tableContainer th:nth-child(1), /* 장비 */
+  .myDemoSection .tableContainer td:nth-child(1) {
+    width: 20%;
+    min-width: 55px;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(2), /* 시리얼 */
+  .myDemoSection .tableContainer td:nth-child(2) {
+    width: 22%;
+    min-width: 70px;
+    font-size: 9px;
+    word-break: break-all;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(3), /* 시작일 */
+  .myDemoSection .tableContainer td:nth-child(3) {
+    width: 13%;
+    min-width: 42px;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(4), /* 반납일 */
+  .myDemoSection .tableContainer td:nth-child(4) {
+    width: 13%;
+    min-width: 42px;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(5), /* 양식 */
+  .myDemoSection .tableContainer td:nth-child(5) {
+    width: 16%;
+    min-width: 45px;
+    text-align: center;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(6), /* 관리 */
+  .myDemoSection .tableContainer td:nth-child(6) {
+    width: 16%;
+    min-width: 45px;
+    text-align: center;
+  }
+
+  /* 버튼 최소화 */
+  .myDemoSection .tableContainer td button {
+    padding: 5px 4px;
+    font-size: 10px;
+    white-space: nowrap;
+    width: 100%;
+    min-width: unset;
+    border-radius: 3px;
+    line-height: 1.2;
+  }
+
+  /* 제출 완료 텍스트 스타일 */
+  .myDemoSection .tableContainer td:nth-child(5) {
+    font-size: 10px;
+  }
+
+  /* 반납일 초과 텍스트 */
+  .myDemoSection .overdueText {
+    display: none; /* 모바일에서는 텍스트 숨김 */
+  }
+
+  /* 반납일 초과 셀 색상 */
+  .myDemoSection .tableContainer td.overdue {
+    color: var(--danger-color);
+    font-weight: 700;
+  }
+
+  /* 헤더 폰트 크기 */
+  .myDemoSection .tableContainer th {
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* 새 데모 신청 - 장비 목록 테이블 최적화 */
+  .section:not(.myDemoSection) table {
+    font-size: 11px;
+  }
+
+  .section:not(.myDemoSection) th,
+  .section:not(.myDemoSection) td {
+    padding: 6px 3px;
+    word-wrap: break-word;
+  }
+
+  /* 장비 목록 헤더 폰트 크기 */
+  .section:not(.myDemoSection) th {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* 장비 목록 칼럼 너비 최적화 */
+  .section:not(.myDemoSection) th:nth-child(1), /* 선택 */
+  .section:not(.myDemoSection) td:nth-child(1) {
+    width: 35px;
+    min-width: 35px;
+    padding: 6px 2px;
+    text-align: center;
+  }
+
+  .section:not(.myDemoSection) th:nth-child(2), /* 장비 */
+  .section:not(.myDemoSection) td:nth-child(2) {
+    width: 23%;
+    font-size: 11px;
+  }
+
+  .section:not(.myDemoSection) th:nth-child(3), /* 시리얼 */
+  .section:not(.myDemoSection) td:nth-child(3) {
+    width: 26%;
+    font-size: 9px;
+    word-break: break-all;
+  }
+
+  .section:not(.myDemoSection) th:nth-child(4), /* 위치 */
+  .section:not(.myDemoSection) td:nth-child(4) {
+    width: 18%;
+    font-size: 10px;
+  }
+
+  .section:not(.myDemoSection) th:nth-child(5), /* 현황 */
+  .section:not(.myDemoSection) td:nth-child(5) {
+    width: 13%;
+    font-size: 10px;
+    text-align: center;
+    white-space: nowrap;
+    padding: 6px 2px;
+  }
+
+  /* 체크박스 크기 조정 */
+  .equipmentCheckbox {
+    width: 16px;
+    height: 16px;
+  }
+
+  /* 폼 컨테이너 */
+  .formContainer {
+    padding: 12px;
+    background-color: white;
+  }
+
+  /* 폼 그리드를 1열로 변경 */
+  .formGrid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* 폼 필드를 세로로 배치 */
+  .formField {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 4px !important;
+    grid-column: 1 / -1 !important;
+  }
+
+  .formField label {
+    white-space: normal !important;
+    text-align: left !important;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+  }
+
+  .formField input,
+  .formField select,
+  .formField textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    padding: 7px 10px !important;
+    font-size: 13px !important;
+  }
+  
+  .formField span {
+    width: 100% !important;
+    font-size: 12px !important;
+  }
+
+  /* Full width 필드도 세로로 */
+  .formFieldFullWidth {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+  }
+
+  .formFieldFullWidth label {
+    white-space: normal;
+    text-align: left;
+    font-size: 12px !important;
+    font-weight: 500 !important;
+  }
+
+  .formFieldFullWidth input,
+  .formFieldFullWidth textarea {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 7px 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* 인포 박스 패딩 줄이기 */
+  .infoBox {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 6px;
+  }
+
+  .infoBox h3 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+  
+  /* 인포 박스 헤더 (양식 복사/붙여넣기 버튼 포함) */
+  .infoBox > div[style*="display: flex"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px;
+  }
+  
+  .infoBox > div[style*="display: flex"] > div {
+    width: 100%;
+    flex-direction: row !important;
+    gap: 6px !important;
+  }
+  
+  .infoBox > div[style*="display: flex"] button {
+    flex: 1;
+    font-size: 11px !important;
+    padding: 6px 8px !important;
+  }
+
+  /* 버튼 액션 영역 */
+  .formActions {
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 12px;
+    padding-top: 12px;
+  }
+
+  .formActions button {
+    width: 100%;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  /* 헤더 */
+  .header {
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .headerTitle {
+    font-size: 16px;
+    font-weight: 600;
+  }
+
+  .header button {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* 섹션 헤더 */
+  .sectionHeader {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .sectionHeader h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  /* 제목과 버튼 한 줄 */
+  .sectionHeaderWithButton {
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+
+  .sectionHeaderWithButton h2 {
+    font-size: 14px;
+  }
+
+  /* 인라인 접기 버튼 */
+  .foldButtonInline {
+    padding: 5px 12px;
+    font-size: 11px;
+  }
+
+  /* 컴팩트 검색 헤더 */
+  .compactSearchHeader {
+    gap: 8px;
+    flex-wrap: nowrap;
+  }
+
+  .compactTitle {
+    font-size: 14px;
+  }
+
+  .searchBarCompact {
+    min-width: 100px;
+  }
+
+  .filterLabelCompact {
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  .filterLabelCompact span {
+    display: inline;
+  }
+
+  /* 섹션 푸터 */
+  .sectionFooter {
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  /* 접기 버튼 */
+  .foldButton {
+    padding: 6px 16px;
+    font-size: 12px;
+  }
+
+  /* 필터 컨트롤 */
+  .filterControls {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+
+  .filterLabel {
+    font-size: 11px;
+    gap: 4px;
+  }
+
+  /* 검색 섹션 */
+  .searchSection {
+    margin-bottom: 10px;
+  }
+
+  .searchInput {
+    padding: 8px;
+    font-size: 13px;
+    border-radius: 4px;
+  }
+
+  /* 일반 버튼 크기 */
+  .button-primary,
+  .button-secondary {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  /* 테이블 컨테이너 */
+  .tableContainer {
+    margin-bottom: 0;
+  }
+
+  /* 데이터 없음 메시지 */
+  .noData {
+    padding: 20px;
+    font-size: 12px;
+  }
+
+  /* 선택된 장비 요약 */
+  .selectedEquipmentsSummary {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .selectedEquipmentsSummary h4 {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .selectedEquipmentsSummary ul {
+    padding-left: 16px;
+  }
+
+  .selectedEquipmentsSummary li {
+    font-size: 11px;
+    margin-bottom: 3px;
+  }
+
+  /* 애플리케이션 폼 컨테이너 */
+  .applicationFormContainer {
+    padding: 10px;
+    margin-top: 0;
+  }
+
+  .applicationFormHeader {
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+  }
+
+  .applicationFormHeader h3 {
+    font-size: 14px;
+  }
+
+  .formControlButtons {
+    gap: 6px;
+  }
+
+  .foldFormButton,
+  .expandButton {
+    padding: 4px 10px;
+    font-size: 11px;
+    min-width: 50px;
+  }
+
+  /* 하단 영역 상태별 높이 */
+  .bottomFixedAreaCompact {
+    max-height: 40vh !important;
+  }
+
+  .bottomFixedAreaFolded {
+    max-height: 45px !important;
+    padding: 8px 4px 8px 8px !important;
+  }
+
+  /* 테이블 컨테이너 */
+  .tableContainer {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* 검색 결과 */
+  .searchResults {
+    max-height: 150px;
+  }
+
+  /* 날짜 입력 필드 모바일 최적화 */
+  .formField input[name="checkoutDate"], 
+  .formField input[name="returnDate"],
+  input[type="date"][name="checkoutDate"],
+  input[type="date"][name="returnDate"] {
+    width: 100% !important;
+    max-width: 180px !important;
+    box-sizing: border-box !important;
+    flex: 0 0 auto;
+    padding: 7px 10px !important;
+    font-size: 13px !important;
+  }
+  
+  /* 모바일에서 달력 아이콘 크기 */
+  .formField input[type="date"]::-webkit-calendar-picker-indicator,
+  .formField input[name="checkoutDate"]::-webkit-calendar-picker-indicator,
+  .formField input[name="returnDate"]::-webkit-calendar-picker-indicator,
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    width: 32px !important;
+    height: 32px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+
+  /* 날짜 표시 영역 - 모바일에서 숨김 */
+  .dateDisplay {
+    display: none;
+  }
+  
+  /* 날짜 필드만 가로 배치 */
+  .formField:has(input[name="checkoutDate"]),
+  .formField:has(input[name="returnDate"]) {
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+  }
+  
+  .formField:has(input[name="checkoutDate"]) label,
+  .formField:has(input[name="returnDate"]) label {
+    width: 100%;
+    flex-basis: 100%;
+    margin-bottom: 2px;
+  }
+  
+  /* 날짜 필드 컨테이너 */
+  .formField[style*="gridColumn"] {
+    grid-column: 1 / -1 !important;
+  }
+
+  /* 스프레드시트 결과 박스 */
+  .spreadsheetResultBox {
+    padding: 12px;
+    margin-top: 10px;
+  }
+
+  .spreadsheetResultHeader {
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+
+  .successIcon {
+    font-size: 22px;
+  }
+
+  .spreadsheetResultHeader h4 {
+    font-size: 15px;
+  }
+
+  .spreadsheetResultDescription {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .spreadsheetResultButton,
+  .copyUrlButtonInline {
+    width: 100%;
+    text-align: center;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .spreadsheetResultUrl {
+    padding: 8px;
+    margin: 8px 0;
+  }
+
+  .spreadsheetResultUrl code {
+    font-size: 10px;
+  }
+
+  /* PNG 뷰어 */
+  .pngViewer {
+    padding: 8px;
+  }
+
+  .pngViewerHeader {
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .pngViewerHeader h3 {
+    font-size: 14px;
+    margin: 0;
+  }
+
+  .pngViewerContent {
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .pngFileItem {
+    padding: 10px;
+    margin-bottom: 10px;
+  }
+
+  .pngFileItem h4 {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .pngFileItem p {
+    font-size: 11px;
+    margin: 3px 0;
+  }
+
+  .downloadLink {
+    padding: 6px 12px;
+    font-size: 12px;
+    margin-top: 6px;
+  }
+
+  /* 검색 결과 */
+  .searchResults {
+    max-height: 180px;
+    font-size: 12px;
+  }
+
+  .searchResults li {
+    padding: 6px 10px;
+  }
+
+  .searchResultNumber {
+    width: 18px;
+    height: 18px;
+    font-size: 11px;
+  }
+
+  .searchResultTitle {
+    font-size: 12px;
+  }
+
+  .searchResultSubtitle {
+    font-size: 10px;
+  }
+}
