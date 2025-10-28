@@ -494,6 +494,7 @@ const MainPage = ({ user, onLogout }) => {
   const [pdfBase64, setPdfBase64] = useState(null); // State for PDF Base64 data
   const [pngFiles, setPngFiles] = useState([]); // State for PNG files
   const [isExportingToPng, setIsExportingToPng] = useState(false); // State for PNG export loading
+  const [processMessage, setProcessMessage] = useState(''); // State for detailed process message
   const [sheetPngFiles, setSheetPngFiles] = useState([]); // State for specific sheet PNG files
   const [isExportingSheetToPng, setIsExportingSheetToPng] = useState(false); // State for sheet PNG export loading
   const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState(null); // State for created spreadsheet URL
@@ -2003,10 +2004,12 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
       // Set loading state for PNG export
       setIsExportingToPng(true);
+      setProcessMessage('🚀 데모 신청 처리를 시작합니다...');
 
       try {
         console.log("MultiEquipmentApplicationForm: Initiating PNG export workflow.");
         
+        setProcessMessage('🔧 Google API 초기화 중...');
         // Initialize Google APIs (simplified for Apps Script)
         await initGoogleApis();
         
@@ -2018,6 +2021,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         const MAIN_SHEET_ID = '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
         logOperation('addDataToMainSheet', { spreadsheetId: MAIN_SHEET_ID, equipmentCount: selectedEquipments.length });
         try {
+          setProcessMessage('📝 기존 시트에 장비 데이터 추가 중...');
           console.log('기존 시트에 데이터 추가 시작:', { spreadsheetId: MAIN_SHEET_ID });
           const addDataSuccess = await addDataToSheet(accessToken, MAIN_SHEET_ID, formData, selectedEquipments);
           if (!addDataSuccess) {
@@ -2026,12 +2030,12 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           
           logOperation('addDataToMainSheet', { success: true });
           console.log('✅ 기존 시트에 데이터가 추가되었습니다!');
-          alert('✅ 장비 데이터가 기존 시트에 추가되었습니다!\n\n스프레드시트: https://docs.google.com/spreadsheets/d/13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ/edit');
+          setProcessMessage('✅ 기존 시트에 데이터 추가 완료!');
           
         } catch (error) {
           logOperation('addDataToMainSheet', { success: false, error: error.message }, 'error');
           console.error('기존 시트 데이터 추가 실패:', error);
-          alert(`기존 시트에 데이터 추가 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('⚠️ 기존 시트 데이터 추가 실패 (계속 진행)');
           // 실패해도 계속 진행 (복제 워크플로우)
         }
 
@@ -2039,6 +2043,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         logOperation('duplicateSpreadsheet', { requester: formData.requester });
         const newSpreadsheetTitle = `장비_대여요청서_${formData.requester}_${new Date().toISOString().slice(0, 10)}`;
         
+        setProcessMessage('📋 템플릿 시트 복사 중...');
         let newSpreadsheetId;
         try {
           newSpreadsheetId = await duplicateSpreadsheet(accessToken, TEMPLATE_SPREADSHEET_ID, newSpreadsheetTitle);
@@ -2048,6 +2053,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           }
           
           logOperation('duplicateSpreadsheet', { success: true, spreadsheetId: newSpreadsheetId });
+          setProcessMessage('✅ 템플릿 시트 복사 완료!');
         } catch (error) {
           logOperation('duplicateSpreadsheet', { success: false, error: error.message }, 'error');
           
@@ -2056,13 +2062,15 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             clearAuthData();
           }
           
-          alert(`1. 스프레드시트 복제 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('');
+          alert(`❌ 스프레드시트 복제 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
         }
 
         // 2. Update the duplicated Google Sheet with form data
         logOperation('updateGoogleSheet', { spreadsheetId: newSpreadsheetId, equipmentCount: selectedEquipments.length });
         try {
+          setProcessMessage('📝 신청 정보 입력 중...');
           const updateSuccess = await updateGoogleSheetWithData(accessToken, newSpreadsheetId, formData, selectedEquipments);
           if (!updateSuccess) {
             throw new Error("Sheet update returned false");
@@ -2077,6 +2085,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.log('✅ 스프레드시트 생성 및 업데이트 완료!');
           console.log('📄 스프레드시트 URL:', spreadsheetUrl);
           console.log('📋 스프레드시트 ID:', newSpreadsheetId);
+          setProcessMessage('✅ 신청 정보 입력 완료!');
           
         } catch (error) {
           logOperation('updateGoogleSheet', { success: false, error: error.message }, 'error');
@@ -2086,7 +2095,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             clearAuthData();
           }
           
-          alert(`2. Google Sheet 업데이트 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('');
+          alert(`❌ Google Sheet 업데이트 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
         }
 
@@ -2158,6 +2168,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         console.log('📄 생성된 스프레드시트:', spreadsheetUrl);
         console.log('📄 스프레드시트 제목:', newSpreadsheetTitle);
         
+        setProcessMessage('🎉 데모 신청이 완료되었습니다!');
+        
         // URL을 클립보드에 복사 (선택적)
         if (navigator.clipboard && navigator.clipboard.writeText) {
           try {
@@ -2167,6 +2179,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             console.log('클립보드 복사 실패:', clipboardError);
           }
         }
+        
+        // 완료 alert만 표시
+        alert(`✅ 데모 신청이 완료되었습니다!\n\n생성된 스프레드시트:\n${spreadsheetUrl}\n\n※ URL이 클립보드에 복사되었습니다.`);
 
       } catch (error) {
         logOperation('workflowError', { error: error.message }, 'error');
@@ -2176,10 +2191,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           clearAuthData();
         }
         
-        alert(`전체 워크플로우 중 오류 발생: ${getUserFriendlyErrorMessage(error)}`);
+        setProcessMessage('');
+        alert(`❌ 전체 워크플로우 중 오류 발생: ${getUserFriendlyErrorMessage(error)}`);
       } finally {
         // Reset loading state
         setIsExportingToPng(false);
+        // processMessage는 유지 (사용자가 확인할 수 있도록)
+        setTimeout(() => setProcessMessage(''), 3000); // 3초 후 메시지 제거
       }
     };
 
@@ -2605,14 +2623,25 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             입력 테스트
           </button>
           */}
-          <button 
-            onClick={handleDownloadPng} 
-            className="button-primary" 
-            disabled={!isGoogleApiLoaded || isExportingToPng}
-          >
-            {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
-          </button>
-          <button onClick={onCancel} className="button-secondary">취소</button>
+          
+          {/* 실시간 처리 메시지 표시 */}
+          {processMessage && (
+            <div className={styles.processMessage}>
+              <div className={styles.processSpinner}></div>
+              <p>{processMessage}</p>
+            </div>
+          )}
+          
+          <div>
+            <button 
+              onClick={handleDownloadPng} 
+              className="button-primary" 
+              disabled={!isGoogleApiLoaded || isExportingToPng}
+            >
+              {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
+            </button>
+            <button onClick={onCancel} className="button-secondary">취소</button>
+          </div>
         </div>
 
         {/* 생성된 스프레드시트 결과 표시 */}

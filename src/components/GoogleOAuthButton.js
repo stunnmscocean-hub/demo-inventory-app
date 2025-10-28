@@ -8,14 +8,16 @@ const GoogleOAuthButton = () => {
 
   const handleSuccess = async (credentialResponse) => {
     try {
-      setLoading(true);
+      setLoading(true, '🔐 Google 인증 정보 확인 중...');
       setError(null); // 이전 에러 메시지 초기화
       console.log('Google OAuth credential received:', credentialResponse);
       
+      setLoading(true, '🔑 서버 인증 처리 중...');
       // 실제 GAS 서버를 통한 OAuth 처리 (ACL 권한 확인 포함)
       const response = await processOAuth(credentialResponse.credential, window.location.origin);
       
       if (response && response.email) {
+        setLoading(true, '✅ 사용자 정보 확인 중...');
         const userInfo = {
           id: response.sub || response.id,
           email: response.email,
@@ -24,6 +26,7 @@ const GoogleOAuthButton = () => {
           role: response.role || 'viewer'
         };
         
+        setLoading(true, '🎉 로그인 완료!');
         // JWT 토큰을 accessToken으로 저장
         login(userInfo, credentialResponse.credential);
         console.log('User logged in successfully:', userInfo);
@@ -48,7 +51,7 @@ const GoogleOAuthButton = () => {
       setError(errorMessage);
       console.log('Setting error message:', errorMessage);
     } finally {
-      setLoading(false);
+      setLoading(false, '');
     }
   };
 
