@@ -320,6 +320,15 @@ function duplicateSpreadsheet(templateId, newTitle) {
     var newSpreadsheetId = newSpreadsheet.getId();
     console.log('duplicateSpreadsheet: New spreadsheet created with ID:', newSpreadsheetId);
     
+    // 권한 설정: 링크가 있는 모든 사용자에게 보기 권한 부여
+    try {
+      newSpreadsheet.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      console.log('duplicateSpreadsheet: Sharing permission set to ANYONE_WITH_LINK (VIEW)');
+    } catch (sharingError) {
+      console.warn('duplicateSpreadsheet: Failed to set sharing permission:', sharingError.toString());
+      // 권한 설정 실패해도 파일은 생성되었으므로 계속 진행
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       spreadsheetId: newSpreadsheetId
