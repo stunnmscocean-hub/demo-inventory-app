@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   duplicateSpreadsheet, 
   updateGoogleSheetWithData, 
   initGoogleApis, 
   addDataToSheet,
-  TEMPLATE_SPREADSHEET_ID, 
+  exportGoogleSheetToPdfAndConvertToJpg,
+  TEMPLATE_SPREADSHEET_ID,
+  TEMPLATE_SHEET_GID,
   getUserFriendlyErrorMessage,
   logOperation,
   checkFolderAccess,
@@ -14,6 +16,7 @@ import {
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
 import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
+import { getCacheData, setCacheData, getForceCacheData, findDataChanges, applyDataChanges, CACHE_KEYS } from '../utils/dataCache';
 import JpgViewer from '../components/JpgViewer';
 import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
@@ -37,7 +40,7 @@ const SearchBar = React.memo(({ onSearch }) => {
     <div className={styles.searchForm} onClick={handleClick}>
       <input 
         type="text" 
-        placeholder="장비 이름 또는 시리얼 넘버로 검색" 
+        placeholder="장비 이름, 시리얼" 
         value={term} 
         onChange={handleChange} 
         onClick={handleClick}
@@ -62,7 +65,7 @@ const SkeletonTable = ({ rows = 5 }) => (
   <table>
     <thead>
       <tr>
-        <th style={{ width: '40px' }}>선택</th>
+        <th>선택</th>
         <th>장비명</th>
         <th>시리얼 넘버</th>
         <th>장비 위치</th>
@@ -163,45 +166,171 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     
     return statusMap[status] || status;
   };
+
+  // 카테고리 정의
+  const CATEGORIES = [
+    { id: 'rally', name: 'Rally 시리즈', icon: '📹' },
+    { id: 'meetup', name: 'MeetUp 시리즈', icon: '🎥' },
+    { id: 'mic', name: '연장 마이크', icon: '🎤' },
+    { id: 'tap', name: 'TAP 시리즈', icon: '📱' },
+    { id: 'pc', name: 'PC/컴퓨팅', icon: '💻' },
+    { id: 'dock', name: 'Dock 시리즈', icon: '🖥️' },
+    { id: 'ptz', name: 'PTZ/카메라', icon: '📷' },
+    { id: 'webcam', name: '웹캠', icon: '📸' },
+    { id: 'cable', name: '케이블', icon: '🔗' },
+    { id: 'mount', name: '마운트류', icon: '📐' },
+    { id: 'other', name: '기타', icon: '📦' }
+  ];
+
+  // 장비의 카테고리 결정
+  const getEquipmentCategory = (equipment) => {
+    const name = equipment.name || '';
+    const lowerNameOriginal = name.toLowerCase(); // 원본 이름 (괄호 포함)
+    const cleanName = name.replace(/\s*\([^)]*\)/g, '').trim();
+    const lowerName = cleanName.toLowerCase();
+
+    // includes 체크는 원본 이름으로 (괄호 안의 내용도 체크)
+    
+    // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart includes) - 먼저 체크
+    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') || 
+        lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
+      console.log(`[PC 카테고리] ${name}`);
+      return 'pc';
+    }
+    
+    // 1. Rally 시리즈
+    const rallyList = [
+      'Rally Plus', 'Rally System', 'Rally Camera', 'Rally', 'Rally Bar', 'Rally Bar Graphite','Rally Bar Mini', 'Rally Bar Huddle',
+       'Rally Speaker'
+    ];
+    if (rallyList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'rally';
+    
+    // 2. MeetUp 시리즈
+    const meetupList = ['MeetUp', 'MeetUp 2'];
+    if (meetupList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'meetup';
+    
+    // 3. 연장 마이크 (Expansion includes만 허용)
+    const micList = ['Rally Mic Pod', 'Mic Pod Expansion', 'MIc Pod'];
+    if (micList.some(model => cleanName === model || lowerName === model.toLowerCase()) || 
+        lowerNameOriginal.includes('expansion')) return 'mic';
+    
+    // 4. TAP 시리즈 (tap includes, mount 포함된 제목은 제외)
+    if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) return 'tap';
+    
+    // 6. Dock 시리즈
+    const dockList = ['Logi Dock Flex', 'Logi Dock'];
+    if (dockList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'dock';
+    
+    // 7. PTZ/카메라
+    const ptzList = ['PTZ Pro 2', 'Group', 'Sight', 'Connect', 'BCC950', 'Scribe', 'Reach'];
+    if (ptzList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'ptz';
+    
+    // 8. 웹캠
+    const webcamList = [
+      'Brio', 'MX Brio 705', 'C930e', 'C925e', 'C920e', 'C505e',
+      'Brio 705'
+    ];
+    if (webcamList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'webcam';
+    
+    // 9. 케이블
+    const cableList = [
+      'Active USB Cable', 'CAT5E Kit for TAP', 'Rally Mic Pod Extension Cable', 'Strong USB Cable',
+      'Rally Mic Pod Cat Coupler', 'USB Strong Cable'
+    ];
+    if (cableList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'cable';
+    
+    // 10. 마운트류 (mount includes만 허용)
+    if (lowerNameOriginal.includes('mount')) return 'mount';
+    
+    // 기타 (Screen Share, H570e 등)
+    const otherList = ['Screen Share', 'H570e'];
+    if (otherList.some(model => cleanName === model || lowerName === model.toLowerCase())) {
+      console.log(`[기타 카테고리 - 명시적] ${name}`);
+      return 'other';
+    }
+    
+    // 기타 (나머지 모든 장비)
+    console.log(`[기타 카테고리 - 기본] ${name}`);
+    return 'other';
+  };
+
+  // 장비를 카테고리별로 그룹화
+  const groupedEquipments = React.useMemo(() => {
+    const groups = {};
+    
+    console.log('===== 전체 장비 목록 =====');
+    console.log('총 장비 수:', equipments.length);
+    
+    equipments.forEach(eq => {
+      const categoryId = getEquipmentCategory(eq);
+      if (!groups[categoryId]) {
+        groups[categoryId] = [];
+      }
+      groups[categoryId].push(eq);
+    });
+    
+    console.log('===== 카테고리별 그룹화 결과 =====');
+    Object.keys(groups).forEach(catId => {
+      console.log(`[${catId}] ${groups[catId].length}개:`, groups[catId].map(e => e.name));
+    });
+    
+    return groups;
+  }, [equipments]);
+
+  // 렌더링할 카테고리 목록 (장비가 있는 카테고리만)
+  const categoriesToRender = CATEGORIES.filter(cat => 
+    groupedEquipments[cat.id] && groupedEquipments[cat.id].length > 0
+  );
   
   return (
-    <table>
-      <thead>
-        <tr>
-          <th style={{ width: '40px' }}>선택</th>
-          <th>{isMobile ? '장비' : '장비명'}</th>
-          <th>{isMobile ? '시리얼' : '시리얼 넘버'}</th>
-          <th>{isMobile ? '위치' : '장비 위치'}</th>
-          <th>{isMobile ? '현황' : '사용 현황'}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {equipments.map((eq) => {
-          const isSelected = selectedEquipments.some(selected => selected.id === eq.id);
-          return (
-            <tr 
-              key={eq.id} 
-              className={styles.selectableRow}
-              onClick={(e) => handleRowClick(e, eq)}
-            >
-              <td>
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => handleCheckboxChange(e, eq)}
-                  className={styles.equipmentCheckbox}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </td>
-              <td>{eq.name}</td>
-              <td>{eq.serial}</td>
-              <td>{eq.location}</td>
-              <td>{getStatusText(eq.status)}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <div>
+      {categoriesToRender.map((category) => (
+        <div key={category.id} className={styles.categorySection}>
+          <div className={styles.categoryHeader}>
+            <span className={styles.categoryIcon}>{category.icon}</span>
+            <span className={styles.categoryName}>{category.name}</span>
+            <span className={styles.categoryCount}>({groupedEquipments[category.id].length})</span>
+          </div>
+          <table className={styles.categoryTable}>
+            <thead>
+              <tr>
+                <th>선택</th>
+                <th>{isMobile ? '장비' : '장비명'}</th>
+                <th>{isMobile ? '시리얼' : '시리얼 넘버'}</th>
+                <th>{isMobile ? '위치' : '장비 위치'}</th>
+                <th>{isMobile ? '현황' : '사용 현황'}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {groupedEquipments[category.id].map((eq) => {
+                const isSelected = selectedEquipments.some(selected => selected.id === eq.id);
+                return (
+                  <tr 
+                    key={eq.id} 
+                    className={styles.selectableRow}
+                    onClick={(e) => handleRowClick(e, eq)}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => handleCheckboxChange(e, eq)}
+                        className={styles.equipmentCheckbox}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                    <td>{eq.name}</td>
+                    <td>{eq.serial}</td>
+                    <td>{eq.location}</td>
+                    <td>{getStatusText(eq.status)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
   );
 });
 
@@ -343,6 +472,14 @@ const MainPage = ({ user, onLogout }) => {
   const [allPartners, setAllPartners] = useState([]); // New state for partner data
   const [showInUseEquipment, setShowInUseEquipment] = useState(false);
   const [isMyDemosFolded, setIsMyDemosFolded] = useState(false); // State for folding MyDemoList
+  const [applicationFormState, setApplicationFormState] = useState('folded'); // 'expanded', 'compact', 'folded' - 초기값 folded
+  const [isBottomAreaExpanded, setIsBottomAreaExpanded] = useState(false); // 스크롤 시 높이 확장 상태
+  const scrollableAreaRef = useRef(null); // Ref for scrollable area
+  const bottomFixedAreaRef = useRef(null); // Ref for bottom fixed area
+  const scrollCountRef = useRef(0); // 스크롤 카운터
+  const lastScrollTopRef = useRef(0); // 마지막 스크롤 위치
+  const isProcessingRef = useRef(false); // 상태 변경 처리 중 플래그
+  const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
   
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
@@ -359,17 +496,39 @@ const MainPage = ({ user, onLogout }) => {
   const [pdfBase64, setPdfBase64] = useState(null); // State for PDF Base64 data
   const [pngFiles, setPngFiles] = useState([]); // State for PNG files
   const [isExportingToPng, setIsExportingToPng] = useState(false); // State for PNG export loading
+  const [processMessage, setProcessMessage] = useState(''); // State for detailed process message
   const [sheetPngFiles, setSheetPngFiles] = useState([]); // State for specific sheet PNG files
   const [isExportingSheetToPng, setIsExportingSheetToPng] = useState(false); // State for sheet PNG export loading
   const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState(null); // State for created spreadsheet URL
+  const [createdPdfUrl, setCreatedPdfUrl] = useState(null); // State for created PDF URL
+  const [createdPdfDownloadUrl, setCreatedPdfDownloadUrl] = useState(null); // State for PDF download URL
+  const [createdPdfFileName, setCreatedPdfFileName] = useState(null); // State for PDF file name
+  const [isSheetBoxExpanded, setIsSheetBoxExpanded] = useState(false); // State for sheet box expand/collapse
 
   // Custom sorting order
   const customOrder = [
-    "Rally Plus", "Rally System", "Rally Camera", "Rally", "Rally Bar", "Rally Bar Mini",
-    "Rally Bar Huddle", "MeetUp", "MeetUp 2", "TAP", "TAP IP", "Extend", "SWYTCH", "Logi Dock Flex",
-    "Logi Dock", "PTZ Pro 2", "Group", "Sight", "Connect", "BCC950", "Scribe", "Reach",
-    "Brio", "MX Brio 705", "C930e", "C925e", "C920e", "C505e",
-    "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Strong USB Cable"
+    // 1. Rally 시리즈
+    "Rally Plus", "Rally System", "Rally Camera", "Rally", "Rally Bar", "Rally Bar Mini", "Rally Bar Huddle",
+    "Rally Bar Graphite", "Rally Speaker",
+    // 2. MeetUp 시리즈
+    "MeetUp", "MeetUp 2",
+    // 3. 연장 마이크 (Expansion 포함 + Rally Mic Pod)
+    "Rally Mic Pod", "MIc Pod", "Mic Pod Expansion",
+    // 4. TAP 시리즈 (tap includes)
+    "TAP", "TAP IP",
+    // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart includes)
+    "Google Chromebox",
+    // 6. Dock 시리즈
+    "Logi Dock Flex", "Logi Dock",
+    // 7. PTZ/카메라
+    "PTZ Pro 2", "Group", "Sight", "Connect", "BCC950", "Scribe", "Reach",
+    // 8. 웹캠
+    "Brio", "Brio 705", "MX Brio 705", "C930e", "C925e", "C920e", "C505e",
+    // 9. 케이블
+    "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Rally Mic Pod Cat Coupler", 
+    "Strong USB Cable", "USB Strong Cable",
+    // 10. 마운트류 (mount 포함)
+    "TV Mount", "Wall Mount", "Secure Mount"
   ];
 
   // Function to clean equipment names for sorting
@@ -379,51 +538,151 @@ const MainPage = ({ user, onLogout }) => {
     return clean;
   };
 
+  // 장비 카테고리 결정 함수
+  const getCategoryRank = (name) => {
+    const lowerNameOriginal = name.toLowerCase(); // 원본 이름 (괄호 포함)
+    const cleanName = getCleanName(name);
+    const lowerName = cleanName.toLowerCase();
+    
+    // customOrder에 정확히 일치하는 항목이 있으면 그 위치 반환
+    const exactIndex = customOrder.indexOf(cleanName);
+    if (exactIndex !== -1) {
+      return exactIndex;
+    }
+    
+    // includes 체크는 원본 이름으로
+    
+    // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart 포함) - 먼저 체크
+    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') || 
+        lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
+      return customOrder.indexOf("Google Chromebox");
+    }
+    
+    // 3. 연장 마이크 (Expansion 포함)
+    if (lowerNameOriginal.includes('expansion')) {
+      return customOrder.indexOf("Mic Pod Expansion");
+    }
+    
+    // 4. TAP 시리즈 (tap 포함, mount 포함된 제목은 제외)
+    if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) {
+      return customOrder.indexOf("TAP");
+    }
+    
+    // 10. 마운트류 (mount 포함)
+    if (lowerNameOriginal.includes('mount')) {
+      return customOrder.indexOf("TV Mount");
+    }
+    
+    // customOrder에 없으면 맨 뒤로
+    return customOrder.length;
+  };
+
   // Sorting function
   const sortEquipment = (a, b) => {
-    const cleanNameA = getCleanName(a.name);
-    const cleanNameB = getCleanName(b.name);
+    const rankA = getCategoryRank(a.name);
+    const rankB = getCategoryRank(b.name);
 
-    const rankA = customOrder.indexOf(cleanNameA);
-    const rankB = customOrder.indexOf(cleanNameB);
-
-    // Assign a large rank for items not in customOrder to place them at the end
-    const finalRankA = rankA === -1 ? customOrder.length : rankA;
-    const finalRankB = rankB === -1 ? customOrder.length : rankB;
-
-    // Sort by custom order rank first
-    if (finalRankA !== finalRankB) {
-      return finalRankA - finalRankB;
+    // Sort by category rank first
+    if (rankA !== rankB) {
+      return rankA - rankB;
     }
 
-    // If custom order ranks are the same (or both not in custom order), sort by clean name alphabetically
+    // 같은 카테고리 내에서는 이름 순으로 정렬
+    const cleanNameA = getCleanName(a.name);
+    const cleanNameB = getCleanName(b.name);
     return cleanNameA.localeCompare(cleanNameB);
   };
 
+  // 대여 가능 상태 체크 (다양한 표기 허용)
+  const isAvailableStatus = (status) => {
+    if (!status) return false;
+    const normalizedStatus = status.toString().trim().toLowerCase().replace(/\s+/g, '');
+    // '대여 가능', '대여가능', '대여  가능' 등 모두 허용
+    return normalizedStatus === '대여가능';
+  };
+
+  // 장비 데이터 처리 헬퍼 함수 (캐시와 서버 데이터 공통 로직)
+  const processEquipmentData = useCallback((allEquipmentFromSheet, userName) => {
+    // Apply sorting to all equipment data
+    const sortedAllEquipment = [...allEquipmentFromSheet].sort(sortEquipment);
+    setAllEquipments(sortedAllEquipment);
+    
+    console.log('📋 전체 장비 목록 확인 (NUC PC 포함 여부):');
+    const nucPcEquipments = sortedAllEquipment.filter(item => 
+      item.name && item.name.toLowerCase().includes('nuc')
+    );
+    console.log('NUC 장비들:', nucPcEquipments.map(e => ({ name: e.name, status: e.status, available: isAvailableStatus(e.status) })));
+    
+    const initialFiltered = sortedAllEquipment.filter(item => {
+      if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
+      const available = isAvailableStatus(item.status);
+      if (!available && item.name && item.name.toLowerCase().includes('nuc')) {
+        console.log(`❌ NUC 장비 필터링됨: ${item.name}, status="${item.status}"`);
+      }
+      return available; // 대여 가능한 장비만 표시
+    });
+    
+    console.log(`📋 장비 필터링: 전체 ${sortedAllEquipment.length}건 → 표시 ${initialFiltered.length}건 (showInUseEquipment: ${showInUseEquipment})`);
+    setAvailableEquipments(initialFiltered);
+    setFilteredEquipments(initialFiltered);
+  }, [showInUseEquipment]);
+
   useEffect(() => {
     const fetchAllCsvData = async () => {
-      // 섹션별 로딩 시작
+      const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+      
+      // 🚀 STEP 1: 캐시 데이터 즉시 로드 (빠른 표시)
+      console.log('⚡ [Step 1] 캐시 데이터 로드 시작...');
+      const cachedEquipment = getForceCacheData(CACHE_KEYS.EQUIPMENT);
+      const cachedPartners = getForceCacheData(CACHE_KEYS.PARTNER);
+      
+      if (cachedEquipment && cachedEquipment.length > 0) {
+        console.log('✅ [Cache Hit] 장비 데이터 캐시:', cachedEquipment.length, '건');
+        // 캐시 데이터로 즉시 표시
+        processEquipmentData(cachedEquipment, userName);
+        setLoadingEquipments(false);
+      } else {
+        setLoadingEquipments(true);
+      }
+      
+      if (cachedPartners && cachedPartners.length > 0) {
+        console.log('✅ [Cache Hit] 파트너 데이터 캐시:', cachedPartners.length, '건');
+        setAllPartners(cachedPartners);
+        setLoadingPartners(false);
+      } else {
+        setLoadingPartners(true);
+      }
+      
+      // 내 데모는 항상 로딩 (빠르게 변경되므로)
       setLoadingMyDemos(true);
-      setLoadingEquipments(true);
-      setLoadingPartners(true);
+      
+      // 🔄 STEP 2: 백그라운드에서 최신 데이터 가져오기
+      console.log('🔄 [Step 2] 서버 데이터 로드 시작...');
       
       try {
-        const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-        
         // Fetch equipment data from Google Sheet (1번만 호출!)
         let allEquipmentFromSheet = [];
         try {
-          console.log('📦 장비 데이터 로딩 시작 (시트1)...');
+          console.log('📦 장비 데이터 로딩 시작 (시트)...');
           const equipmentData = await getEquipmentData();
           allEquipmentFromSheet = equipmentData.data || [];
           console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
-          console.log('Sample equipment data:', allEquipmentFromSheet[0]); // 디버깅용
-          console.log('파트너명 필드 확인:', {
-            '첫번째 장비': allEquipmentFromSheet[0]?.partnerName || '없음',
-            '두번째 장비': allEquipmentFromSheet[1]?.partnerName || '없음',
-            '세번째 장비': allEquipmentFromSheet[2]?.partnerName || '없음',
-            '샘플 장비 전체 키': allEquipmentFromSheet[0] ? Object.keys(allEquipmentFromSheet[0]) : '없음'
+          
+          // 🔍 상태값 분석 (Mini 검색 문제 디버깅)
+          const statusMap = new Map();
+          allEquipmentFromSheet.forEach(item => {
+            const status = (item.status || '없음').toString().trim();
+            const name = item.name || '이름없음';
+            statusMap.set(status, (statusMap.get(status) || 0) + 1);
+            
+            // Mini가 포함된 장비 상세 로그
+            if (name.toLowerCase().includes('mini')) {
+              console.log(`🔍 [Mini 장비 발견] ${name} - 상태: "${status}"`);
+            }
           });
+          
+          console.log('📊 시트의 상태값 분포:', Object.fromEntries(statusMap));
+          console.log('Sample equipment data:', allEquipmentFromSheet[0]);
           
           // 🎯 클라이언트 사이드 필터링: 내 대여 현황
           // Step 1: 담당자가 나인 장비만 추출
@@ -584,17 +843,25 @@ const MainPage = ({ user, onLogout }) => {
           }
         }
         
-        // Apply sorting to all equipment data
-        const sortedAllEquipment = [...allEquipmentFromSheet].sort(sortEquipment);
-        setAllEquipments(sortedAllEquipment);
-        console.log('Sorted all equipment:', sortedAllEquipment.length, 'items');
+        // 💾 캐시에 저장
+        setCacheData(CACHE_KEYS.EQUIPMENT, allEquipmentFromSheet);
         
-        const initialFiltered = sortedAllEquipment.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
-        setAvailableEquipments(initialFiltered);
-        setFilteredEquipments(initialFiltered);
+        // 🔄 변경사항 확인 및 업데이트
+        if (cachedEquipment && cachedEquipment.length > 0) {
+          const changes = findDataChanges(cachedEquipment, allEquipmentFromSheet, 'serial');
+          if (changes.hasChanges) {
+            console.log('🆕 장비 데이터 변경사항 발견 - UI 업데이트');
+            processEquipmentData(allEquipmentFromSheet, userName);
+          } else {
+            console.log('✅ 장비 데이터 변경사항 없음');
+          }
+        } else {
+          // 캐시가 없었으면 그냥 표시
+          processEquipmentData(allEquipmentFromSheet, userName);
+        }
+        
         setLoadingEquipments(false); // 장비 목록 로딩 완료
-        console.log('Initial filtered equipment:', initialFiltered.length, 'items');
-        console.log('Show in use equipment:', showInUseEquipment);
+        console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
 
         // Fetch partner data from Google Sheet instead of CSV
         let allPartnersFromSheet = [];
@@ -607,31 +874,74 @@ const MainPage = ({ user, onLogout }) => {
           console.log('partnerData.data length:', partnerData.data ? partnerData.data.length : 'undefined');
           
           // GAS에서 이미 UI 형식으로 변환된 데이터 사용
-          allPartnersFromSheet = partnerData.data || [];
-          console.log('Loaded partner data from sheet:', allPartnersFromSheet.length, 'items');
-          console.log('All partner data from GAS:', allPartnersFromSheet); // 모든 파트너 데이터
-          console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
+          let rawPartnerData = partnerData.data || [];
+          console.log('Loaded partner data from sheet (raw):', rawPartnerData.length, 'items');
           
-          // 각 파트너 데이터를 개별적으로 로그
-          allPartnersFromSheet.forEach((partner, index) => {
-            console.log(`Partner ${index + 1}:`, partner);
+          // 🔄 중복 제거: companyName + contactPerson 조합이 같은 것 제거
+          const uniquePartnersMap = new Map();
+          rawPartnerData.forEach((partner) => {
+            const companyName = (partner.companyName || '').trim();
+            const contactPerson = (partner.contactPerson || '').trim();
+            const uniqueKey = `${companyName}_${contactPerson}`;
+            
+            // 같은 조합이 없을 때만 추가
+            if (!uniquePartnersMap.has(uniqueKey)) {
+              uniquePartnersMap.set(uniqueKey, partner);
+            } else {
+              console.log(`⚠️ [중복 제거] ${companyName} - ${contactPerson}`);
+            }
           });
+          
+          allPartnersFromSheet = Array.from(uniquePartnersMap.values());
+          console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
+          console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
         } catch (error) {
           console.error('Failed to load partner data from sheet:', error);
           // Fallback to CSV if sheet fails
           try {
             const partnerResponse = await fetch('/파트너정보.csv');
             const partnerText = await partnerResponse.text();
-            const parsedPartnerData = parsePartnerCsv(partnerText);
-            allPartnersFromSheet = parsedPartnerData;
-            console.log('Fallback to CSV partner data:', allPartnersFromSheet.length, 'items');
+            let parsedPartnerData = parsePartnerCsv(partnerText);
+            
+            // 🔄 중복 제거: companyName + contactPerson 조합이 같은 것 제거
+            const uniquePartnersMap = new Map();
+            parsedPartnerData.forEach((partner) => {
+              const companyName = (partner.companyName || '').trim();
+              const contactPerson = (partner.contactPerson || '').trim();
+              const uniqueKey = `${companyName}_${contactPerson}`;
+              
+              if (!uniquePartnersMap.has(uniqueKey)) {
+                uniquePartnersMap.set(uniqueKey, partner);
+              }
+            });
+            
+            allPartnersFromSheet = Array.from(uniquePartnersMap.values());
+            console.log('Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
           } catch (csvError) {
             console.error('Failed to load CSV partner data as fallback:', csvError);
             allPartnersFromSheet = [];
           }
         }
-        setAllPartners(allPartnersFromSheet);
+        
+        // 💾 캐시에 저장
+        setCacheData(CACHE_KEYS.PARTNER, allPartnersFromSheet);
+        
+        // 🔄 변경사항 확인 및 업데이트
+        if (cachedPartners && cachedPartners.length > 0) {
+          const changes = findDataChanges(cachedPartners, allPartnersFromSheet, 'id');
+          if (changes.hasChanges) {
+            console.log('🆕 파트너 데이터 변경사항 발견 - UI 업데이트');
+            setAllPartners(allPartnersFromSheet);
+          } else {
+            console.log('✅ 파트너 데이터 변경사항 없음');
+          }
+        } else {
+          // 캐시가 없었으면 그냥 표시
+          setAllPartners(allPartnersFromSheet);
+        }
+        
         setLoadingPartners(false); // 파트너 정보 로딩 완료
+        console.log('✅ 파트너 데이터 처리 완료:', allPartnersFromSheet.length, 'items');
 
       } catch (error) {
         console.error("Error fetching or parsing CSV:", error);
@@ -971,7 +1281,10 @@ const MainPage = ({ user, onLogout }) => {
     setAllEquipments(updatedAllEquipments);
 
     const searchTerm = document.querySelector(`.${styles.searchInput}`)?.value || '';
-    const newAvailable = updatedAllEquipments.filter(item => showInUseEquipment ? true : item.status === '대여 가능');
+    const newAvailable = updatedAllEquipments.filter(item => {
+      if (showInUseEquipment) return true;
+      return isAvailableStatus(item.status);
+    });
     setAvailableEquipments(newAvailable);
     setFilteredEquipments(newAvailable.filter(eq => 
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
@@ -1077,6 +1390,217 @@ const MainPage = ({ user, onLogout }) => {
       setShowApplicationForm(false);
     }
   }, [selectedEquipments]);
+
+  // 스크롤 이벤트 감지하여 내 데모 현황 자동 접기 및 신청 폼 상태 변경
+  useEffect(() => {
+    const scrollableArea = scrollableAreaRef.current;
+    if (!scrollableArea) return;
+
+    const handleScroll = () => {
+      const scrollTop = scrollableArea.scrollTop;
+      const scrollThreshold = 50; // 50px 스크롤 시 내 데모 현황 접기
+
+      // 내 데모 현황 자동 접기
+      if (scrollTop > scrollThreshold && !isMyDemosFolded) {
+        setIsMyDemosFolded(true);
+      }
+
+      // 신청 폼 상태 변경 (스크롤 방향 감지)
+      if (selectedEquipments.length > 0 && showApplicationForm) {
+        const currentScrollTop = scrollTop;
+        const scrollDelta = Math.abs(currentScrollTop - lastScrollTopRef.current);
+        
+        // 의미있는 스크롤인지 확인 (최소 10px 이상)
+        if (scrollDelta > 10) {
+          lastScrollTopRef.current = currentScrollTop;
+          scrollCountRef.current += 1;
+
+          console.log('Scroll count:', scrollCountRef.current);
+
+          // 1회 스크롤: 살짝 줄이기
+          if (scrollCountRef.current === 1 && applicationFormState === 'expanded') {
+            setApplicationFormState('compact');
+            console.log('Form state: compact');
+          }
+          // 3회 이상 스크롤: 완전히 접기
+          else if (scrollCountRef.current >= 3 && applicationFormState !== 'folded') {
+            setApplicationFormState('folded');
+            console.log('Form state: folded');
+          }
+        }
+      }
+    };
+
+    scrollableArea.addEventListener('scroll', handleScroll);
+
+    return () => {
+      scrollableArea.removeEventListener('scroll', handleScroll);
+    };
+  }, [isMyDemosFolded, selectedEquipments.length, showApplicationForm, applicationFormState]); // 의존성 추가
+
+  // 장비 선택이 변경되면 스크롤 카운터와 폼 상태 초기화
+  useEffect(() => {
+    if (selectedEquipments.length === 0) {
+      scrollCountRef.current = 0;
+      lastScrollTopRef.current = 0;
+      setApplicationFormState('folded');
+    } else if (selectedEquipments.length > 0 && applicationFormState === 'folded' && scrollCountRef.current === 0) {
+      // 최초 장비 선택 시 '접기' 상태로 시작
+      setApplicationFormState('folded');
+    }
+  }, [selectedEquipments.length, applicationFormState]);
+
+  // 하단 영역 스크롤/터치 이벤트로 확대 및 접기
+  useEffect(() => {
+    const bottomArea = bottomFixedAreaRef.current;
+    if (!bottomArea) {
+      console.log('[useEffect] bottomArea not found, skipping event listener setup');
+      return;
+    }
+    
+    console.log('[useEffect] Setting up event listeners for bottom area');
+
+    let touchStartY = 0;
+    let touchStartTime = 0;
+
+    const handleBottomScroll = () => {
+      const scrollTop = bottomArea.scrollTop;
+      
+      // 접힌 상태이거나 축소 상태일 때만 확대
+      if (applicationFormState === 'folded') {
+        setApplicationFormState('compact');
+        setIsBottomAreaExpanded(false); // 확장 상태 초기화
+        console.log('Bottom area scrolled: folded → compact');
+      } else if (applicationFormState === 'compact') {
+        setApplicationFormState('expanded');
+        setIsBottomAreaExpanded(false); // 확장 상태 초기화
+        console.log('Bottom area scrolled: compact → expanded');
+      } else if (applicationFormState === 'expanded') {
+        // expanded 상태에서만 스크롤 위치에 따라 높이 확장
+        if (scrollTop >= 30 && !isBottomAreaExpanded) {
+          setIsBottomAreaExpanded(true);
+          console.log('Bottom area: expanded to 77vh (scrollTop >= 30px)');
+          // 전체 페이지를 맨 아래로 스크롤
+          setTimeout(() => {
+            window.scrollTo({
+              top: document.documentElement.scrollHeight,
+              behavior: 'smooth'
+            });
+          }, 50);
+        } else if (scrollTop < 30 && isBottomAreaExpanded) {
+          setIsBottomAreaExpanded(false);
+          console.log('Bottom area: back to normal height');
+        }
+      }
+    };
+
+    // 클릭 이벤트로 접힌/축소 상태 확대 (모바일 터치 대응)
+    const handleClick = (e) => {
+      // 버튼 클릭은 제외
+      if (e.target.tagName === 'BUTTON' || e.target.closest('button')) {
+        return;
+      }
+
+      if (applicationFormState === 'folded') {
+        setApplicationFormState('compact');
+        console.log('Bottom area clicked: folded → compact');
+      } else if (applicationFormState === 'compact') {
+        setApplicationFormState('expanded');
+        console.log('Bottom area clicked: compact → expanded');
+      }
+    };
+
+    // 맨 위에서 위로 스크롤 시도 시 접기 (마우스 휠 - 오버스크롤)
+    const handleWheel = (e) => {
+      const scrollTop = bottomArea.scrollTop;
+      const isAtTop = scrollTop === 0;
+      const isScrollingUp = e.deltaY < 0; // 음수 = 위로 스크롤하려는 시도
+
+      // 맨 위에서 위로 더 스크롤하려고 하면 접기
+      if (isAtTop && isScrollingUp && applicationFormState !== 'folded') {
+        e.preventDefault();
+        setApplicationFormState('folded');
+        scrollCountRef.current = 3;
+        console.log('Bottom area: overscroll at top → folded');
+      }
+    };
+
+    // 터치 이벤트 - 스와이프 감지
+    const handleTouchStart = (e) => {
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+      isProcessingRef.current = false;
+      stateChangedRef.current = false;
+      console.log(`[Touch Start] Y: ${touchStartY}, State: ${applicationFormState}`);
+    };
+
+    const handleTouchMove = (e) => {
+      if (isProcessingRef.current || stateChangedRef.current) {
+        console.log('[Touch Move] Blocked - processing or already changed');
+        return;
+      }
+
+      const scrollTop = bottomArea.scrollTop;
+      const isAtTop = scrollTop === 0;
+      const touchCurrentY = e.touches[0].clientY;
+      const touchDelta = touchCurrentY - touchStartY;
+      const isSwipingUp = touchDelta < 0; // 음수 = 위로 스와이프
+      const isSwipingDown = touchDelta > 0; // 양수 = 아래로 스와이프
+      const swipeDistance = Math.abs(touchDelta);
+
+      console.log(`[Touch Move] Delta: ${touchDelta}, Distance: ${swipeDistance}, Direction: ${isSwipingUp ? 'UP' : 'DOWN'}, State: ${applicationFormState}`);
+
+      // 위로 스와이프: 접힌/축소 상태일 때 확대
+      if (isSwipingUp && swipeDistance > 20 && !stateChangedRef.current) {
+        if (applicationFormState === 'folded') {
+          isProcessingRef.current = true;
+          stateChangedRef.current = true;
+          setApplicationFormState('compact');
+          console.log('✅ Bottom area: swipe up → folded to compact');
+          setTimeout(() => { isProcessingRef.current = false; }, 300);
+        } else if (applicationFormState === 'compact') {
+          isProcessingRef.current = true;
+          stateChangedRef.current = true;
+          setApplicationFormState('expanded');
+          console.log('✅ Bottom area: swipe up → compact to expanded');
+          setTimeout(() => { isProcessingRef.current = false; }, 300);
+        }
+      }
+      
+      // 아래로 스와이프: 맨 위에서 아래로 스와이프 시 접기 (접힌 상태가 아닐 때)
+      else if (isAtTop && isSwipingDown && swipeDistance > 40 && applicationFormState !== 'folded' && !stateChangedRef.current) {
+        isProcessingRef.current = true;
+        stateChangedRef.current = true;
+        setApplicationFormState('folded');
+        scrollCountRef.current = 3;
+        console.log('Bottom area: swipe down from top → folded');
+        setTimeout(() => { isProcessingRef.current = false; }, 300);
+      }
+    };
+
+    const handleTouchEnd = () => {
+      // 터치 종료 시 플래그 리셋
+      isProcessingRef.current = false;
+      stateChangedRef.current = false;
+    };
+
+    bottomArea.addEventListener('click', handleClick);
+    bottomArea.addEventListener('scroll', handleBottomScroll);
+    bottomArea.addEventListener('wheel', handleWheel, { passive: false });
+    bottomArea.addEventListener('touchstart', handleTouchStart, { passive: true });
+    bottomArea.addEventListener('touchmove', handleTouchMove, { passive: true });
+    bottomArea.addEventListener('touchend', handleTouchEnd, { passive: true });
+
+    return () => {
+      bottomArea.removeEventListener('click', handleClick);
+      bottomArea.removeEventListener('scroll', handleBottomScroll);
+      bottomArea.removeEventListener('wheel', handleWheel);
+      bottomArea.removeEventListener('touchstart', handleTouchStart);
+      bottomArea.removeEventListener('touchmove', handleTouchMove);
+      bottomArea.removeEventListener('touchend', handleTouchEnd);
+      console.log('[useEffect] Cleaned up event listeners');
+    };
+  }, [applicationFormState, isBottomAreaExpanded, selectedEquipments.length, showApplicationForm]);
 
   // ----------------------------------------------------------------
   // Sub-components defined within the same file
@@ -1196,6 +1720,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
       usageContactPerson: '',
       usageContactNumber: '',
     });
+
+    const [skipUsageInfo, setSkipUsageInfo] = useState(false); // 사용처 정보 입력 안함 체크박스
 
     const [companyNameSearchResults, setCompanyNameSearchResults] = useState([]);
     const [showCompanyNameSearchResults, setShowCompanyNameSearchResults] = useState(false);
@@ -1460,10 +1986,20 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
       console.log("MultiEquipmentApplicationForm: handleDownloadPng called.");
       console.log("Form Data before validation (Multi):", formData);
 
-      if (!formData.returnDate || !formData.checkoutReason || !formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
-        alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유, 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처");
+      // 기본 필수 항목 검사
+      if (!formData.returnDate || !formData.checkoutReason) {
+        alert("필수 입력 항목을 모두 채워주세요: 반납일자, 반출 사유");
         console.log("MultiEquipmentApplicationForm: Validation failed.");
         return;
+      }
+
+      // 사용처 정보 입력 안함이 체크되지 않은 경우에만 사용처 정보 검사
+      if (!skipUsageInfo) {
+        if (!formData.usageCompanyName || !formData.usageAddress || !formData.usageContactPerson || !formData.usageContactNumber) {
+          alert("필수 입력 항목을 모두 채워주세요: 사용처 상호, 사용처 주소, 사용처 담당자, 사용처 연락처\n\n※ 사용처 정보를 입력하지 않으려면 '정보 입력 안함'을 체크하세요.");
+          console.log("MultiEquipmentApplicationForm: Validation failed.");
+          return;
+        }
       }
       console.log("MultiEquipmentApplicationForm: Validation passed.");
       
@@ -1474,10 +2010,12 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
       // Set loading state for PNG export
       setIsExportingToPng(true);
+      setProcessMessage('🚀 데모 신청 처리를 시작합니다...');
 
       try {
         console.log("MultiEquipmentApplicationForm: Initiating PNG export workflow.");
         
+        setProcessMessage('🔧 Google API 초기화 중...');
         // Initialize Google APIs (simplified for Apps Script)
         await initGoogleApis();
         
@@ -1489,6 +2027,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         const MAIN_SHEET_ID = '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
         logOperation('addDataToMainSheet', { spreadsheetId: MAIN_SHEET_ID, equipmentCount: selectedEquipments.length });
         try {
+          setProcessMessage('📝 기존 시트에 장비 데이터 추가 중...');
           console.log('기존 시트에 데이터 추가 시작:', { spreadsheetId: MAIN_SHEET_ID });
           const addDataSuccess = await addDataToSheet(accessToken, MAIN_SHEET_ID, formData, selectedEquipments);
           if (!addDataSuccess) {
@@ -1497,12 +2036,12 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           
           logOperation('addDataToMainSheet', { success: true });
           console.log('✅ 기존 시트에 데이터가 추가되었습니다!');
-          alert('✅ 장비 데이터가 기존 시트에 추가되었습니다!\n\n스프레드시트: https://docs.google.com/spreadsheets/d/13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ/edit');
+          setProcessMessage('✅ 기존 시트에 데이터 추가 완료!');
           
         } catch (error) {
           logOperation('addDataToMainSheet', { success: false, error: error.message }, 'error');
           console.error('기존 시트 데이터 추가 실패:', error);
-          alert(`기존 시트에 데이터 추가 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('⚠️ 기존 시트 데이터 추가 실패 (계속 진행)');
           // 실패해도 계속 진행 (복제 워크플로우)
         }
 
@@ -1510,6 +2049,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         logOperation('duplicateSpreadsheet', { requester: formData.requester });
         const newSpreadsheetTitle = `장비_대여요청서_${formData.requester}_${new Date().toISOString().slice(0, 10)}`;
         
+        setProcessMessage('📋 템플릿 시트 복사 중...');
         let newSpreadsheetId;
         try {
           newSpreadsheetId = await duplicateSpreadsheet(accessToken, TEMPLATE_SPREADSHEET_ID, newSpreadsheetTitle);
@@ -1519,6 +2059,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           }
           
           logOperation('duplicateSpreadsheet', { success: true, spreadsheetId: newSpreadsheetId });
+          setProcessMessage('✅ 템플릿 시트 복사 완료!');
         } catch (error) {
           logOperation('duplicateSpreadsheet', { success: false, error: error.message }, 'error');
           
@@ -1527,13 +2068,15 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             clearAuthData();
           }
           
-          alert(`1. 스프레드시트 복제 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('');
+          alert(`❌ 스프레드시트 복제 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
         }
 
         // 2. Update the duplicated Google Sheet with form data
         logOperation('updateGoogleSheet', { spreadsheetId: newSpreadsheetId, equipmentCount: selectedEquipments.length });
         try {
+          setProcessMessage('📝 신청 정보 입력 중...');
           const updateSuccess = await updateGoogleSheetWithData(accessToken, newSpreadsheetId, formData, selectedEquipments);
           if (!updateSuccess) {
             throw new Error("Sheet update returned false");
@@ -1548,6 +2091,17 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.log('✅ 스프레드시트 생성 및 업데이트 완료!');
           console.log('📄 스프레드시트 URL:', spreadsheetUrl);
           console.log('📋 스프레드시트 ID:', newSpreadsheetId);
+          setProcessMessage('✅ 신청 정보 입력 완료!');
+          
+          // 스프레드시트 URL을 클립보드에 복사
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            try {
+              await navigator.clipboard.writeText(spreadsheetUrl);
+              console.log('📋 스프레드시트 URL이 클립보드에 복사되었습니다!');
+            } catch (clipboardError) {
+              console.log('클립보드 복사 실패:', clipboardError);
+            }
+          }
           
         } catch (error) {
           logOperation('updateGoogleSheet', { success: false, error: error.message }, 'error');
@@ -1557,7 +2111,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             clearAuthData();
           }
           
-          alert(`2. Google Sheet 업데이트 실패: ${getUserFriendlyErrorMessage(error)}`);
+          setProcessMessage('');
+          alert(`❌ Google Sheet 업데이트 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
         }
 
@@ -1623,21 +2178,88 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         //   return;
         // }
 
+        // ===== PDF 변환 추가 =====
+        let pdfFileUrl = null;
+        try {
+          setProcessMessage('📄 PDF 변환 중...');
+          logOperation('exportToPdf', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
+          
+          const pdfResult = await exportGoogleSheetToPdfAndConvertToJpg(
+            accessToken, 
+            newSpreadsheetId, 
+            TEMPLATE_SHEET_GID, 
+            newSpreadsheetTitle
+          );
+          
+          console.log('=== PDF Export 응답 상세 ===');
+          console.log('전체 응답:', pdfResult);
+          console.log('success:', pdfResult?.success);
+          console.log('fileId:', pdfResult?.fileId);
+          console.log('fileUrl:', pdfResult?.fileUrl);
+          console.log('fileName:', pdfResult?.fileName);
+          console.log('pdfUrl:', pdfResult?.pdfUrl);
+          console.log('error:', pdfResult?.error);
+          
+          if (pdfResult && pdfResult.success && pdfResult.fileId && pdfResult.fileUrl) {
+            pdfFileUrl = pdfResult.fileUrl;
+            const pdfDownloadUrl = pdfResult.pdfUrl || pdfResult.fileUrl;
+            const pdfFileName = pdfResult.fileName || `${newSpreadsheetTitle}.pdf`;
+            
+            setCreatedPdfUrl(pdfFileUrl); // PDF URL을 state에 저장
+            setCreatedPdfDownloadUrl(pdfDownloadUrl); // PDF 다운로드 URL 저장
+            setCreatedPdfFileName(pdfFileName); // PDF 파일명 저장
+            
+            logOperation('exportToPdf', { 
+              success: true, 
+              fileId: pdfResult.fileId,
+              fileUrl: pdfResult.fileUrl,
+              downloadUrl: pdfDownloadUrl,
+              actualSheetGid: pdfResult.actualSheetGid
+            });
+            console.log('✅ PDF 변환 완료!');
+            console.log('📄 PDF URL:', pdfFileUrl);
+            console.log('📥 PDF 다운로드 URL:', pdfDownloadUrl);
+            console.log('📋 실제 시트 GID:', pdfResult.actualSheetGid);
+            setProcessMessage('✅ PDF 변환 완료!');
+          } else {
+            // pdfResult에 에러가 있으면 상세 로그
+            if (pdfResult && pdfResult.error) {
+              console.error('=== PDF 변환 서버 에러 ===');
+              console.error('에러:', pdfResult.error);
+              console.error('에러 이름:', pdfResult.errorName);
+              console.error('에러 메시지:', pdfResult.errorMessage);
+              if (pdfResult.stack) {
+                console.error('스택 트레이스:', pdfResult.stack);
+              }
+              throw new Error(`PDF export failed: ${pdfResult.errorMessage || pdfResult.error}`);
+            } else {
+              console.error('PDF 결과 없음:', pdfResult);
+              throw new Error("PDF export failed - no valid result returned");
+            }
+          }
+        } catch (pdfError) {
+          logOperation('exportToPdf', { success: false, error: pdfError.message }, 'error');
+          console.error('=== ⚠️ PDF 변환 실패 (신청은 완료됨) ===');
+          console.error('에러:', pdfError);
+          console.error('에러 메시지:', pdfError.message);
+          console.error('에러 스택:', pdfError.stack);
+          setProcessMessage('⚠️ PDF 변환 실패 (신청은 완료됨)');
+          // PDF 변환 실패해도 신청은 완료된 것으로 간주
+        }
+        
         // ===== 워크플로우 완료 =====
         const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
         console.log('🎉 전체 워크플로우 완료!');
         console.log('📄 생성된 스프레드시트:', spreadsheetUrl);
         console.log('📄 스프레드시트 제목:', newSpreadsheetTitle);
-        
-        // URL을 클립보드에 복사 (선택적)
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          try {
-            await navigator.clipboard.writeText(spreadsheetUrl);
-            console.log('📋 URL이 클립보드에 복사되었습니다!');
-          } catch (clipboardError) {
-            console.log('클립보드 복사 실패:', clipboardError);
-          }
+        if (pdfFileUrl) {
+          console.log('📄 생성된 PDF:', pdfFileUrl);
         }
+        
+        setProcessMessage('🎉 데모 신청이 완료되었습니다!');
+        
+        // 최종 완료 메시지 (간단하게)
+        alert('🎉 모든 작업이 완료되었습니다!');
 
       } catch (error) {
         logOperation('workflowError', { error: error.message }, 'error');
@@ -1647,10 +2269,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           clearAuthData();
         }
         
-        alert(`전체 워크플로우 중 오류 발생: ${getUserFriendlyErrorMessage(error)}`);
+        setProcessMessage('');
+        alert(`❌ 전체 워크플로우 중 오류 발생: ${getUserFriendlyErrorMessage(error)}`);
       } finally {
         // Reset loading state
         setIsExportingToPng(false);
+        // processMessage는 유지 (사용자가 확인할 수 있도록)
+        setTimeout(() => setProcessMessage(''), 3000); // 3초 후 메시지 제거
       }
     };
 
@@ -1685,8 +2310,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         </div>
 
         <div className={styles.infoBox}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-            <h3 style={{ margin: 0 }}>[파트너 정보]</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'nowrap', gap: '8px' }}>
+            <h3 style={{ margin: 0, whiteSpace: 'nowrap' }}>[파트너 정보]</h3>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -1722,8 +2347,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     document.body.removeChild(textarea);
                   }
                 }}
-                className="button-secondary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
+                className={styles.utilityButton}
               >
                 📋 양식 복사
               </button>
@@ -1776,8 +2400,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
                   }
                 }}
-                className="button-primary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
+                className={styles.utilityButton}
               >
                 📥 정보 붙여넣기
               </button>
@@ -1849,8 +2472,32 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         </div>
 
         <div className={styles.infoBox}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
-            <h3 style={{ margin: 0 }}>[사용처 정보]</h3>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'nowrap', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'nowrap' }}>
+              <h3 style={{ margin: 0, whiteSpace: 'nowrap' }}>[사용처 정보]</h3>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '14px', cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                <input
+                  type="checkbox"
+                  checked={skipUsageInfo}
+                  onChange={(e) => {
+                    setSkipUsageInfo(e.target.checked);
+                    if (e.target.checked) {
+                      // 체크 시 사용처 정보 초기화
+                      setFormData(prev => ({
+                        ...prev,
+                        usageCompanyName: '',
+                        usageBusinessNumber: '',
+                        usageAddress: '',
+                        usageContactPerson: '',
+                        usageContactNumber: '',
+                      }));
+                    }
+                  }}
+                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
+                />
+                <span style={{ color: '#666' }}>정보 입력 안함</span>
+              </label>
+            </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               <button
                 type="button"
@@ -1886,13 +2533,14 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     document.body.removeChild(textarea);
                   }
                 }}
-                className="button-secondary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
+                disabled={skipUsageInfo}
+                className={styles.utilityButton}
               >
                 📋 양식 복사
               </button>
               <button
                 type="button"
+                disabled={skipUsageInfo}
                 onClick={async () => {
                   try {
                     let clipboardText = '';
@@ -1940,8 +2588,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
                   }
                 }}
-                className="button-primary"
-                style={{ fontSize: '13px', padding: '6px 12px' }}
+                className={styles.utilityButton}
               >
                 📥 정보 붙여넣기
               </button>
@@ -1958,7 +2605,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
                   required 
-                  style={{ width: '150px' }} 
+                  disabled={skipUsageInfo}
+                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} 
                 />
                 {showUsageCompanyNameSearchResults && usageCompanyNameSearchResults.length > 0 && (
                   <div className={styles.searchResults}>
@@ -1981,7 +2629,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 )}
               </div>
             </div>
-            <div className={styles.formField}><label>사용처 사업자번호 :</label><input type="text" name="usageBusinessNumber" value={formData.usageBusinessNumber} onChange={handleChange} style={{ width: '150px' }} /></div>
+            <div className={styles.formField}><label>사용처 사업자번호 :</label><input type="text" name="usageBusinessNumber" value={formData.usageBusinessNumber} onChange={handleChange} disabled={skipUsageInfo} style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} /></div>
             <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
               <label>사용처 담당자 *(필수) :</label>
               <div className={styles.inputWithResults}>
@@ -1992,7 +2640,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
                   required 
-                  style={{ width: '150px' }} 
+                  disabled={skipUsageInfo}
+                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} 
                 />
                 {showUsageContactPersonSearchResults && usageContactPersonSearchResults.length > 0 && (
                   <div className={styles.searchResults}>
@@ -2015,8 +2664,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 )}
               </div>
             </div>
-            <div className={styles.formField}><label>사용처 담당자 연락처 *(필수) :</label><input type="text" name="usageContactNumber" value={formData.usageContactNumber} onChange={handleChange} required style={{ width: '150px' }} /></div>
-            <div className={styles.formFieldFullWidth}><label>사용처 주소 *(필수) :</label><input type="text" name="usageAddress" value={formData.usageAddress} onChange={handleChange} required placeholder="" style={{ width: '500px'}} /></div>
+            <div className={styles.formField}><label>사용처 담당자 연락처 *(필수) :</label><input type="text" name="usageContactNumber" value={formData.usageContactNumber} onChange={handleChange} required disabled={skipUsageInfo} style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} /></div>
+            <div className={styles.formFieldFullWidth}><label>사용처 주소 *(필수) :</label><input type="text" name="usageAddress" value={formData.usageAddress} onChange={handleChange} required disabled={skipUsageInfo} placeholder="" style={{ width: '500px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} /></div>
           </div>
         </div>
 
@@ -2052,50 +2701,113 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             입력 테스트
           </button>
           */}
-          <button 
-            onClick={handleDownloadPng} 
-            className="button-primary" 
-            disabled={!isGoogleApiLoaded || isExportingToPng}
-          >
-            {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
-          </button>
-          <button onClick={onCancel} className="button-secondary">취소</button>
+          
+          {/* 실시간 처리 메시지 표시 */}
+          {processMessage && (
+            <div className={styles.processMessage}>
+              <div className={styles.processSpinner}></div>
+              <p>{processMessage}</p>
+            </div>
+          )}
+          
+          <div>
+            <button 
+              onClick={handleDownloadPng} 
+              className="button-primary" 
+              disabled={!isGoogleApiLoaded || isExportingToPng}
+            >
+              {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
+            </button>
+            <button onClick={onCancel} className="button-secondary">취소</button>
+          </div>
         </div>
 
         {/* 생성된 스프레드시트 결과 표시 */}
         {createdSpreadsheetUrl && (
           <div className={styles.spreadsheetResultBox}>
-            <div className={styles.spreadsheetResultHeader}>
-              <span className={styles.successIcon}>✅</span>
-              <h4>스프레드시트가 생성되었습니다!</h4>
-            </div>
-            <div className={styles.spreadsheetResultContent}>
-              <p className={styles.spreadsheetResultDescription}>
-                생성된 장비 대여요청서를 확인하세요.
-              </p>
-              <a 
-                href={createdSpreadsheetUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className={styles.spreadsheetResultButton}
-              >
-                📄 Google Sheets에서 열기
-              </a>
-              <div className={styles.spreadsheetResultUrl}>
-                <code>{createdSpreadsheetUrl}</code>
+            <div className={styles.spreadsheetResultHeader} style={{ cursor: 'pointer' }} onClick={() => setIsSheetBoxExpanded(!isSheetBoxExpanded)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span className={styles.successIcon}>✅</span>
+                <h4>스프레드시트가 생성되었습니다!</h4>
               </div>
               <button 
-                onClick={() => {
-                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(createdSpreadsheetUrl)
-                      .then(() => alert('URL이 클립보드에 복사되었습니다!'))
-                      .catch(err => console.error('클립보드 복사 실패:', err));
-                  }
-                }}
-                className={styles.copyUrlButtonInline}
+                className={styles.foldButtonInline}
+                style={{ marginLeft: 'auto' }}
               >
-                📋 URL 복사
+                {isSheetBoxExpanded ? '▲ 접기' : '▼ 시트 수정 하기'}
               </button>
+            </div>
+            {isSheetBoxExpanded && (
+              <div className={styles.spreadsheetResultContent}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <a 
+                    href={createdSpreadsheetUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={styles.spreadsheetResultButton}
+                    style={{ textDecoration: 'none' }}
+                  >
+                    📄 열기
+                  </a>
+                  <button 
+                    onClick={() => {
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(createdSpreadsheetUrl)
+                          .then(() => alert('URL이 클립보드에 복사되었습니다!'))
+                          .catch(err => console.error('클립보드 복사 실패:', err));
+                      }
+                    }}
+                    className={styles.copyUrlButtonInline}
+                  >
+                    📋 링크 복사
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        
+        {/* 생성된 PDF 결과 표시 */}
+        {createdPdfUrl && (
+          <div className={styles.spreadsheetResultBox}>
+            <div className={styles.spreadsheetResultHeader}>
+              <span className={styles.successIcon}>📄</span>
+              <h4>PDF가 생성되었습니다!</h4>
+            </div>
+            <div className={styles.spreadsheetResultContent}>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <a 
+                  href={createdPdfUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className={styles.spreadsheetResultButton}
+                  style={{ textDecoration: 'none' }}
+                >
+                  📄 열기
+                </a>
+                <button 
+                  onClick={() => {
+                    const downloadUrl = createdPdfDownloadUrl || createdPdfUrl;
+                    window.open(downloadUrl, '_blank');
+                  }}
+                  className={styles.spreadsheetResultButton}
+                >
+                  📥 다운로드
+                </button>
+                <button 
+                  onClick={() => {
+                    const urlToCopy = createdPdfUrl || createdPdfDownloadUrl;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                      navigator.clipboard.writeText(urlToCopy)
+                        .then(() => alert('PDF URL이 클립보드에 복사되었습니다!'))
+                        .catch(err => console.error('클립보드 복사 실패:', err));
+                    }
+                  }}
+                  className={styles.copyUrlButtonInline}
+                >
+                  📋 링크 복사
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -2121,12 +2833,19 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
   // MainPage component return statement
   return (
     <div className={styles.container}>
-      <Header user={user} onLogout={onLogout} />
+      {!isMyDemosFolded && <Header user={user} onLogout={onLogout} />}
       
       <div className={styles.mainContent}>
-        <div className={`${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}>
-          <div className={styles.sectionHeader}>
+        {/* 고정 영역 1: 내 데모 현황 */}
+        <div className={`${styles.fixedArea} ${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}>
+          <div className={styles.sectionHeaderWithButton}>
             <h2>내 데모 현황</h2>
+            <button 
+              onClick={() => setIsMyDemosFolded(!isMyDemosFolded)}
+              className={styles.foldButtonInline}
+            >
+              {isMyDemosFolded ? '▼ 펼치기' : '▲ 접기'}
+            </button>
           </div>
           {!isMyDemosFolded && (
             <div className={styles.tableContainer}>
@@ -2139,165 +2858,176 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               )}
             </div>
           )}
-          <div className={styles.sectionFooter}>
-            <button 
-              onClick={() => setIsMyDemosFolded(!isMyDemosFolded)}
-              className={styles.foldButton}
-            >
-              {isMyDemosFolded ? '▼ 펼치기' : '▲ 접기'}
-            </button>
+        </div>
+
+        {/* 고정 영역 2: 장비 검색 */}
+        <div className={`${styles.fixedArea} ${styles.searchFixedSection}`}>
+          <div className={styles.compactSearchHeader}>
+            <h2 className={styles.compactTitle}>신청</h2>
+            <div className={styles.searchBarCompact}>
+              <SearchBar onSearch={handleSearch} />
+            </div>
+            <label className={styles.filterLabelCompact}>
+              <input
+                type="checkbox"
+                checked={showInUseEquipment}
+                onChange={(e) => setShowInUseEquipment(e.target.checked)}
+              />
+              <span>사용중인 장비</span>
+            </label>
           </div>
         </div>
 
-        <div className={styles.section}>
-          <div className={styles.sectionHeader}>
-            <h2>새 데모 신청</h2>
-            <div className={styles.filterControls}>
-              <label className={styles.filterLabel}>
-                <input
-                  type="checkbox"
-                  checked={showInUseEquipment}
-                  onChange={(e) => setShowInUseEquipment(e.target.checked)}
+        {/* 스크롤 가능 영역: 장비 목록만 */}
+        <div className={styles.scrollableArea} ref={scrollableAreaRef}>
+          <div className={styles.section}>
+            <div className={styles.tableContainer}>
+              {loadingEquipments ? (
+                <SkeletonTable rows={5} />
+              ) : (
+                <EquipmentList 
+                  equipments={filteredEquipments} 
+                  selectedEquipments={selectedEquipments}
+                  onEquipmentToggle={handleEquipmentToggle}
                 />
-                사용 중인 장비도 보기
-              </label>
-              {/* Google Sheets PNG 변환 버튼 (주석처리 - 사용 안 함) */}
-              {/* 
-              <button 
-                onClick={handleExportSheetToPng}
-                className="button-primary"
-                disabled={!googleApiLoaded || isExportingSheetToPng}
-                style={{ marginLeft: '20px' }}
-              >
-                {isExportingSheetToPng ? 'Google Sheets PNG 변환 중...' : 'Google Sheets PNG 변환'}
-              </button>
-              */}
+              )}
             </div>
           </div>
-          
-          <div className={styles.searchSection}>
-            <SearchBar onSearch={handleSearch} />
-          </div>
-          
-          <div className={styles.tableContainer}>
-            {loadingEquipments ? (
-              <SkeletonTable rows={5} />
-            ) : (
-              <EquipmentList 
-                equipments={filteredEquipments} 
-                selectedEquipments={selectedEquipments}
-                onEquipmentToggle={handleEquipmentToggle}
+        </div>
+
+        {/* 하단 고정 영역: 데모 신청 정보 */}
+        {(selectedEquipments.length > 0 || pdfPreviewImages?.length > 0 || pngFiles?.length > 0 || sheetPngFiles?.length > 0 || pdfBase64 || pdfUrl) && (
+          <div 
+            ref={bottomFixedAreaRef}
+            className={`${styles.bottomFixedArea} ${
+              applicationFormState === 'compact' ? styles.bottomFixedAreaCompact : 
+              applicationFormState === 'folded' ? styles.bottomFixedAreaFolded : ''
+            } ${isBottomAreaExpanded ? styles.bottomFixedAreaExpanded : ''}`}
+          >
+            {/* 데모 신청 정보 */}
+            {showApplicationForm && selectedEquipments.length > 0 && (
+              <div className={styles.applicationFormContainer}>
+                <div className={styles.applicationFormHeader}>
+                  <h3>데모 신청 정보</h3>
+                  <div className={styles.formControlButtons}>
+                    <button 
+                      onClick={() => {
+                        if (applicationFormState === 'folded') {
+                          setApplicationFormState('expanded');
+                          scrollCountRef.current = 0;
+                        } else {
+                          setApplicationFormState('folded');
+                          scrollCountRef.current = 3;
+                        }
+                      }}
+                      className={styles.foldFormButton}
+                    >
+                      {applicationFormState === 'folded' ? '▼ 펼치기' : '▲ 접기'}
+                    </button>
+                  </div>
+                </div>
+                {applicationFormState !== 'folded' && (
+                  <MultiEquipmentApplicationForm 
+                    selectedEquipments={selectedEquipments}
+                    applicantName={getUserDisplayName(user)}
+                    allPartners={allPartners}
+                    onNewDemo={handleMultipleNewDemo}
+                    onCancel={() => setShowApplicationForm(false)}
+                    isGoogleApiLoaded={googleApiLoaded}
+                    googleTokenClient={googleTokenClient}
+                    onJpgImagesGenerated={handleJpgImagesGenerated}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* JPG 이미지 미리보기 */}
+            {pdfPreviewImages && pdfPreviewImages.length > 0 && (
+              <JpgViewer 
+                images={pdfPreviewImages}
+                title="데모 신청 양식 미리보기"
+                showDownload={true} 
+                onClose={() => {
+                  setPdfPreviewImages([]);
+                  setPdfUrl(null);
+                  setPdfBase64(null);
+                }}
+              />
+            )}
+
+            {/* PNG 이미지 미리보기 */}
+            {pngFiles && pngFiles.length > 0 && (
+              <div className={styles.pngViewer}>
+                <div className={styles.pngViewerHeader}>
+                  <h3>PNG 이미지 미리보기</h3>
+                  <button 
+                    onClick={() => setPngFiles([])}
+                    className={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className={styles.pngViewerContent}>
+                  {pngFiles.map((pngFile, index) => (
+                    <div key={index} className={styles.pngFileItem}>
+                      <h4>{pngFile.fileName}</h4>
+                      <p>페이지: {pngFile.pageNumber || index + 1}</p>
+                      <p>시트: {pngFile.sheetName || 'N/A'}</p>
+                      <a 
+                        href={pngFile.fileUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className={styles.downloadLink}
+                      >
+                        Google Drive에서 보기
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Google Sheets PNG 이미지 미리보기 */}
+            {sheetPngFiles && sheetPngFiles.length > 0 && (
+              <div className={styles.pngViewer}>
+                <div className={styles.pngViewerHeader}>
+                  <h3>Google Sheets PNG 이미지 미리보기</h3>
+                  <button 
+                    onClick={() => setSheetPngFiles([])}
+                    className={styles.closeButton}
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className={styles.pngViewerContent}>
+                  {sheetPngFiles.map((pngFile, index) => (
+                    <div key={index} className={styles.pngFileItem}>
+                      <h4>{pngFile.fileName}</h4>
+                      <p>페이지: {pngFile.pageNumber || index + 1}</p>
+                      <p>시트: {pngFile.sheetName || '행사장비요청서'}</p>
+                      <a 
+                        href={pngFile.fileUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className={styles.downloadLink}
+                      >
+                        Google Drive에서 보기
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* PDF 뷰어 (JPG 이미지가 없을 때만) */}
+            {!pdfPreviewImages && (pdfBase64 || pdfUrl) && (
+              <PdfViewer 
+                pdfUrl={pdfBase64 ? `data:application/pdf;base64,${pdfBase64}` : pdfUrl}
+                onImagesGenerated={handleJpgImagesGenerated}
               />
             )}
           </div>
-
-          <SelectedEquipmentsList
-            selectedEquipments={selectedEquipments}
-            onRemoveEquipment={handleRemoveEquipment}
-          />
-
-          {showApplicationForm && selectedEquipments.length > 0 && (
-            <div className={styles.applicationFormContainer}>
-              <h3>데모 신청 정보</h3>
-              <MultiEquipmentApplicationForm 
-                selectedEquipments={selectedEquipments}
-                applicantName={getUserDisplayName(user)}
-                allPartners={allPartners}
-                onNewDemo={handleMultipleNewDemo}
-                onCancel={() => setShowApplicationForm(false)}
-                isGoogleApiLoaded={googleApiLoaded}
-                googleTokenClient={googleTokenClient}
-                onJpgImagesGenerated={handleJpgImagesGenerated}
-              />
-            </div>
-          )}
-
-          {/* JPG 이미지 미리보기 */}
-          {pdfPreviewImages && pdfPreviewImages.length > 0 && (
-            <JpgViewer 
-              images={pdfPreviewImages}
-              title="데모 신청 양식 미리보기" // Static title
-              showDownload={true} 
-              onClose={() => {
-                setPdfPreviewImages([]); // Clear JPG previews
-                setPdfUrl(null); // Clear PDF URL if it was set for fallback
-                setPdfBase64(null); // Clear Base64 if it was set
-              }}
-            />
-          )}
-
-          {/* PNG 이미지 미리보기 */}
-          {pngFiles && pngFiles.length > 0 && (
-            <div className={styles.pngViewer}>
-              <div className={styles.pngViewerHeader}>
-                <h3>PNG 이미지 미리보기</h3>
-                <button 
-                  onClick={() => setPngFiles([])}
-                  className={styles.closeButton}
-                >
-                  ✕
-                </button>
-              </div>
-              <div className={styles.pngViewerContent}>
-                {pngFiles.map((pngFile, index) => (
-                  <div key={index} className={styles.pngFileItem}>
-                    <h4>{pngFile.fileName}</h4>
-                    <p>페이지: {pngFile.pageNumber || index + 1}</p>
-                    <p>시트: {pngFile.sheetName || 'N/A'}</p>
-                    <a 
-                      href={pngFile.fileUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className={styles.downloadLink}
-                    >
-                      Google Drive에서 보기
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Google Sheets PNG 이미지 미리보기 */}
-          {sheetPngFiles && sheetPngFiles.length > 0 && (
-            <div className={styles.pngViewer}>
-              <div className={styles.pngViewerHeader}>
-                <h3>Google Sheets PNG 이미지 미리보기</h3>
-                <button 
-                  onClick={() => setSheetPngFiles([])}
-                  className={styles.closeButton}
-                >
-                  ✕
-                </button>
-              </div>
-              <div className={styles.pngViewerContent}>
-                {sheetPngFiles.map((pngFile, index) => (
-                  <div key={index} className={styles.pngFileItem}>
-                    <h4>{pngFile.fileName}</h4>
-                    <p>페이지: {pngFile.pageNumber || index + 1}</p>
-                    <p>시트: {pngFile.sheetName || '행사장비요청서'}</p>
-                    <a 
-                      href={pngFile.fileUrl} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className={styles.downloadLink}
-                    >
-                      Google Drive에서 보기
-                    </a>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* PDF 뷰어 (JPG 이미지가 없을 때만) */}
-          {!pdfPreviewImages && (pdfBase64 || pdfUrl) && (
-            <PdfViewer 
-              pdfUrl={pdfBase64 ? `data:application/pdf;base64,${pdfBase64}` : pdfUrl}
-              onImagesGenerated={handleJpgImagesGenerated}
-            />
-          )}
-        </div>
+        )}
       </div>
     </div>
   );

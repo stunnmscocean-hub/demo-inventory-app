@@ -1,12 +1,13 @@
 import React from 'react';
 // import { useState } from 'react';
 // import { useNavigate } from 'react-router-dom';
-// import useAuthStore from '../stores/authStore';
+import useAuthStore from '../stores/authStore';
 // import { pingGAS, testACL } from '../services/api';
 import GoogleOAuthButton from '../components/GoogleOAuthButton';
 import styles from './LoginPage.module.css';
 
 const LoginPage = () => {
+  const { isLoading, loadingMessage } = useAuthStore();
   // Google OAuth 로그인만 사용 (기존 로그인 폼 비활성화)
   // const [id, setId] = useState('');
   // const [password, setPassword] = useState('');
@@ -75,6 +76,14 @@ const LoginPage = () => {
     <div className={styles.container}>
       <div className={styles.loginBox}>
         <h1 className={styles.title}>데모 장비 관리 시스템</h1>
+        
+        {/* 로딩 메시지 표시 */}
+        {isLoading && loadingMessage && (
+          <div className={styles.loadingMessage}>
+            <div className={styles.loadingSpinner}></div>
+            <p>{loadingMessage}</p>
+          </div>
+        )}
         
         {/* Google OAuth 로그인 */}
         <div className={styles.oauthSection}>

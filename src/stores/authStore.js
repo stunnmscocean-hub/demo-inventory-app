@@ -10,6 +10,7 @@ const useAuthStore = create(
       user: null,
       accessToken: null,
       isLoading: false,
+      loadingMessage: '',
       error: null,
       
       // 액션
@@ -42,8 +43,11 @@ const useAuthStore = create(
           error: null
         }),
       
-      setLoading: (loading) => 
-        set({ isLoading: loading }),
+      setLoading: (loading, message = '') => 
+        set({ isLoading: loading, loadingMessage: message }),
+      
+      setLoadingMessage: (message) =>
+        set({ loadingMessage: message }),
       
       setError: (error) => 
         set({ error }),

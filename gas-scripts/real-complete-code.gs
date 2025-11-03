@@ -24,7 +24,9 @@ const CONFIG = {
   DEFAULT_SHEET_ID: '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ', // 장비 관리 메인 시트
   TEMPLATE_SPREADSHEET_ID: '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0lht0',
   TEMPLATE_SHEET_GID: '1326732411',
-  DRIVE_FOLDER_ID: '1Ah66GAuU_cln6uvtR-apgLG-38zwa1Px', // 장비 대여신청서 저장 폴더
+  PDF_FOLDER_ID: '1x4dl_uWgrIcHbI19Il3xQzSEqY5Q68S4', // PDF 저장 폴더
+  SHEET_FOLDER_ID: '1kwlO_ECacC1KDThPnZWpxXvLEqGUALvl', // 복제된 스프레드시트 저장 폴더
+  DRIVE_FOLDER_ID: '1x4dl_uWgrIcHbI19Il3xQzSEqY5Q68S4', // 하위 호환성 (PDF 폴더)
   
   get CLIENT_ID() {
     return PropertiesService.getScriptProperties().getProperty('GOOGLE_CLIENT_ID') || 
@@ -69,7 +71,7 @@ function doGet(e) {
       
       // 실제 고급 기능들
       case 'duplicateSpreadsheet':
-        return handleDuplicateSpreadsheet(e.parameter.templateId, e.parameter.newTitle);
+        return handleDuplicateSpreadsheet(e.parameter.templateId, e.parameter.newTitle, e.parameter.targetFolderId);
       case 'updateSpreadsheet':
         return handleUpdateSpreadsheet(e.parameter.spreadsheetId, e.parameter.formData, e.parameter.selectedEquipments);
       case 'exportToPdfAndJpg':
@@ -138,7 +140,7 @@ function doPost(e) {
     switch (action) {
       case 'duplicateSpreadsheet':
         console.log('doPost: Calling duplicateSpreadsheet function.');
-        return handleDuplicateSpreadsheet(params.templateId, params.newTitle);
+        return handleDuplicateSpreadsheet(params.templateId, params.newTitle, params.targetFolderId);
       case 'updateSpreadsheet':
         console.log('doPost: Calling updateSpreadsheet function.');
         return handleUpdateSpreadsheet(params.spreadsheetId, params.formData, params.selectedEquipments);
@@ -306,9 +308,9 @@ function loadPdfLib() {
 }
 
 /**
- * 스프레드시트 복제 - 기존 함수 그대로 사용
+ * 스프레드시트 복제 - 특정 폴더에 저장
  */
-function duplicateSpreadsheet(templateId, newTitle) {
+function duplicateSpreadsheet(templateId, newTitle, targetFolderId) {
   console.log('duplicateSpreadsheet: Function started.');
   try {
     console.log('duplicateSpreadsheet: Attempting to get file by ID:', templateId);
@@ -320,18 +322,43 @@ function duplicateSpreadsheet(templateId, newTitle) {
     var newSpreadsheetId = newSpreadsheet.getId();
     console.log('duplicateSpreadsheet: New spreadsheet created with ID:', newSpreadsheetId);
     
-    // 권한 설정: 링크가 있는 모든 사용자에게 보기 권한 부여
+    // 타겟 폴더로 이동 (제공된 경우)
+    if (targetFolderId) {
+      try {
+        console.log('duplicateSpreadsheet: Moving to target folder:', targetFolderId);
+        var targetFolder = DriveApp.getFolderById(targetFolderId);
+        
+        // 기존 부모 폴더들에서 제거
+        var parents = newSpreadsheet.getParents();
+        while (parents.hasNext()) {
+          var parent = parents.next();
+          parent.removeFile(newSpreadsheet);
+          console.log('duplicateSpreadsheet: Removed from parent folder:', parent.getName());
+        }
+        
+        // 새 폴더에 추가
+        targetFolder.addFile(newSpreadsheet);
+        console.log('duplicateSpreadsheet: Successfully moved to target folder');
+      } catch (folderError) {
+        console.error('duplicateSpreadsheet: Error moving to folder:', folderError.toString());
+        // 폴더 이동 실패해도 스프레드시트는 생성됨
+      }
+    }
+    
+    // 스프레드시트 권한 설정 - 링크가 있는 모든 사용자가 수정 가능하도록
     try {
-      newSpreadsheet.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-      console.log('duplicateSpreadsheet: Sharing permission set to ANYONE_WITH_LINK (VIEW)');
+      console.log('🔓 스프레드시트 권한 설정 중...');
+      newSpreadsheet.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.EDIT);
+      console.log('✅ 스프레드시트 권한 설정 완료: 링크가 있는 사람 전체 수정 가능');
     } catch (sharingError) {
-      console.warn('duplicateSpreadsheet: Failed to set sharing permission:', sharingError.toString());
-      // 권한 설정 실패해도 파일은 생성되었으므로 계속 진행
+      console.warn('⚠️ 스프레드시트 권한 설정 실패 (계속 진행):', sharingError.toString());
+      // 권한 설정 실패해도 스프레드시트는 생성되었으므로 계속 진행
     }
     
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
-      spreadsheetId: newSpreadsheetId
+      spreadsheetId: newSpreadsheetId,
+      spreadsheetUrl: 'https://docs.google.com/spreadsheets/d/' + newSpreadsheetId + '/edit'
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     console.error('duplicateSpreadsheet: Error duplicating spreadsheet:', error.toString());
@@ -341,8 +368,8 @@ function duplicateSpreadsheet(templateId, newTitle) {
   }
 }
 
-function handleDuplicateSpreadsheet(templateId, newTitle) {
-  return duplicateSpreadsheet(templateId, newTitle);
+function handleDuplicateSpreadsheet(templateId, newTitle, targetFolderId) {
+  return duplicateSpreadsheet(templateId, newTitle, targetFolderId);
 }
 
 /**
@@ -411,99 +438,277 @@ function handleUpdateSpreadsheet(spreadsheetId, formData, selectedEquipments) {
 }
 
 /**
- * PDF 및 JPG 내보내기 - 기존 함수 그대로 사용
+ * PDF 및 JPG 내보내기 - 개선된 버전
  */
 function exportToPdfAndJpg(spreadsheetId, sheetGid, fileName, folderId) {
   try {
-    var params = [
-      'format=pdf',
-      'size=7', 'portrait=true', 'fitw=false',
-      'gridlines=false', 'printtitle=false', 'pagenum=UNDEFINED',
-      'scale=8', 'fzr=false',  // 800% 크기로 증가하여 고화질 생성
-      'top_margin=0.75','bottom_margin=0.75','left_margin=0.7','right_margin=0.7'
-    ];
-    if (sheetGid !== undefined && sheetGid !== null && sheetGid !== '') {
-      params.push('gid=' + sheetGid);
+    console.log('=== PDF Export 시작 ===');
+    console.log('입력 파라미터:', JSON.stringify({ spreadsheetId, sheetGid, fileName, folderId }));
+    
+    // 0) 스프레드시트 열기 및 검증
+    var spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.openById(spreadsheetId);
+      console.log('✅ 스프레드시트 열기 성공:', spreadsheet.getName());
+    } catch (openError) {
+      console.error('❌ 스프레드시트 열기 실패:', openError.toString());
+      throw new Error('Cannot open spreadsheet: ' + openError.toString());
     }
-    var exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?' + params.join('&');
+    
+    // 1) 첫 번째 시트 가져오기
+    var sheet = spreadsheet.getSheets()[0];
+    var actualSheetGid = sheet.getSheetId();
+    var sheetName = sheet.getName();
+    
+    console.log('시트 정보:', JSON.stringify({
+      name: sheetName,
+      actualGid: actualSheetGid,
+      requestedGid: sheetGid,
+      sheetCount: spreadsheet.getSheets().length
+    }));
+    
+    // 2) 스프레드시트 URL 생성 (소유자 확인용)
+    var spreadsheetUrl = spreadsheet.getUrl();
+    console.log('스프레드시트 URL:', spreadsheetUrl);
+    
+    // 3) 권한 및 전파 대기 (더 길게)
+    console.log('⏳ 권한 전파 대기 중 (3초)...');
+    Utilities.sleep(3000);
+    
+    // 4) PDF Export URL 생성 - 단순화된 파라미터
+    var exportParams = {
+      format: 'pdf',
+      size: 'A4',           // 'size=7' 대신 'A4' 사용
+      portrait: 'true',
+      scale: '4',           // '8' 대신 '4'로 낮춤 (너무 높으면 400 에러)
+      fitw: 'true',         // 'false' 대신 'true'
+      gridlines: 'false',
+      printtitle: 'false',
+      pagenum: 'UNDEFINED',
+      top_margin: '0.5',
+      bottom_margin: '0.5',
+      left_margin: '0.5',
+      right_margin: '0.5'
+    };
+    
+    // GID 추가 (실제 시트 GID 사용)
+    if (actualSheetGid !== undefined && actualSheetGid !== null) {
+      exportParams.gid = actualSheetGid.toString();
+    }
+    
+    // URL 파라미터 생성
+    var paramArray = [];
+    for (var key in exportParams) {
+      paramArray.push(key + '=' + exportParams[key]);
+    }
+    
+    var exportUrl = 'https://docs.google.com/spreadsheets/d/' + spreadsheetId + '/export?' + paramArray.join('&');
+    console.log('📄 Export URL:', exportUrl);
+    
+    // 5) OAuth 토큰 가져오기
+    var oauthToken;
+    try {
+      oauthToken = ScriptApp.getOAuthToken();
+      console.log('✅ OAuth Token 획득 성공 (길이:', oauthToken.length, ')');
+    } catch (tokenError) {
+      console.error('❌ OAuth Token 획득 실패:', tokenError.toString());
+      throw new Error('Cannot get OAuth token: ' + tokenError.toString());
+    }
+    
+    // 6) PDF 생성 요청
+    console.log('📥 PDF Export 요청 중...');
+    var response;
+    try {
+      response = UrlFetchApp.fetch(exportUrl, {
+        headers: { 
+          'Authorization': 'Bearer ' + oauthToken
+        },
+        muteHttpExceptions: true,
+        validateHttpsCertificates: true,
+        followRedirects: true
+      });
+      console.log('✅ PDF Export 응답 받음');
+    } catch (fetchError) {
+      console.error('❌ UrlFetchApp.fetch 에러:', fetchError.toString());
+      throw new Error('Fetch error: ' + fetchError.toString());
+    }
+    
+    // 7) 응답 검증
+    var responseCode = response.getResponseCode();
+    var responseHeaders = response.getHeaders();
+    var contentType = responseHeaders['Content-Type'] || '';
+    
+    console.log('📊 응답 상태:', JSON.stringify({
+      code: responseCode,
+      contentType: contentType,
+      contentLength: response.getContentText().length
+    }));
+    
+    if (responseCode !== 200) {
+      var responseText = response.getContentText();
+      console.error('❌ PDF export 실패:', responseCode);
+      console.error('응답 본문 (처음 1000자):', responseText.substring(0, 1000));
+      
+      // 상세한 에러 메시지
+      var errorMsg = 'PDF export failed with status: ' + responseCode;
+      if (responseCode === 400) {
+        errorMsg += ' (Bad Request - 잘못된 파라미터 또는 권한 문제)';
+      } else if (responseCode === 403) {
+        errorMsg += ' (Forbidden - 접근 권한 없음)';
+      } else if (responseCode === 404) {
+        errorMsg += ' (Not Found - 스프레드시트 또는 시트를 찾을 수 없음)';
+      }
+      throw new Error(errorMsg);
+    }
+    
+    // HTML 응답인지 확인 (에러 페이지)
+    if (contentType.indexOf('text/html') !== -1) {
+      var responseText = response.getContentText();
+      console.error('❌ HTML 응답 받음 (에러 페이지)');
+      console.error('응답 본문 (처음 500자):', responseText.substring(0, 500));
+      throw new Error('PDF export returned HTML error page instead of PDF');
+    }
+    
+    // PDF 응답인지 확인
+    if (contentType.indexOf('application/pdf') === -1 && contentType.indexOf('application/octet-stream') === -1) {
+      console.warn('⚠️ 예상치 못한 Content-Type:', contentType);
+    }
+    
+    console.log('✅ PDF 응답 검증 완료');
+    var pdfBlob = response.getBlob();
 
-    // 1) PDF 생성 (인증 방식 개선)
-    var pdfBlob = UrlFetchApp.fetch(exportUrl, {
-      headers: { 
-        'Authorization': 'Bearer ' + ScriptApp.getOAuthToken(),
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-      },
-      muteHttpExceptions: true
-    }).getBlob();
-
-    // 2) 파일명 정규화
+    // 8) 파일명 정규화
     var baseName = (fileName && fileName.toLowerCase().endsWith('.pdf')) ? fileName.slice(0, -4) : (fileName || 'export');
     pdfBlob.setName(baseName + '.pdf');
+    console.log('📝 PDF 파일명:', baseName + '.pdf');
+    console.log('📦 PDF Blob 크기:', pdfBlob.getBytes().length, 'bytes');
 
-    // 3) Drive 저장
+    // 9) Drive에 저장
+    console.log('💾 Google Drive에 PDF 저장 중...');
     var file;
+    var savedToFolder = false;
+    
     if (folderId) {
       try {
+        console.log('📁 대상 폴더 ID:', folderId);
         var folder = DriveApp.getFolderById(folderId);
+        console.log('✅ 폴더 접근 성공:', folder.getName());
         file = folder.createFile(pdfBlob);
-      } catch (e) {
+        savedToFolder = true;
+        console.log('✅ 폴더에 파일 생성 완료');
+      } catch (folderError) {
+        console.warn('⚠️ 폴더 저장 실패, 루트에 저장:', folderError.toString());
         file = DriveApp.createFile(pdfBlob);
       }
     } else {
+      console.log('📁 폴더 ID 없음, 루트에 저장');
       file = DriveApp.createFile(pdfBlob);
     }
-    if (!file || !file.getId()) throw new Error('Failed to create PDF file in Drive');
-
+    
+    if (!file || !file.getId()) {
+      throw new Error('Failed to create PDF file in Drive');
+    }
+    
     var fileId = file.getId();
+    console.log('✅ Drive 파일 생성 완료, ID:', fileId);
 
-    // 4) 생성 완료 확인 루프 (전파·인덱싱 대기)
+    // 10) 파일 전파 대기
+    console.log('⏳ 파일 전파 대기 중...');
     var maxChecks = 10;
-    var sleepMs = 400;
+    var sleepMs = 500;
     var ok = false;
+    
     for (var i = 0; i < maxChecks; i++) {
       try {
         var f = DriveApp.getFileById(fileId);
-        if (f && f.getSize() > 0) {
+        var fileSize = f.getSize();
+        console.log('  체크', (i + 1) + '/' + maxChecks + ':', fileSize, 'bytes');
+        
+        if (f && fileSize > 0) {
           ok = true;
+          console.log('✅ 파일 전파 확인 완료');
           break;
         }
-      } catch (ignore) {}
+      } catch (checkError) {
+        console.log('  체크', (i + 1), '실패:', checkError.toString());
+      }
       Utilities.sleep(sleepMs);
     }
-    if (!ok) throw new Error('PDF file not ready after wait');
-
-    // 5) PDF를 Base64로 인코딩 (클라이언트에서 JPG 변환)
-    var pdfBase64 = null;
-    try {
-      console.log('PDF Base64 인코딩 시작...');
-      var pdfBlob = file.getBlob();
-      pdfBase64 = Utilities.base64Encode(pdfBlob.getBytes());
-      console.log('PDF Base64 인코딩 완료, 크기:', pdfBase64.length);
-    } catch (base64Error) {
-      console.log('PDF Base64 인코딩 실패:', base64Error.toString());
+    
+    if (!ok) {
+      console.warn('⚠️ 파일 전파 확인 실패했지만 계속 진행');
+      // throw하지 않고 계속 진행 (파일은 생성되었을 가능성 높음)
     }
 
-    // 6) 결과 반환
-    var fileUrl = file.getUrl();
-    var downloadUrl = file.getDownloadUrl();
+    // 10-1) 파일 권한 설정 - 링크가 있는 모든 사용자가 볼 수 있도록
+    try {
+      console.log('🔓 파일 권한 설정 중...');
+      file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      console.log('✅ 파일 권한 설정 완료: 링크가 있는 사람 전체 열람 가능');
+    } catch (sharingError) {
+      console.warn('⚠️ 권한 설정 실패 (계속 진행):', sharingError.toString());
+      // 권한 설정 실패해도 파일은 생성되었으므로 계속 진행
+    }
 
+    // 11) Base64 인코딩 (선택적)
+    var pdfBase64 = null;
+    try {
+      console.log('🔄 PDF Base64 인코딩 시작...');
+      var pdfBlobForEncode = file.getBlob();
+      pdfBase64 = Utilities.base64Encode(pdfBlobForEncode.getBytes());
+      console.log('✅ Base64 인코딩 완료, 길이:', pdfBase64.length);
+    } catch (base64Error) {
+      console.warn('⚠️ Base64 인코딩 실패 (건너뜀):', base64Error.toString());
+    }
+
+    // 12) 결과 URL 생성
+    var fileUrl = file.getUrl();
+    
+    // 다운로드 URL 생성 (Google Drive 직접 다운로드 URL)
+    var downloadUrl = 'https://drive.google.com/uc?export=download&id=' + fileId;
+    
+    // 또는 뷰어 URL에서 다운로드
+    var viewerDownloadUrl = fileUrl.replace('/view', '/export?format=pdf');
+
+    console.log('=== PDF Export 완료 ===');
+    console.log('📄 파일 이름:', file.getName());
+    console.log('🆔 파일 ID:', fileId);
+    console.log('🔗 파일 URL:', fileUrl);
+    console.log('📥 다운로드 URL (direct):', downloadUrl);
+    console.log('📥 다운로드 URL (viewer):', viewerDownloadUrl);
+    console.log('📁 저장 위치:', savedToFolder ? '지정 폴더' : '루트');
+    
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       fileId: fileId,
       fileName: file.getName(),
       fileUrl: fileUrl,
-      pdfUrl: downloadUrl,
-      pdfBase64: pdfBase64
+      pdfUrl: downloadUrl,  // 직접 다운로드 URL
+      viewerDownloadUrl: viewerDownloadUrl,  // 뷰어 다운로드 URL
+      pdfBase64: pdfBase64,
+      actualSheetGid: actualSheetGid
     })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
+    console.error('=== PDF Export 실패 ===');
+    console.error('에러 타입:', error.name);
+    console.error('에러 메시지:', error.message);
+    console.error('에러 전체:', error.toString());
+    if (error.stack) {
+      console.error('스택 트레이스:', error.stack);
+    }
+    
     return ContentService.createTextOutput(JSON.stringify({
-      error: 'Failed to export to PDF: ' + error.toString()
+      success: false,
+      error: 'Failed to export to PDF: ' + error.toString(),
+      errorName: error.name || 'Unknown',
+      errorMessage: error.message || error.toString(),
+      stack: error.stack || ''
     })).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
 function handleExportToPdfAndJpg(spreadsheetId, sheetGid, fileName) {
-  var folderId = CONFIG.DRIVE_FOLDER_ID;
+  var folderId = CONFIG.PDF_FOLDER_ID; // PDF 저장 폴더
   return exportToPdfAndJpg(spreadsheetId, sheetGid, fileName, folderId);
 }
 
