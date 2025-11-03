@@ -80,9 +80,10 @@ const SkeletonTable = ({ rows = 5 }) => (
   </table>
 );
 
-// 내 데모 현황용 스켈레톤 (6개 컬럼)
+// 내 데모 현황용 스켈레톤 (7개 칼럼 - 선택 칼럼 추가)
 const SkeletonMyDemoRow = () => (
   <tr>
+    <td style={{ textAlign: 'center' }}><div className={`${styles.skeleton} ${styles.skeletonCellSmall}`} /></td>
     <td data-label="장비명"><div className={`${styles.skeleton} ${styles.skeletonCellLarge}`} /></td>
     <td data-label="시리얼 넘버"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
     <td data-label="대여 시작일"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
@@ -109,6 +110,7 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => {
     <table>
       <thead>
         <tr>
+          <th style={{ width: '40px', textAlign: 'center' }}>선택</th>
           <th>{isMobile ? '장비' : (isTablet ? '장비' : '장비명')}</th>
           <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
           <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
@@ -487,6 +489,9 @@ const MainPage = ({ user, onLogout }) => {
   const [, setLoadingPartners] = useState(true); // loadingPartners는 사용하지 않지만 setLoadingPartners는 사용
   
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
+  const [selectedDemos, setSelectedDemos] = useState([]); // State for selected demos to return
+  const [isReturning, setIsReturning] = useState(false); // 반납 진행 중 상태
+  const [returnLogs, setReturnLogs] = useState([]); // 반납 진행 로그
   // const [excelImage, setExcelImage] = useState(null); // State for Excel image preview (no longer needed for direct PDF export)
   const [showApplicationForm, setShowApplicationForm] = useState(false); // State for showing application form
   const [googleApiLoaded, setGoogleApiLoaded] = useState(false); // State to track Google API readiness
@@ -597,14 +602,42 @@ const MainPage = ({ user, onLogout }) => {
   const isAvailableStatus = (status) => {
     if (!status) return false;
     const normalizedStatus = status.toString().trim().toLowerCase().replace(/\s+/g, '');
-    // '대여 가능', '대여가능', '대여  가능' 등 모두 허용
-    return normalizedStatus === '대여가능';
+    // '대여 가능', '대여가능', '대여  가능', '반납완료', '반납 완료' 등 모두 허용
+    return normalizedStatus === '대여가능' || normalizedStatus === '반납완료';
   };
 
   // 장비 데이터 처리 헬퍼 함수 (캐시와 서버 데이터 공통 로직)
   const processEquipmentData = useCallback((allEquipmentFromSheet, userName) => {
-    // Apply sorting to all equipment data
-    const sortedAllEquipment = [...allEquipmentFromSheet].sort(sortEquipment);
+    console.log('📋 [processEquipmentData] 시작 - 전체:', allEquipmentFromSheet.length, '건');
+    
+    // Step 1: 시리얼 넘버별로 최신 데이터만 추출 (히스토리 중복 제거)
+    const latestEquipmentMap = new Map();
+    
+    // 역순으로 순회하여 각 시리얼 넘버의 최신 상태만 유지
+    [...allEquipmentFromSheet].reverse().forEach((item, index) => {
+      const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+      
+      // 빈 시리얼은 건너뛰기
+      if (!serial) {
+        console.log(`⚠️ 시리얼 번호 없는 장비 건너뜀:`, item.name);
+        return;
+      }
+      
+      // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
+      if (!latestEquipmentMap.has(serial)) {
+        latestEquipmentMap.set(serial, item);
+        console.log(`[최신 장비] ${item.name} (${serial}) - 상태: ${item.status}`);
+      } else {
+        console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${item.status} (이미 최신 존재)`);
+      }
+    });
+    
+    // Map에서 배열로 변환
+    const uniqueEquipments = Array.from(latestEquipmentMap.values());
+    console.log(`📊 중복 제거 완료: ${allEquipmentFromSheet.length}건 → ${uniqueEquipments.length}건 (고유 장비)`);
+    
+    // Step 2: 정렬
+    const sortedAllEquipment = [...uniqueEquipments].sort(sortEquipment);
     setAllEquipments(sortedAllEquipment);
     
     console.log('📋 전체 장비 목록 확인 (NUC PC 포함 여부):');
@@ -613,6 +646,7 @@ const MainPage = ({ user, onLogout }) => {
     );
     console.log('NUC 장비들:', nucPcEquipments.map(e => ({ name: e.name, status: e.status, available: isAvailableStatus(e.status) })));
     
+    // Step 3: 대여 가능 여부로 필터링
     const initialFiltered = sortedAllEquipment.filter(item => {
       if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
       const available = isAvailableStatus(item.status);
@@ -962,6 +996,24 @@ const MainPage = ({ user, onLogout }) => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name, showInUseEquipment]); // sortEquipment는 존재하지 않는 함수
 
+  // showInUseEquipment 변경 시 필터링 다시 적용
+  useEffect(() => {
+    if (allEquipments.length === 0) return;
+    
+    console.log('🔄 showInUseEquipment 변경 감지 - 필터링 다시 적용');
+    console.log('showInUseEquipment:', showInUseEquipment);
+    console.log('allEquipments:', allEquipments.length);
+    
+    const newFiltered = allEquipments.filter(item => {
+      if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
+      return isAvailableStatus(item.status); // 대여 가능한 장비만 표시
+    });
+    
+    console.log('필터링 결과:', newFiltered.length);
+    setAvailableEquipments(newFiltered);
+    setFilteredEquipments(newFiltered);
+  }, [showInUseEquipment, allEquipments]);
+
   const handleSearch = useCallback((searchTerm) => {
     console.log('Search term:', searchTerm);
     console.log('Available equipments:', availableEquipments.length);
@@ -980,6 +1032,140 @@ const MainPage = ({ user, onLogout }) => {
     setFilteredEquipments(filtered);
   }, [availableEquipments]);
   
+  // 데모 선택/해제 핸들러
+  const handleDemoToggle = (demo) => {
+    setSelectedDemos(prev => {
+      const isSelected = prev.some(d => d.id === demo.id);
+      if (isSelected) {
+        return prev.filter(d => d.id !== demo.id);
+      } else {
+        return [...prev, demo];
+      }
+    });
+  };
+
+  // 전체 선택/해제 핸들러
+  const handleSelectAllDemos = () => {
+    if (selectedDemos.length === myDemos.length) {
+      setSelectedDemos([]);
+    } else {
+      setSelectedDemos([...myDemos]);
+    }
+  };
+
+  // 일괄 반납 함수
+  const handleBulkReturn = async () => {
+    if (selectedDemos.length === 0) {
+      alert('반납할 장비를 선택해주세요.');
+      return;
+    }
+
+    if (!window.confirm(`선택한 ${selectedDemos.length}개의 장비를 반납하시겠습니까?`)) {
+      return;
+    }
+
+    setIsReturning(true);
+    setReturnLogs([]);
+    const logs = [];
+
+    const addLog = (message, type = 'info') => {
+      const timestamp = new Date().toLocaleTimeString('ko-KR');
+      const logEntry = { timestamp, message, type };
+      logs.push(logEntry);
+      setReturnLogs([...logs]);
+    };
+
+    addLog(`총 ${selectedDemos.length}개 장비 반납 시작...`, 'info');
+
+    let successCount = 0;
+    let failCount = 0;
+
+    for (let i = 0; i < selectedDemos.length; i++) {
+      const demo = selectedDemos[i];
+      addLog(`[${i + 1}/${selectedDemos.length}] ${demo.name} (${demo.serial}) 반납 처리 중...`, 'processing');
+
+      try {
+        // 전체 장비 데이터에서 해당 시리얼의 최신 대여 정보 찾기
+        const matchingEquipments = allEquipments.filter(eq => 
+          (eq.serial === demo.serial || eq.serialNumber === demo.serial)
+        );
+
+        const fullEquipmentData = matchingEquipments
+          .reverse()
+          .find(eq => {
+            const assignee = (eq.assignee || eq['대여담당자'] || '').toString().trim();
+            const status = (eq.status || eq['대여가능여부'] || '').toString().trim();
+            const isMyEquipment = assignee === user.name;
+            const isActive = status === '대여신청' || status === '대여중' || status === '사용중';
+            return isMyEquipment && isActive;
+          });
+
+        if (!fullEquipmentData) {
+          addLog(`  ❌ ${demo.name} - 대여 정보를 찾을 수 없습니다.`, 'error');
+          failCount++;
+          continue;
+        }
+
+        // 반납할 장비 데이터 준비
+        const equipmentDataToReturn = {
+          serial: fullEquipmentData.serial || fullEquipmentData.serialNumber || demo.serial,
+          serialNumber: fullEquipmentData.serial || fullEquipmentData.serialNumber || demo.serial,
+          name: fullEquipmentData.name || fullEquipmentData['제품명'] || demo.name,
+          tag: fullEquipmentData.tag || fullEquipmentData['Tag'] || '',
+          location: fullEquipmentData.location || fullEquipmentData['보관위치'] || '본사',
+          assignee: fullEquipmentData.assignee || fullEquipmentData['대여담당자'] || user.name,
+          startDate: fullEquipmentData.startDate || fullEquipmentData['시작일'] || demo.startDate,
+          returnDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || demo.returnDate,
+          endDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || demo.returnDate,
+          partnerName: fullEquipmentData.partnerName || fullEquipmentData['파트너명'] || '',
+          partnerContact: fullEquipmentData.partnerContact || fullEquipmentData['파트너담당자명'] || '',
+          partnerPhone: fullEquipmentData.partnerPhone || fullEquipmentData['휴대폰 번호'] || '',
+          userName: fullEquipmentData.userName || fullEquipmentData['사용자명'] || '',
+          userContact: fullEquipmentData.userContact || fullEquipmentData['사용자담당자명'] || '',
+          userPhone: fullEquipmentData.userPhone || '',
+          memo: fullEquipmentData.memo || fullEquipmentData['비고'] || ''
+        };
+
+        // Google Sheets에 반납 히스토리 추가
+        const result = await returnEquipment(equipmentDataToReturn);
+
+        if (result.success) {
+          addLog(`  ✅ ${demo.name} - 반납 완료`, 'success');
+          successCount++;
+        } else {
+          addLog(`  ❌ ${demo.name} - 반납 실패: ${result.error || '알 수 없는 오류'}`, 'error');
+          failCount++;
+        }
+
+      } catch (error) {
+        console.error(`반납 처리 실패 (${demo.name}):`, error);
+        addLog(`  ❌ ${demo.name} - 오류 발생: ${error.message}`, 'error');
+        failCount++;
+      }
+
+      // 각 처리 사이에 짧은 딜레이 (과부하 방지)
+      if (i < selectedDemos.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    addLog(`\n반납 처리 완료! 성공: ${successCount}개, 실패: ${failCount}개`, successCount > 0 ? 'success' : 'error');
+
+    setIsReturning(false);
+
+    if (successCount > 0) {
+      // 성공한 경우 선택 초기화 및 페이지 새로고침
+      setSelectedDemos([]);
+      
+      setTimeout(() => {
+        alert(`✅ ${successCount}개 장비 반납이 완료되었습니다!${failCount > 0 ? `\n(실패: ${failCount}개)` : ''}\n페이지를 새로고침합니다.`);
+        window.location.reload();
+      }, 1000);
+    } else {
+      alert(`❌ 반납 처리에 실패했습니다. 로그를 확인해주세요.`);
+    }
+  };
+
   const handleReturn = async (demoId) => {
     if (window.confirm("반납 하시겠습니까?")) {
       const returnedDemo = myDemos.find(demo => demo.id === demoId);
@@ -1619,7 +1805,7 @@ const MainPage = ({ user, onLogout }) => {
     );
   };
 
-  const MyDemoList = ({ demos, onReturn }) => { // Removed onFormSubmit from props
+  const MyDemoList = ({ demos, onReturn, selectedDemos, onDemoToggle, onSelectAll }) => {
     const isOverdue = (returnDate) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // 시간은 비교에서 제외
@@ -1653,11 +1839,22 @@ const MainPage = ({ user, onLogout }) => {
       }
       return formatted;
     };
+
+    const allSelected = demos.length > 0 && selectedDemos.length === demos.length;
     
     return (
       <table>
         <thead>
           <tr>
+            <th style={{ width: '40px', textAlign: 'center' }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onSelectAll}
+                className={styles.equipmentCheckbox}
+                title="전체 선택"
+              />
+            </th>
             <th>{isMobile ? '장비' : (isTablet ? '장비' : '장비명')}</th>
             <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
             <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
@@ -1667,29 +1864,40 @@ const MainPage = ({ user, onLogout }) => {
           </tr>
         </thead>
         <tbody>
-          {demos.map((demo) => (
-            <tr key={demo.id}>
-              <td data-label="장비명">{demo.name}</td>
-              <td data-label="시리얼 넘버">{demo.serial}</td>
-              <td data-label="대여 시작일">{formatDate(demo.startDate)}</td>
-              <td data-label="반납 예정일" className={isOverdue(demo.returnDate) ? styles.overdue : ''}>
-                {formatDate(demo.returnDate)}
-                {isOverdue(demo.returnDate) && <span className={styles.overdueText}>(반납일 초과)</span>}
-              </td>
-              <td data-label="신청 양식">
-                {demo.formSubmitted ? (isMobile ? '완료' : (isTablet ? '완료' : '제출 완료')) : (
-                  <button onClick={() => handleFormSubmit(demo.id)} className="button-primary">
-                    {isMobile ? '제출' : (isTablet ? '제출' : '제출하기')}
+          {demos.map((demo) => {
+            const isSelected = selectedDemos.some(d => d.id === demo.id);
+            return (
+              <tr key={demo.id}>
+                <td style={{ textAlign: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onDemoToggle(demo)}
+                    className={styles.equipmentCheckbox}
+                  />
+                </td>
+                <td data-label="장비명">{demo.name}</td>
+                <td data-label="시리얼 넘버">{demo.serial}</td>
+                <td data-label="대여 시작일">{formatDate(demo.startDate)}</td>
+                <td data-label="반납 예정일" className={isOverdue(demo.returnDate) ? styles.overdue : ''}>
+                  {formatDate(demo.returnDate)}
+                  {isOverdue(demo.returnDate) && <span className={styles.overdueText}>(반납일 초과)</span>}
+                </td>
+                <td data-label="신청 양식">
+                  {demo.formSubmitted ? (isMobile ? '완료' : (isTablet ? '완료' : '제출 완료')) : (
+                    <button onClick={() => handleFormSubmit(demo.id)} className="button-primary">
+                      {isMobile ? '제출' : (isTablet ? '제출' : '제출하기')}
+                    </button>
+                  )}
+                </td>
+                <td data-label="관리">
+                  <button onClick={() => onReturn(demo.id)} className="button-secondary">
+                    {isMobile ? '반납' : (isTablet ? '반납' : '반납하기')}
                   </button>
-                )}
-              </td>
-              <td data-label="관리">
-                <button onClick={() => onReturn(demo.id)} className="button-secondary">
-                  {isMobile ? '반납' : (isTablet ? '반납' : '반납하기')}
-                </button>
-              </td>
-            </tr>
-          ))}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     );
@@ -2848,15 +3056,108 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             </button>
           </div>
           {!isMyDemosFolded && (
-            <div className={styles.tableContainer}>
-              {loadingMyDemos ? (
-                <SkeletonMyDemoTable rows={3} />
-              ) : myDemos.length > 0 ? (
-                <MyDemoList demos={myDemos} onReturn={handleReturn} />
-              ) : (
-                <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
+            <>
+              <div className={styles.tableContainer}>
+                {loadingMyDemos ? (
+                  <SkeletonMyDemoTable rows={3} />
+                ) : myDemos.length > 0 ? (
+                  <MyDemoList 
+                    demos={myDemos} 
+                    onReturn={handleReturn}
+                    selectedDemos={selectedDemos}
+                    onDemoToggle={handleDemoToggle}
+                    onSelectAll={handleSelectAllDemos}
+                  />
+                ) : (
+                  <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
+                )}
+              </div>
+              
+              {/* 일괄 반납 버튼 */}
+              {myDemos.length > 0 && !isMyDemosFolded && (
+                <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <button 
+                    onClick={handleBulkReturn}
+                    className="button-primary"
+                    disabled={selectedDemos.length === 0 || isReturning}
+                    style={{
+                      opacity: selectedDemos.length === 0 ? 0.5 : 1,
+                      cursor: selectedDemos.length === 0 || isReturning ? 'not-allowed' : 'pointer'
+                    }}
+                  >
+                    {isReturning ? '반납 처리 중...' : `선택한 장비 반납 (${selectedDemos.length})`}
+                  </button>
+                  {selectedDemos.length > 0 && (
+                    <button 
+                      onClick={() => setSelectedDemos([])}
+                      className="button-secondary"
+                      style={{ padding: '8px 16px' }}
+                    >
+                      선택 해제
+                    </button>
+                  )}
+                </div>
               )}
-            </div>
+
+              {/* 반납 진행 로그 UI */}
+              {returnLogs.length > 0 && (
+                <div style={{
+                  marginTop: '16px',
+                  padding: '16px',
+                  backgroundColor: '#f8f9fa',
+                  border: '1px solid #dee2e6',
+                  borderRadius: '8px',
+                  maxHeight: '400px',
+                  overflowY: 'auto'
+                }}>
+                  <h4 style={{ 
+                    margin: '0 0 12px 0', 
+                    fontSize: '16px', 
+                    fontWeight: 600,
+                    color: '#495057',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    {isReturning && (
+                      <div className={styles.processSpinner} />
+                    )}
+                    반납 진행 상황
+                  </h4>
+                  <div style={{
+                    fontFamily: 'monospace',
+                    fontSize: '13px',
+                    lineHeight: '1.8'
+                  }}>
+                    {returnLogs.map((log, index) => (
+                      <div 
+                        key={index}
+                        style={{
+                          padding: '4px 8px',
+                          marginBottom: '2px',
+                          borderRadius: '4px',
+                          backgroundColor: 
+                            log.type === 'success' ? '#d4edda' :
+                            log.type === 'error' ? '#f8d7da' :
+                            log.type === 'processing' ? '#fff3cd' :
+                            'transparent',
+                          color:
+                            log.type === 'success' ? '#155724' :
+                            log.type === 'error' ? '#721c24' :
+                            log.type === 'processing' ? '#856404' :
+                            '#495057'
+                        }}
+                      >
+                        <span style={{ color: '#6c757d', marginRight: '8px' }}>
+                          [{log.timestamp}]
+                        </span>
+                        {log.message}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
