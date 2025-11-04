@@ -80,7 +80,7 @@ const SkeletonTable = ({ rows = 5 }) => (
   </table>
 );
 
-// 내 데모 현황용 스켈레톤 (7개 칼럼 - 선택 칼럼 추가)
+// 내 데모 현황용 스켈레톤 (8개 칼럼 - 선택 칼럼 + 파트너명 칼럼 추가)
 const SkeletonMyDemoRow = () => (
   <tr>
     <td style={{ textAlign: 'center' }}><div className={`${styles.skeleton} ${styles.skeletonCellSmall}`} /></td>
@@ -88,6 +88,7 @@ const SkeletonMyDemoRow = () => (
     <td data-label="시리얼 넘버"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
     <td data-label="대여 시작일"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
     <td data-label="반납 예정일"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
+    <td data-label="파트너명"><div className={`${styles.skeleton} ${styles.skeletonCellMedium}`} /></td>
     <td data-label="신청 양식"><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
     <td data-label="관리"><div className={`${styles.skeleton} ${styles.skeletonButton}`} /></td>
   </tr>
@@ -115,6 +116,7 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => {
           <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
           <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
           <th>{isMobile ? '반납일' : (isTablet ? '반납일' : '반납 예정일')}</th>
+          <th>{isMobile ? '파트너' : (isTablet ? '파트너' : '파트너명')}</th>
           <th>{isMobile ? '양식' : (isTablet ? '양식' : '신청 양식')}</th>
           <th>{isMobile ? '관리' : '관리'}</th>
         </tr>
@@ -260,8 +262,8 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   const groupedEquipments = React.useMemo(() => {
     const groups = {};
     
-    console.log('===== 전체 장비 목록 =====');
-    console.log('총 장비 수:', equipments.length);
+    // console.log('===== 전체 장비 목록 =====');
+    // console.log('총 장비 수:', equipments.length);
     
     equipments.forEach(eq => {
       const categoryId = getEquipmentCategory(eq);
@@ -271,10 +273,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       groups[categoryId].push(eq);
     });
     
-    console.log('===== 카테고리별 그룹화 결과 =====');
-    Object.keys(groups).forEach(catId => {
-      console.log(`[${catId}] ${groups[catId].length}개:`, groups[catId].map(e => e.name));
-    });
+    // console.log('===== 카테고리별 그룹화 결과 =====');
+    // Object.keys(groups).forEach(catId => {
+    //   console.log(`[${catId}] ${groups[catId].length}개:`, groups[catId].map(e => e.name));
+    // });
     
     return groups;
   }, [equipments]);
@@ -608,7 +610,7 @@ const MainPage = ({ user, onLogout }) => {
 
   // 장비 데이터 처리 헬퍼 함수 (캐시와 서버 데이터 공통 로직)
   const processEquipmentData = useCallback((allEquipmentFromSheet, userName) => {
-    console.log('📋 [processEquipmentData] 시작 - 전체:', allEquipmentFromSheet.length, '건');
+    // console.log('📋 [processEquipmentData] 시작 - 전체:', allEquipmentFromSheet.length, '건');
     
     // Step 1: 시리얼 넘버별로 최신 데이터만 추출 (히스토리 중복 제거)
     const latestEquipmentMap = new Map();
@@ -619,44 +621,44 @@ const MainPage = ({ user, onLogout }) => {
       
       // 빈 시리얼은 건너뛰기
       if (!serial) {
-        console.log(`⚠️ 시리얼 번호 없는 장비 건너뜀:`, item.name);
+        // console.log(`⚠️ 시리얼 번호 없는 장비 건너뜀:`, item.name);
         return;
       }
       
       // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
       if (!latestEquipmentMap.has(serial)) {
         latestEquipmentMap.set(serial, item);
-        console.log(`[최신 장비] ${item.name} (${serial}) - 상태: ${item.status}`);
+        // console.log(`[최신 장비] ${item.name} (${serial}) - 상태: ${item.status}`);
       } else {
-        console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${item.status} (이미 최신 존재)`);
+        // console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${item.status} (이미 최신 존재)`);
       }
     });
     
     // Map에서 배열로 변환
     const uniqueEquipments = Array.from(latestEquipmentMap.values());
-    console.log(`📊 중복 제거 완료: ${allEquipmentFromSheet.length}건 → ${uniqueEquipments.length}건 (고유 장비)`);
+    // console.log(`📊 중복 제거 완료: ${allEquipmentFromSheet.length}건 → ${uniqueEquipments.length}건 (고유 장비)`);
     
     // Step 2: 정렬
     const sortedAllEquipment = [...uniqueEquipments].sort(sortEquipment);
     setAllEquipments(sortedAllEquipment);
     
-    console.log('📋 전체 장비 목록 확인 (NUC PC 포함 여부):');
-    const nucPcEquipments = sortedAllEquipment.filter(item => 
-      item.name && item.name.toLowerCase().includes('nuc')
-    );
-    console.log('NUC 장비들:', nucPcEquipments.map(e => ({ name: e.name, status: e.status, available: isAvailableStatus(e.status) })));
+    // console.log('📋 전체 장비 목록 확인 (NUC PC 포함 여부):');
+    // const nucPcEquipments = sortedAllEquipment.filter(item => 
+    //   item.name && item.name.toLowerCase().includes('nuc')
+    // );
+    // console.log('NUC 장비들:', nucPcEquipments.map(e => ({ name: e.name, status: e.status, available: isAvailableStatus(e.status) })));
     
     // Step 3: 대여 가능 여부로 필터링
     const initialFiltered = sortedAllEquipment.filter(item => {
       if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
       const available = isAvailableStatus(item.status);
-      if (!available && item.name && item.name.toLowerCase().includes('nuc')) {
-        console.log(`❌ NUC 장비 필터링됨: ${item.name}, status="${item.status}"`);
-      }
+      // if (!available && item.name && item.name.toLowerCase().includes('nuc')) {
+      //   console.log(`❌ NUC 장비 필터링됨: ${item.name}, status="${item.status}"`);
+      // }
       return available; // 대여 가능한 장비만 표시
     });
     
-    console.log(`📋 장비 필터링: 전체 ${sortedAllEquipment.length}건 → 표시 ${initialFiltered.length}건 (showInUseEquipment: ${showInUseEquipment})`);
+    // console.log(`📋 장비 필터링: 전체 ${sortedAllEquipment.length}건 → 표시 ${initialFiltered.length}건 (showInUseEquipment: ${showInUseEquipment})`);
     setAvailableEquipments(initialFiltered);
     setFilteredEquipments(initialFiltered);
   }, [showInUseEquipment]);
@@ -666,12 +668,12 @@ const MainPage = ({ user, onLogout }) => {
       const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
       
       // 🚀 STEP 1: 캐시 데이터 즉시 로드 (빠른 표시)
-      console.log('⚡ [Step 1] 캐시 데이터 로드 시작...');
+      // console.log('⚡ [Step 1] 캐시 데이터 로드 시작...');
       const cachedEquipment = getForceCacheData(CACHE_KEYS.EQUIPMENT);
       const cachedPartners = getForceCacheData(CACHE_KEYS.PARTNER);
       
       if (cachedEquipment && cachedEquipment.length > 0) {
-        console.log('✅ [Cache Hit] 장비 데이터 캐시:', cachedEquipment.length, '건');
+        // console.log('✅ [Cache Hit] 장비 데이터 캐시:', cachedEquipment.length, '건');
         // 캐시 데이터로 즉시 표시
         processEquipmentData(cachedEquipment, userName);
         setLoadingEquipments(false);
@@ -680,7 +682,7 @@ const MainPage = ({ user, onLogout }) => {
       }
       
       if (cachedPartners && cachedPartners.length > 0) {
-        console.log('✅ [Cache Hit] 파트너 데이터 캐시:', cachedPartners.length, '건');
+        // console.log('✅ [Cache Hit] 파트너 데이터 캐시:', cachedPartners.length, '건');
         setAllPartners(cachedPartners);
         setLoadingPartners(false);
       } else {
@@ -691,32 +693,32 @@ const MainPage = ({ user, onLogout }) => {
       setLoadingMyDemos(true);
       
       // 🔄 STEP 2: 백그라운드에서 최신 데이터 가져오기
-      console.log('🔄 [Step 2] 서버 데이터 로드 시작...');
+      // console.log('🔄 [Step 2] 서버 데이터 로드 시작...');
       
       try {
         // Fetch equipment data from Google Sheet (1번만 호출!)
         let allEquipmentFromSheet = [];
         try {
-          console.log('📦 장비 데이터 로딩 시작 (시트)...');
+          // console.log('📦 장비 데이터 로딩 시작 (시트)...');
           const equipmentData = await getEquipmentData();
           allEquipmentFromSheet = equipmentData.data || [];
-          console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
+          // console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
           
-          // 🔍 상태값 분석 (Mini 검색 문제 디버깅)
-          const statusMap = new Map();
-          allEquipmentFromSheet.forEach(item => {
-            const status = (item.status || '없음').toString().trim();
-            const name = item.name || '이름없음';
-            statusMap.set(status, (statusMap.get(status) || 0) + 1);
-            
-            // Mini가 포함된 장비 상세 로그
-            if (name.toLowerCase().includes('mini')) {
-              console.log(`🔍 [Mini 장비 발견] ${name} - 상태: "${status}"`);
-            }
-          });
-          
-          console.log('📊 시트의 상태값 분포:', Object.fromEntries(statusMap));
-          console.log('Sample equipment data:', allEquipmentFromSheet[0]);
+          // // 🔍 상태값 분석 (Mini 검색 문제 디버깅)
+          // const statusMap = new Map();
+          // allEquipmentFromSheet.forEach(item => {
+          //   const status = (item.status || '없음').toString().trim();
+          //   const name = item.name || '이름없음';
+          //   statusMap.set(status, (statusMap.get(status) || 0) + 1);
+          //   
+          //   // Mini가 포함된 장비 상세 로그
+          //   if (name.toLowerCase().includes('mini')) {
+          //     console.log(`🔍 [Mini 장비 발견] ${name} - 상태: "${status}"`);
+          //   }
+          // });
+          // 
+          // console.log('📊 시트의 상태값 분포:', Object.fromEntries(statusMap));
+          // console.log('Sample equipment data:', allEquipmentFromSheet[0]);
           
           // 🎯 클라이언트 사이드 필터링: 내 대여 현황
           // Step 1: 담당자가 나인 장비만 추출
@@ -725,7 +727,7 @@ const MainPage = ({ user, onLogout }) => {
             return assignee === userName;
           });
           
-          console.log(`내가 담당한 장비 (전체 히스토리): ${myEquipments.length}건`);
+          // console.log(`내가 담당한 장비 (전체 히스토리): ${myEquipments.length}건`);
           
           // Step 2: 시리얼넘버별로 최신 상태만 추출 (역순 검색)
           const latestEquipmentMap = new Map();
@@ -738,9 +740,9 @@ const MainPage = ({ user, onLogout }) => {
             // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
             if (!latestEquipmentMap.has(serial)) {
               latestEquipmentMap.set(serial, { item, status });
-              console.log(`[최신] ${item.name} (${serial}) - 상태: ${status}`);
+              // console.log(`[최신] ${item.name} (${serial}) - 상태: ${status}`);
             } else {
-              console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${status} (이미 최신 존재)`);
+              // console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${status} (이미 최신 존재)`);
             }
           });
           
@@ -755,33 +757,57 @@ const MainPage = ({ user, onLogout }) => {
             
             if (!isExcluded && status !== '') {
               myDemoData.push(item);
-              console.log(`✅ [표시] ${item.name} (${serial}) - 상태: ${status}`);
+              // console.log(`✅ [표시] ${item.name} (${serial}) - 상태: ${status}`);
             } else {
-              console.log(`❌ [제외] ${item.name} (${serial}) - 상태: ${status}`);
+              // console.log(`❌ [제외] ${item.name} (${serial}) - 상태: ${status}`);
             }
           });
           
-          console.log(`최종 내 대여 현황: ${myDemoData.length}건`);
+          // console.log(`최종 내 대여 현황: ${myDemoData.length}건`);
           
           // 내 데모 현황 데이터 변환
-          let initialMyDemos = myDemoData.map((item, index) => ({
-            id: index,
-            name: item.name || item['제품명'] || '',
-            serial: item.serial || item.serialNumber || item['시리얼넘버'] || '',
-            assignee: item.assignee || item['대여담당자'] || '',
-            startDate: item.startDate || item['시작일'] || '',
-            returnDate: item.endDate || item.returnDate || item['종료일'] || '',
-            partnerName: item.partnerName || item['파트너명'] || '',
-            memo: item.memo || item['비고'] || '',
-            formSubmitted: item.formSubmitted || false, // 시트에서 받아온 제출 여부
-            fileUrl: item.fileUrl || item['신청양식제출'] || '', // 제출된 파일 URL
-            location: item.location || item['보관위치'] || '본사',
-            status: item.status || item['대여가능여부'] || ''
-          }));
+          console.log('\n🚨🚨🚨 [긴급] GAS에서 받은 원본 데이터:', JSON.stringify(myDemoData[0], null, 2));
+          
+          let initialMyDemos = myDemoData.map((item, index) => {
+            const demo = {
+              id: index,
+              name: item.name || item['제품명'] || '',
+              serial: item.serial || item.serialNumber || item['시리얼넘버'] || '',
+              assignee: item.assignee || item['대여담당자'] || '',
+              startDate: item.startDate || item['시작일'] || '',
+              returnDate: item.endDate || item.returnDate || item['종료일'] || '',
+              partnerName: item.partnerName || item['파트너명'] || '',
+              partnerContact: item.partnerContact || item['파트너담당자명'] || '',
+              partnerPhone: item.partnerPhone || '',
+              userName: item.userName || item['사용자명'] || '',
+              userContact: item.userContact || item['사용자담당자명'] || '',
+              userPhone: item.userPhone || '',
+              memo: item.memo || item['비고'] || '',
+              formSubmitted: item.formSubmitted || false, // 시트에서 받아온 제출 여부
+              fileUrl: item.fileUrl || item['신청양식제출'] || '', // 제출된 파일 URL
+              location: item.location || item['보관위치'] || '본사',
+              status: item.status || item['대여가능여부'] || ''
+            };
+            
+            // 디버깅: 파트너 정보 확인
+            if (demo.partnerName || demo.partnerPhone || demo.userPhone) {
+              console.log(`\n📱 [React - 휴대폰 번호 디버깅] ${demo.name} (${demo.serial}):`, {
+                파트너명: demo.partnerName,
+                파트너담당자: demo.partnerContact,
+                파트너휴대폰: demo.partnerPhone,
+                사용자명: demo.userName,
+                사용자담당자: demo.userContact,
+                사용자휴대폰: demo.userPhone,
+                비고: demo.memo
+              });
+            }
+            
+            return demo;
+          });
           
           // 같은 대여건 그룹핑 및 제출 상태 동기화
           // 그룹 기준: 같은 담당자, 같은 시작일, 같은 비고
-          console.log('🔍 그룹핑 시작 - 총 장비:', initialMyDemos.length);
+          // console.log('🔍 그룹핑 시작 - 총 장비:', initialMyDemos.length);
           
           const groupMap = new Map();
           
@@ -790,7 +816,7 @@ const MainPage = ({ user, onLogout }) => {
             const normalizedStartDate = demo.startDate ? demo.startDate.toString().split('T')[0] : '';
             const groupKey = `${demo.assignee}_${normalizedStartDate}_${demo.memo || ''}`;
             
-            console.log(`  [${index}] ${demo.serial}: 담당자=${demo.assignee}, 시작일=${normalizedStartDate}, 비고=${demo.memo}, 제출=${demo.formSubmitted}, 그룹키=${groupKey}`);
+            // console.log(`  [${index}] ${demo.serial}: 담당자=${demo.assignee}, 시작일=${normalizedStartDate}, 비고=${demo.memo}, 제출=${demo.formSubmitted}, 그룹키=${groupKey}`);
             
             if (!groupMap.has(groupKey)) {
               groupMap.set(groupKey, []);
@@ -798,17 +824,17 @@ const MainPage = ({ user, onLogout }) => {
             groupMap.get(groupKey).push(demo);
           });
           
-          console.log(`📦 생성된 그룹 수: ${groupMap.size}`);
+          // console.log(`📦 생성된 그룹 수: ${groupMap.size}`);
           
           // 각 그룹에서 하나라도 제출 완료면 전체를 제출 완료로 처리
           groupMap.forEach((group, groupKey) => {
             const hasSubmitted = group.some(demo => demo.formSubmitted);
             const submittedDemo = group.find(demo => demo.formSubmitted);
             
-            console.log(`  📦 그룹 "${groupKey}": ${group.length}개 장비, 제출 완료=${hasSubmitted}`);
+            // console.log(`  📦 그룹 "${groupKey}": ${group.length}개 장비, 제출 완료=${hasSubmitted}`);
             
             if (hasSubmitted && submittedDemo) {
-              console.log(`    ✅ [그룹 제출 동기화] ${group.length}개 장비를 제출 완료로 처리, 파일 URL: ${submittedDemo.fileUrl}`);
+              // console.log(`    ✅ [그룹 제출 동기화] ${group.length}개 장비를 제출 완료로 처리, 파일 URL: ${submittedDemo.fileUrl}`);
               
               // 같은 그룹의 모든 장비를 제출 완료로 표시
               group.forEach(demo => {
@@ -816,7 +842,7 @@ const MainPage = ({ user, onLogout }) => {
                 demo.formSubmitted = true;
                 demo.fileUrl = submittedDemo.fileUrl; // 같은 파일 URL 공유
                 if (wasPending) {
-                  console.log(`      → ${demo.serial}: 제출 대기 → 제출 완료`);
+                  // console.log(`      → ${demo.serial}: 제출 대기 → 제출 완료`);
                 }
               });
             }
@@ -824,19 +850,19 @@ const MainPage = ({ user, onLogout }) => {
           
           setMyDemos(initialMyDemos);
           setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
-          console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
-          console.log('제출 상태:', initialMyDemos.map(d => ({ 
-            serial: d.serial, 
-            formSubmitted: d.formSubmitted, 
-            fileUrl: d.fileUrl 
-          })));
+          // console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
+          // console.log('제출 상태:', initialMyDemos.map(d => ({ 
+          //   serial: d.serial, 
+          //   formSubmitted: d.formSubmitted, 
+          //   fileUrl: d.fileUrl 
+          // })));
           
         } catch (error) {
-          console.error('Failed to load equipment data from sheet:', error);
+          // console.error('Failed to load equipment data from sheet:', error);
           
           // Fallback to CSV if sheet fails
           try {
-            console.log('CSV 파일로 폴백...');
+            // console.log('CSV 파일로 폴백...');
             
             // 사용내역 CSV
             const usageResponse = await fetch('/사용내역.csv');
@@ -856,7 +882,7 @@ const MainPage = ({ user, onLogout }) => {
                 location: '본사'
               }));
             setMyDemos(initialMyDemos);
-            console.log(`CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
+            // console.log(`CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
             
             // 장비현황 CSV
             const equipmentResponse = await fetch('/장비현황.csv');
@@ -869,9 +895,9 @@ const MainPage = ({ user, onLogout }) => {
               location: item.location,
               status: item.status
             }));
-            console.log(`CSV에서 장비 데이터 로드: ${allEquipmentFromSheet.length}건`);
+            // console.log(`CSV에서 장비 데이터 로드: ${allEquipmentFromSheet.length}건`);
           } catch (csvError) {
-            console.error('Failed to load CSV data as fallback:', csvError);
+            // console.error('Failed to load CSV data as fallback:', csvError);
             allEquipmentFromSheet = [];
             setMyDemos([]);
           }
@@ -884,10 +910,10 @@ const MainPage = ({ user, onLogout }) => {
         if (cachedEquipment && cachedEquipment.length > 0) {
           const changes = findDataChanges(cachedEquipment, allEquipmentFromSheet, 'serial');
           if (changes.hasChanges) {
-            console.log('🆕 장비 데이터 변경사항 발견 - UI 업데이트');
+            // console.log('🆕 장비 데이터 변경사항 발견 - UI 업데이트');
             processEquipmentData(allEquipmentFromSheet, userName);
           } else {
-            console.log('✅ 장비 데이터 변경사항 없음');
+            // console.log('✅ 장비 데이터 변경사항 없음');
           }
         } else {
           // 캐시가 없었으면 그냥 표시
@@ -895,21 +921,21 @@ const MainPage = ({ user, onLogout }) => {
         }
         
         setLoadingEquipments(false); // 장비 목록 로딩 완료
-        console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
+        // console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
 
         // Fetch partner data from Google Sheet instead of CSV
         let allPartnersFromSheet = [];
         try {
-          console.log('=== 파트너 데이터 로딩 시작 ===');
+          // console.log('=== 파트너 데이터 로딩 시작 ===');
           const partnerData = await getPartnerData();
-          console.log('Raw partnerData response:', partnerData);
-          console.log('partnerData.data:', partnerData.data);
-          console.log('partnerData.data type:', typeof partnerData.data);
-          console.log('partnerData.data length:', partnerData.data ? partnerData.data.length : 'undefined');
+          // console.log('Raw partnerData response:', partnerData);
+          // console.log('partnerData.data:', partnerData.data);
+          // console.log('partnerData.data type:', typeof partnerData.data);
+          // console.log('partnerData.data length:', partnerData.data ? partnerData.data.length : 'undefined');
           
           // GAS에서 이미 UI 형식으로 변환된 데이터 사용
           let rawPartnerData = partnerData.data || [];
-          console.log('Loaded partner data from sheet (raw):', rawPartnerData.length, 'items');
+          // console.log('Loaded partner data from sheet (raw):', rawPartnerData.length, 'items');
           
           // 🔄 중복 제거: companyName + contactPerson 조합이 같은 것 제거
           const uniquePartnersMap = new Map();
@@ -922,15 +948,15 @@ const MainPage = ({ user, onLogout }) => {
             if (!uniquePartnersMap.has(uniqueKey)) {
               uniquePartnersMap.set(uniqueKey, partner);
             } else {
-              console.log(`⚠️ [중복 제거] ${companyName} - ${contactPerson}`);
+              // console.log(`⚠️ [중복 제거] ${companyName} - ${contactPerson}`);
             }
           });
           
           allPartnersFromSheet = Array.from(uniquePartnersMap.values());
-          console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
-          console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
+          // console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
+          // console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
         } catch (error) {
-          console.error('Failed to load partner data from sheet:', error);
+          // console.error('Failed to load partner data from sheet:', error);
           // Fallback to CSV if sheet fails
           try {
             const partnerResponse = await fetch('/파트너정보.csv');
@@ -950,9 +976,9 @@ const MainPage = ({ user, onLogout }) => {
             });
             
             allPartnersFromSheet = Array.from(uniquePartnersMap.values());
-            console.log('Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
+            // console.log('Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
           } catch (csvError) {
-            console.error('Failed to load CSV partner data as fallback:', csvError);
+            // console.error('Failed to load CSV partner data as fallback:', csvError);
             allPartnersFromSheet = [];
           }
         }
@@ -964,10 +990,10 @@ const MainPage = ({ user, onLogout }) => {
         if (cachedPartners && cachedPartners.length > 0) {
           const changes = findDataChanges(cachedPartners, allPartnersFromSheet, 'id');
           if (changes.hasChanges) {
-            console.log('🆕 파트너 데이터 변경사항 발견 - UI 업데이트');
+            // console.log('🆕 파트너 데이터 변경사항 발견 - UI 업데이트');
             setAllPartners(allPartnersFromSheet);
           } else {
-            console.log('✅ 파트너 데이터 변경사항 없음');
+            // console.log('✅ 파트너 데이터 변경사항 없음');
           }
         } else {
           // 캐시가 없었으면 그냥 표시
@@ -1000,35 +1026,35 @@ const MainPage = ({ user, onLogout }) => {
   useEffect(() => {
     if (allEquipments.length === 0) return;
     
-    console.log('🔄 showInUseEquipment 변경 감지 - 필터링 다시 적용');
-    console.log('showInUseEquipment:', showInUseEquipment);
-    console.log('allEquipments:', allEquipments.length);
+    // console.log('🔄 showInUseEquipment 변경 감지 - 필터링 다시 적용');
+    // console.log('showInUseEquipment:', showInUseEquipment);
+    // console.log('allEquipments:', allEquipments.length);
     
     const newFiltered = allEquipments.filter(item => {
       if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
       return isAvailableStatus(item.status); // 대여 가능한 장비만 표시
     });
     
-    console.log('필터링 결과:', newFiltered.length);
+    // console.log('필터링 결과:', newFiltered.length);
     setAvailableEquipments(newFiltered);
     setFilteredEquipments(newFiltered);
   }, [showInUseEquipment, allEquipments]);
 
   const handleSearch = useCallback((searchTerm) => {
-    console.log('Search term:', searchTerm);
-    console.log('Available equipments:', availableEquipments.length);
+    // console.log('Search term:', searchTerm);
+    // console.log('Available equipments:', availableEquipments.length);
     // Use availableEquipments instead of allEquipments to avoid dependency issues
     const equipmentToFilter = availableEquipments;
     if (!searchTerm || searchTerm.trim() === '') {
       setFilteredEquipments(equipmentToFilter);
-      console.log('No search term, showing all available:', equipmentToFilter.length);
+      // console.log('No search term, showing all available:', equipmentToFilter.length);
       return;
     }
     const filtered = equipmentToFilter.filter(eq => 
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    console.log('Filtered results:', filtered.length);
+    // console.log('Filtered results:', filtered.length);
     setFilteredEquipments(filtered);
   }, [availableEquipments]);
   
@@ -1805,6 +1831,189 @@ const MainPage = ({ user, onLogout }) => {
     );
   };
 
+  // 파트너명 툴팁 컴포넌트
+  const PartnerTooltip = ({ partnerName, partnerContact, partnerPhone, userName, userContact, userPhone, memo }) => {
+    const [tooltipStyle, setTooltipStyle] = useState({});
+    const [isTooltipAbove, setIsTooltipAbove] = useState(false);
+    const [isVisible, setIsVisible] = useState(false);
+    const containerRef = useRef(null);
+    const tooltipRef = useRef(null);
+
+    // 툴팁 위치 계산 함수
+    const calculateTooltipPosition = useCallback(() => {
+      if (!containerRef.current || !tooltipRef.current) return;
+      
+      const containerRect = containerRef.current.getBoundingClientRect();
+      const tooltipRect = tooltipRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      // 기본적으로 아래쪽에 표시
+      let top = containerRect.bottom + 8;
+      let left = containerRect.left + containerRect.width / 2;
+      let tooltipAbove = false;
+      
+      // 아래쪽이 잘리면 위쪽에 표시
+      if (top + tooltipRect.height > viewportHeight) {
+        top = containerRect.top - tooltipRect.height - 8;
+        tooltipAbove = true;
+      }
+      
+      // 위쪽이 잘리면 다시 아래쪽에 표시
+      if (top < 0) {
+        top = containerRect.bottom + 8;
+        tooltipAbove = false;
+      }
+      
+      // 왼쪽이 잘리면 조정
+      if (left - tooltipRect.width / 2 < 0) {
+        left = tooltipRect.width / 2 + 10;
+      }
+      
+      // 오른쪽이 잘리면 조정
+      if (left + tooltipRect.width / 2 > viewportWidth) {
+        left = viewportWidth - tooltipRect.width / 2 - 10;
+      }
+      
+      setIsTooltipAbove(tooltipAbove);
+      setTooltipStyle({
+        position: 'fixed',
+        top: `${top}px`,
+        left: `${left}px`,
+        transform: 'translateX(-50%)',
+        opacity: 1
+      });
+    }, []);
+
+    // 툴팁 위치 계산 및 표시
+    const showTooltip = () => {
+      if (!containerRef.current) return;
+      
+      // 먼저 isVisible을 true로 설정하여 툴팁을 렌더링
+      setIsVisible(true);
+      
+      // 먼저 툴팁을 보이지 않게 렌더링 (높이 계산을 위해)
+      setTooltipStyle({
+        position: 'fixed',
+        top: '-9999px',
+        left: '-9999px',
+        transform: 'translateX(-50%)',
+        opacity: 0
+      });
+    };
+
+    // isVisible이 true가 되면 위치 계산
+    useEffect(() => {
+      if (!isVisible) return;
+      
+      // 툴팁이 렌더링된 후 위치 계산
+      const timer = setTimeout(() => {
+        calculateTooltipPosition();
+      }, 10);
+      
+      return () => clearTimeout(timer);
+    }, [isVisible, calculateTooltipPosition]);
+
+    const hideTooltip = useCallback(() => {
+      setTooltipStyle({
+        opacity: 0
+      });
+      setIsVisible(false);
+    }, []);
+
+    const handleClick = (e) => {
+      e.stopPropagation();
+      if (isVisible) {
+        hideTooltip();
+      } else {
+        showTooltip();
+      }
+    };
+
+    // 외부 클릭 감지
+    useEffect(() => {
+      if (!isVisible) return;
+
+      const handleClickOutside = (event) => {
+        if (
+          containerRef.current &&
+          tooltipRef.current &&
+          !containerRef.current.contains(event.target) &&
+          !tooltipRef.current.contains(event.target)
+        ) {
+          hideTooltip();
+        }
+      };
+
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+      };
+    }, [isVisible, hideTooltip]);
+
+    return (
+      <div 
+        className={styles.partnerTooltipContainer}
+        ref={containerRef}
+      >
+        <span 
+          className={styles.partnerNameText}
+          onClick={handleClick}
+          style={{ cursor: 'pointer' }}
+        >
+          {partnerName}
+        </span>
+        {isVisible && (
+          <div 
+            className={`${styles.partnerTooltip} ${isTooltipAbove ? styles.tooltipAbove : styles.tooltipBelow}`}
+            ref={tooltipRef}
+            style={tooltipStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>파트너명:</span>
+            <span className={styles.tooltipValue}>{partnerName || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>파트너 담당자명:</span>
+            <span className={styles.tooltipValue}>{partnerContact || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>파트너 휴대폰 번호:</span>
+            <span className={styles.tooltipValue}>{partnerPhone || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>사용자명:</span>
+            <span className={styles.tooltipValue}>{userName || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>사용자 담당자명:</span>
+            <span className={styles.tooltipValue}>{userContact || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>사용자 휴대폰 번호:</span>
+            <span className={styles.tooltipValue}>{userPhone || '-'}</span>
+          </div>
+          <div className={styles.tooltipRow}>
+            <span className={styles.tooltipLabel}>비고:</span>
+            <span className={styles.tooltipValue}>{memo || '-'}</span>
+          </div>
+          <button 
+            className={styles.tooltipCloseButton}
+            onClick={hideTooltip}
+            aria-label="닫기"
+          >
+            ×
+          </button>
+        </div>
+        )}
+      </div>
+    );
+  };
+
   const MyDemoList = ({ demos, onReturn, selectedDemos, onDemoToggle, onSelectAll }) => {
     const isOverdue = (returnDate) => {
       const today = new Date();
@@ -1859,6 +2068,7 @@ const MainPage = ({ user, onLogout }) => {
             <th>{isMobile ? '시리얼' : (isTablet ? '시리얼' : '시리얼 넘버')}</th>
             <th>{isMobile ? '시작일' : (isTablet ? '시작일' : '대여 시작일')}</th>
             <th>{isMobile ? '반납일' : (isTablet ? '반납일' : '반납 예정일')}</th>
+            <th>{isMobile ? '파트너' : (isTablet ? '파트너' : '파트너명')}</th>
             <th>{isMobile ? '양식' : (isTablet ? '양식' : '신청 양식')}</th>
             <th>{isMobile ? '관리' : '관리'}</th>
           </tr>
@@ -1882,6 +2092,19 @@ const MainPage = ({ user, onLogout }) => {
                 <td data-label="반납 예정일" className={isOverdue(demo.returnDate) ? styles.overdue : ''}>
                   {formatDate(demo.returnDate)}
                   {isOverdue(demo.returnDate) && <span className={styles.overdueText}>(반납일 초과)</span>}
+                </td>
+                <td data-label="파트너명" className={styles.partnerNameCell}>
+                  {demo.partnerName ? (
+                    <PartnerTooltip
+                      partnerName={demo.partnerName}
+                      partnerContact={demo.partnerContact}
+                      partnerPhone={demo.partnerPhone}
+                      userName={demo.userName || demo.assignee}
+                      userContact={demo.userContact}
+                      userPhone={demo.userPhone}
+                      memo={demo.memo}
+                    />
+                  ) : '-'}
                 </td>
                 <td data-label="신청 양식">
                   {demo.formSubmitted ? (isMobile ? '완료' : (isTablet ? '완료' : '제출 완료')) : (

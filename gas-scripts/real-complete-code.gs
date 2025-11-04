@@ -1222,6 +1222,15 @@ function handleGetPartnerData() {
 }
 
 /**
+ * 🧪 테스트 함수: handleGetMyDemoData를 실제 사용자명으로 실행
+ */
+function TEST_handleGetMyDemoData() {
+  const testUserName = "최진호"; // ← 여기에 실제 사용자 이름 입력
+  console.log(`\n🧪 테스트 실행: userName="${testUserName}"`);
+  return handleGetMyDemoData(testUserName);
+}
+
+/**
  * 특정 사용자의 데모 현황 조회 (최신 상태만 반환)
  * 히스토리가 쌓이는 구조에서 가장 최신 데이터만 필터링
  * 
@@ -1230,7 +1239,7 @@ function handleGetPartnerData() {
  */
 function handleGetMyDemoData(userName) {
   try {
-    console.log(`=== handleGetMyDemoData 시작 (사용자: ${userName}) ===`);
+    console.log(`\n========== [휴대폰 번호 디버깅 시작] 사용자: ${userName} ==========\n`);
     
     if (!userName) {
       return createErrorResponse('invalid_parameter', '사용자 이름이 필요합니다.');
@@ -1247,7 +1256,7 @@ function handleGetMyDemoData(userName) {
     const lastCol = sheet.getLastColumn();
     
     if (lastRow <= 1) {
-      console.log('데이터가 없습니다.');
+      // console.log('데이터가 없습니다.');
       return createSuccessResponse({ 
         data: [], 
         count: 0,
@@ -1259,8 +1268,8 @@ function handleGetMyDemoData(userName) {
     const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
     const data = sheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
     
-    console.log(`전체 데이터 ${data.length}행 조회 완료`);
-    console.log('📋 시트 헤더:', headers);
+    // console.log(`전체 데이터 ${data.length}행 조회 완료`);
+    console.log('📋 [휴대폰 번호 디버깅] 시트 헤더:', headers.map((h, i) => `[${i}:${String.fromCharCode(65 + i)}] ${h}`));
     
     // 필요한 컬럼 인덱스 찾기
     const serialIndex = headers.indexOf('시리얼넘버');
@@ -1271,21 +1280,75 @@ function handleGetMyDemoData(userName) {
     const endDateIndex = headers.indexOf('종료일');
     const locationIndex = headers.indexOf('보관위치');
     const partnerNameIndex = headers.indexOf('파트너명');
+    const partnerContactIndex = headers.indexOf('파트너담당자명');
+    const userNameIndex = headers.indexOf('사용자명');
+    const userContactIndex = headers.indexOf('사용자담당자명');
     const submissionIndex = headers.indexOf('신청양식제출');
     const memoIndex = headers.indexOf('비고');
     
-    console.log('🔍 컬럼 인덱스:', {
-      시리얼넘버: serialIndex,
-      제품명: nameIndex,
-      대여담당자: managerIndex,
-      대여가능여부: statusIndex,
-      시작일: startDateIndex,
-      종료일: endDateIndex,
-      보관위치: locationIndex,
-      파트너명: partnerNameIndex,
-      신청양식제출: submissionIndex,
-      비고: memoIndex
+    // 휴대폰 번호 인덱스 찾기
+    // 🚨 임시 하드코딩: K열(10) = 파트너 휴대폰, N열(13) = 사용자 휴대폰
+    console.log('\n🚨 [임시 해결] 시트 구조:');
+    console.log(`   파트너담당자명: ${partnerContactIndex}열 (${partnerContactIndex !== -1 ? String.fromCharCode(65 + partnerContactIndex) : '없음'})`);
+    console.log(`   사용자담당자명: ${userContactIndex}열 (${userContactIndex !== -1 ? String.fromCharCode(65 + userContactIndex) : '없음'})`);
+    
+    // K열과 N열 헤더 확인
+    console.log(`   K열(10) 헤더: "${headers[10]}"`);
+    console.log(`   N열(13) 헤더: "${headers[13]}"`);
+    
+    // 🚨 실제 데이터 행 샘플 출력 (마지막 데이터 행 = 최신)
+    if (data.length > 0) {
+      const lastRowIndex = data.length - 1;
+      const sampleRow = data[lastRowIndex]; // 시트의 마지막 행 (최신 데이터)
+      console.log(`\n🔍 [샘플 데이터] 마지막 행 (최신, 행 번호: ${lastRowIndex + 2}):`);
+      console.log(`   A열(0, 시리얼): "${sampleRow[0]}"`);
+      console.log(`   B열(1, 제품명): "${sampleRow[1]}"`);
+      console.log(`   I열(8, 파트너명): "${sampleRow[8]}"`);
+      console.log(`   J열(9, 파트너담당자): "${sampleRow[9]}"`);
+      console.log(`   K열(10): "${sampleRow[10]}" ← 🚨 파트너 휴대폰`);
+      console.log(`   L열(11, 사용자명): "${sampleRow[11]}"`);
+      console.log(`   M열(12, 사용자담당자): "${sampleRow[12]}"`);
+      console.log(`   N열(13): "${sampleRow[13]}" ← 🚨 사용자 휴대폰`);
+    }
+    
+    // 강제로 K열 = 파트너, N열 = 사용자
+    const partnerPhoneIndex = 10; // K열
+    const userPhoneIndex = 13;     // N열
+    
+    console.log(`\n🔧 [강제 지정] 파트너 휴대폰: K열(10), 사용자 휴대폰: N열(13)`);
+    
+    // 검증 로그
+    console.log(`📱 휴대폰 번호 컬럼 찾기 최종 결과:`, {
+      파트너담당자명인덱스: partnerContactIndex !== -1 ? `${String.fromCharCode(65 + partnerContactIndex)}열(${partnerContactIndex})` : '없음',
+      파트너휴대폰인덱스: partnerPhoneIndex !== -1 ? `${String.fromCharCode(65 + partnerPhoneIndex)}열(${partnerPhoneIndex})` : '없음',
+      사용자담당자명인덱스: userContactIndex !== -1 ? `${String.fromCharCode(65 + userContactIndex)}열(${userContactIndex})` : '없음',
+      사용자휴대폰인덱스: userPhoneIndex !== -1 ? `${String.fromCharCode(65 + userPhoneIndex)}열(${userPhoneIndex})` : '없음'
     });
+    
+    if (partnerPhoneIndex === -1) {
+      console.warn(`⚠️ 파트너 휴대폰 번호 컬럼을 찾을 수 없습니다.`);
+    }
+    if (userPhoneIndex === -1) {
+      console.warn(`⚠️ 사용자 휴대폰 번호 컬럼을 찾을 수 없습니다.`);
+    }
+    
+    // console.log('🔍 컬럼 인덱스:', {
+    //   시리얼넘버: serialIndex,
+    //   제품명: nameIndex,
+    //   대여담당자: managerIndex,
+    //   대여가능여부: statusIndex,
+    //   시작일: startDateIndex,
+    //   종료일: endDateIndex,
+    //   보관위치: locationIndex,
+    //   파트너명: partnerNameIndex,
+    //   파트너담당자명: partnerContactIndex,
+    //   파트너휴대폰번호: partnerPhoneIndex,
+    //   사용자명: userNameIndex,
+    //   사용자담당자명: userContactIndex,
+    //   사용자휴대폰번호: userPhoneIndex,
+    //   신청양식제출: submissionIndex,
+    //   비고: memoIndex
+    // });
     
     if (serialIndex === -1 || managerIndex === -1 || statusIndex === -1) {
       console.error('❌ 필수 컬럼을 찾을 수 없습니다!');
@@ -1320,9 +1383,9 @@ function handleGetMyDemoData(userName) {
           status: status,
           originalIndex: data.length - 1 - index // 원래 행 번호
         });
-        console.log(`[최신] 시리얼: ${key}, 상태: ${status}, 담당자: ${manager}`);
+        // console.log(`[최신] 시리얼: ${key}, 상태: ${status}, 담당자: ${manager}`);
       } else {
-        console.log(`[건너뜀] 시리얼: ${key} (이미 최신 데이터 존재)`);
+        // console.log(`[건너뜀] 시리얼: ${key} (이미 최신 데이터 존재)`);
       }
     });
     
@@ -1337,10 +1400,40 @@ function handleGetMyDemoData(userName) {
       if (status === '대여신청' || status === '대여중') {
         const submissionValue = submissionIndex !== -1 ? row[submissionIndex] : '';
         const partnerNameValue = partnerNameIndex !== -1 ? row[partnerNameIndex] : '';
+        const partnerContactValue = partnerContactIndex !== -1 ? row[partnerContactIndex] : '';
+        const userNameValue = userNameIndex !== -1 ? row[userNameIndex] : '';
+        const userContactValue = userContactIndex !== -1 ? row[userContactIndex] : '';
         const memoValue = memoIndex !== -1 ? row[memoIndex] : '';
         
-        // 디버깅: 파트너명 확인
-        console.log(`📦 [장비 추가] ${row[nameIndex]} (${row[serialIndex]}): 파트너명="${partnerNameValue}", 파트너명인덱스=${partnerNameIndex}, 원본값="${row[partnerNameIndex]}"`);
+        // 휴대폰 번호 처리 (명확하게 분류)
+        // K 컬럼: 파트너 휴대폰 번호 (파트너담당자명 다음)
+        // N 컬럼: 사용자 휴대폰 번호 (사용자담당자명 다음)
+        
+        console.log(`\n🚨🚨🚨 [코드 버전 확인]`);
+        console.log(`   partnerPhoneIndex = ${partnerPhoneIndex} (타입: ${typeof partnerPhoneIndex})`);
+        console.log(`   userPhoneIndex = ${userPhoneIndex} (타입: ${typeof userPhoneIndex})`);
+        console.log(`   row[10] = "${row[10]}"`);
+        console.log(`   row[13] = "${row[13]}"`);
+        console.log(`   row[partnerPhoneIndex] = "${row[partnerPhoneIndex]}"`);
+        console.log(`   row[userPhoneIndex] = "${row[userPhoneIndex]}"`);
+        
+        const partnerPhoneValue = partnerPhoneIndex !== -1 ? (row[partnerPhoneIndex] || '') : '';
+        const userPhoneValue = userPhoneIndex !== -1 ? (row[userPhoneIndex] || '') : '';
+        
+        console.log(`   최종 partnerPhoneValue = "${partnerPhoneValue}"`);
+        console.log(`   최종 userPhoneValue = "${userPhoneValue}"`);
+        
+        // 디버깅: 상세 정보 확인
+        console.log(`\n📦 [휴대폰 번호 디버깅] ${row[nameIndex]} (${row[serialIndex]})`);
+        console.log(`   전체 행 데이터 (${row.length}개 컬럼):`, row.map((val, idx) => `[${idx}:${String.fromCharCode(65 + idx)}]="${val}"`).join(', '));
+        console.log(`   파트너 정보:`);
+        console.log(`     - 파트너명 (${partnerNameIndex}열): "${partnerNameValue}"`);
+        console.log(`     - 파트너담당자명 (${partnerContactIndex}열): "${partnerContactValue}"`);
+        console.log(`     - 파트너휴대폰 (${partnerPhoneIndex}열): "${partnerPhoneValue}" ${partnerPhoneIndex !== -1 ? `(원본: "${row[partnerPhoneIndex]}")` : ''}`);
+        console.log(`   사용자 정보:`);
+        console.log(`     - 사용자명 (${userNameIndex}열): "${userNameValue}"`);
+        console.log(`     - 사용자담당자명 (${userContactIndex}열): "${userContactValue}"`);
+        console.log(`     - 사용자휴대폰 (${userPhoneIndex}열): "${userPhoneValue}" ${userPhoneIndex !== -1 ? `(원본: "${row[userPhoneIndex]}")` : ''}`);
         
         activeDemos.push({
           시리얼넘버: row[serialIndex] || '',
@@ -1351,6 +1444,9 @@ function handleGetMyDemoData(userName) {
           종료일: row[endDateIndex] || '',
           보관위치: row[locationIndex] || '',
           파트너명: partnerNameValue,
+          파트너담당자명: partnerContactValue,
+          사용자명: userNameValue,
+          사용자담당자명: userContactValue,
           신청양식제출: submissionValue,
           비고: memoValue,
           // UI용 추가 필드
@@ -1361,19 +1457,24 @@ function handleGetMyDemoData(userName) {
           returnDate: row[endDateIndex] || '',
           location: row[locationIndex] || '',
           partnerName: partnerNameValue,
+          partnerContact: partnerContactValue,
+          partnerPhone: partnerPhoneValue,
+          userName: userNameValue,
+          userContact: userContactValue,
+          userPhone: userPhoneValue,
           status: status,
           formSubmitted: submissionValue ? true : false,
           fileUrl: submissionValue || '',
           memo: memoValue
         });
         
-        console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]}), 제출상태: ${submissionValue ? '제출완료' : '미제출'}, URL: ${submissionValue}`);
+        // console.log(`[대여중] ${row[nameIndex]} (${row[serialIndex]}), 제출상태: ${submissionValue ? '제출완료' : '미제출'}, URL: ${submissionValue}`);
       } else {
-        console.log(`[제외] ${row[nameIndex]} (${row[serialIndex]}) - 상태: ${status}`);
+        // console.log(`[제외] ${row[nameIndex]} (${row[serialIndex]}) - 상태: ${status}`);
       }
     });
     
-    console.log(`=== 최종 결과: ${activeDemos.length}건 (사용자: ${userName}) ===`);
+    console.log(`\n=== [휴대폰 번호 디버깅] 최종 결과: ${activeDemos.length}건 (사용자: ${userName}) ===\n`);
     
     // createSuccessResponse가 한 번 더 래핑하므로, 직접 배열을 전달
     return ContentService.createTextOutput(JSON.stringify({
@@ -1599,11 +1700,32 @@ function handleGetInitialDataWithSheetsAPI() {
     console.log('장비 데이터 행 수:', equipmentDataRows.length);
     
     // 장비 데이터를 객체 배열로 변환
+    // 중복 헤더(휴대폰 번호) 처리: 첫 번째는 '_파트너', 두 번째는 '_사용자' 접미사 추가
     const equipmentData = equipmentDataRows.map(row => {
       const item = {};
+      const headerCount = {};
+      
       equipmentHeaders.forEach((header, index) => {
-        item[header] = row[index] || '';
+        const trimmedHeader = (header || '').toString().trim();
+        
+        // 중복 헤더 카운트
+        if (!headerCount[trimmedHeader]) {
+          headerCount[trimmedHeader] = 0;
+        }
+        headerCount[trimmedHeader]++;
+        
+        // 휴대폰 번호 처리 (중복 헤더 구분)
+        if (trimmedHeader === '휴대폰 번호') {
+          if (headerCount[trimmedHeader] === 1) {
+            item['휴대폰 번호_파트너'] = row[index] || '';
+          } else if (headerCount[trimmedHeader] === 2) {
+            item['휴대폰 번호_사용자'] = row[index] || '';
+          }
+        } else {
+          item[trimmedHeader] = row[index] || '';
+        }
       });
+      
       return item;
     });
     
@@ -2125,11 +2247,32 @@ function getEquipmentData() {
     const dataRows = values.slice(1);
     
     // 데이터를 객체 배열로 변환
+    // 중복 헤더(휴대폰 번호) 처리: 첫 번째는 '_파트너', 두 번째는 '_사용자' 접미사 추가
     const equipmentData = dataRows.map(row => {
       const item = {};
+      const headerCount = {};
+      
       headers.forEach((header, index) => {
-        item[header] = row[index] || '';
+        const trimmedHeader = (header || '').toString().trim();
+        
+        // 중복 헤더 카운트
+        if (!headerCount[trimmedHeader]) {
+          headerCount[trimmedHeader] = 0;
+        }
+        headerCount[trimmedHeader]++;
+        
+        // 휴대폰 번호 처리 (중복 헤더 구분)
+        if (trimmedHeader === '휴대폰 번호') {
+          if (headerCount[trimmedHeader] === 1) {
+            item['휴대폰 번호_파트너'] = row[index] || '';
+          } else if (headerCount[trimmedHeader] === 2) {
+            item['휴대폰 번호_사용자'] = row[index] || '';
+          }
+        } else {
+          item[trimmedHeader] = row[index] || '';
+        }
       });
+      
       return item;
     });
     
@@ -2168,10 +2311,10 @@ function convertEquipmentDataForUI(equipmentData) {
     endDate: item['종료일'] || '',
     partnerName: item['파트너명'] || '',
     partnerContact: item['파트너담당자명'] || '',
-    partnerPhone: item['휴대폰 번호'] || '',
+    partnerPhone: item['휴대폰 번호_파트너'] || '', // K열: 파트너 휴대폰
     userName: item['사용자명'] || '',
     userContact: item['사용자담당자명'] || '',
-    userPhone: item['휴대폰 번호'] || '',
+    userPhone: item['휴대폰 번호_사용자'] || '', // N열: 사용자 휴대폰
     memo: item['비고'] || '',
     formSubmitted: item['신청양식제출'] ? true : false, // 제출 여부
     fileUrl: item['신청양식제출'] || '' // 제출된 파일 URL
@@ -2480,7 +2623,8 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
           };
           
           // 휴대폰 번호는 2개가 있음 (11번째: 파트너, 14번째: 사용자)
-          if (header === '휴대폰 번호') {
+          const trimmedHeader = (header || '').toString().trim();
+          if (trimmedHeader === '휴대폰 번호') {
             phoneNumberIndex++;
             if (phoneNumberIndex === 1) {
               return formData.partnerContactNumber || '';

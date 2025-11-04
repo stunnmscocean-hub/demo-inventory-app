@@ -663,15 +663,21 @@
   min-width: 95px;
 }
 
-.myDemoSection .tableContainer th:nth-child(6), /* 양식 */
+.myDemoSection .tableContainer th:nth-child(6), /* 파트너명 */
 .myDemoSection .tableContainer td:nth-child(6) {
+  width: 12%;
+  min-width: 80px;
+}
+
+.myDemoSection .tableContainer th:nth-child(7), /* 양식 */
+.myDemoSection .tableContainer td:nth-child(7) {
   width: 13%;
   min-width: 75px;
   text-align: center;
 }
 
-.myDemoSection .tableContainer th:nth-child(7), /* 관리 */
-.myDemoSection .tableContainer td:nth-child(7) {
+.myDemoSection .tableContainer th:nth-child(8), /* 관리 */
+.myDemoSection .tableContainer td:nth-child(8) {
   width: 13%;
   min-width: 75px;
   text-align: center;
@@ -1857,15 +1863,21 @@ input[name="returnDate"]::placeholder {
     min-width: 85px;
   }
 
-  .myDemoSection .tableContainer th:nth-child(6), /* 양식 */
+  .myDemoSection .tableContainer th:nth-child(6), /* 파트너명 */
   .myDemoSection .tableContainer td:nth-child(6) {
+    width: 12%;
+    min-width: 70px;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(7), /* 양식 */
+  .myDemoSection .tableContainer td:nth-child(7) {
     width: 13%;
     min-width: 65px;
     text-align: center;
   }
 
-  .myDemoSection .tableContainer th:nth-child(7), /* 관리 */
-  .myDemoSection .tableContainer td:nth-child(7) {
+  .myDemoSection .tableContainer th:nth-child(8), /* 관리 */
+  .myDemoSection .tableContainer td:nth-child(8) {
     width: 13%;
     min-width: 65px;
     text-align: center;
@@ -2112,15 +2124,21 @@ input[name="returnDate"]::placeholder {
     min-width: 40px;
   }
 
-  .myDemoSection .tableContainer th:nth-child(6), /* 양식 */
+  .myDemoSection .tableContainer th:nth-child(6), /* 파트너명 */
   .myDemoSection .tableContainer td:nth-child(6) {
+    width: 12%;
+    min-width: 50px;
+  }
+
+  .myDemoSection .tableContainer th:nth-child(7), /* 양식 */
+  .myDemoSection .tableContainer td:nth-child(7) {
     width: 14%;
     min-width: 38px;
     text-align: center;
   }
 
-  .myDemoSection .tableContainer th:nth-child(7), /* 관리 */
-  .myDemoSection .tableContainer td:nth-child(7) {
+  .myDemoSection .tableContainer th:nth-child(8), /* 관리 */
+  .myDemoSection .tableContainer td:nth-child(8) {
     width: 14%;
     min-width: 38px;
     text-align: center;
@@ -2854,5 +2872,138 @@ input[name="returnDate"]::placeholder {
     overflow-wrap: break-word;
     white-space: normal;
     line-height: 1.3;
+  }
+}
+
+/* 파트너명 툴팁 스타일 */
+.partnerNameCell {
+  position: relative;
+}
+
+.partnerTooltipContainer {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+
+.partnerNameText {
+  cursor: pointer;
+  color: var(--primary-color);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.partnerTooltip {
+  position: fixed;
+  padding: 12px 16px;
+  background-color: #333;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: normal;
+  z-index: 10000;
+  opacity: 0;
+  visibility: visible;
+  transition: opacity 0.2s;
+  pointer-events: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 250px;
+  max-width: 350px;
+}
+
+/* 툴팁이 아래쪽에 표시될 때 화살표 (위쪽에 화살표) */
+.partnerTooltip.tooltipBelow:not([style*="opacity: 0"]):not([style*="opacity:0"])::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-bottom-color: #333;
+}
+
+/* 툴팁이 위쪽에 표시될 때 화살표 (아래쪽에 화살표) */
+.partnerTooltip.tooltipAbove:not([style*="opacity: 0"]):not([style*="opacity:0"])::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #333;
+}
+
+.tooltipRow {
+  display: flex;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.tooltipRow:last-child {
+  margin-bottom: 0;
+}
+
+.tooltipLabel {
+  font-weight: 600;
+  min-width: 120px;
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.tooltipValue {
+  flex: 1;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.tooltipCloseButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 20px;
+  font-weight: bold;
+  cursor: pointer;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  border-radius: 50%;
+  transition: background-color 0.2s;
+}
+
+.tooltipCloseButton:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.tooltipCloseButton:active {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* 모바일에서 툴팁 스타일 조정 */
+@media (max-width: 600px) {
+  .partnerTooltip {
+    font-size: 11px;
+    padding: 10px 12px;
+    min-width: 200px;
+    max-width: 280px;
+  }
+
+  .tooltipLabel {
+    min-width: 100px;
+    font-size: 10px;
+  }
+
+  .tooltipValue {
+    font-size: 10px;
   }
 }
