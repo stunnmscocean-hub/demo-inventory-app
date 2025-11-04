@@ -763,7 +763,7 @@ const MainPage = ({ user, onLogout }) => {
             }
           });
           
-          // console.log(`최종 내 대여 현황: ${myDemoData.length}건`);
+          console.log(`✅ 최종 내 대여 현황: ${myDemoData.length}건`);
           
           // 내 데모 현황 데이터 변환
           console.log('\n🚨🚨🚨 [긴급] GAS에서 받은 원본 데이터:', JSON.stringify(myDemoData[0], null, 2));
@@ -850,19 +850,14 @@ const MainPage = ({ user, onLogout }) => {
           
           setMyDemos(initialMyDemos);
           setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
-          // console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
-          // console.log('제출 상태:', initialMyDemos.map(d => ({ 
-          //   serial: d.serial, 
-          //   formSubmitted: d.formSubmitted, 
-          //   fileUrl: d.fileUrl 
-          // })));
+          console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
           
         } catch (error) {
-          // console.error('Failed to load equipment data from sheet:', error);
+          console.error('❌ Failed to load equipment data from sheet:', error);
           
           // Fallback to CSV if sheet fails
           try {
-            // console.log('CSV 파일로 폴백...');
+            console.log('⚠️ CSV 파일로 폴백...');
             
             // 사용내역 CSV
             const usageResponse = await fetch('/사용내역.csv');
@@ -882,7 +877,7 @@ const MainPage = ({ user, onLogout }) => {
                 location: '본사'
               }));
             setMyDemos(initialMyDemos);
-            // console.log(`CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
+            console.log(`✅ CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
             
             // 장비현황 CSV
             const equipmentResponse = await fetch('/장비현황.csv');
@@ -895,9 +890,9 @@ const MainPage = ({ user, onLogout }) => {
               location: item.location,
               status: item.status
             }));
-            // console.log(`CSV에서 장비 데이터 로드: ${allEquipmentFromSheet.length}건`);
+            console.log(`✅ CSV에서 장비 데이터 로드: ${allEquipmentFromSheet.length}건`);
           } catch (csvError) {
-            // console.error('Failed to load CSV data as fallback:', csvError);
+            console.error('❌ Failed to load CSV data as fallback:', csvError);
             allEquipmentFromSheet = [];
             setMyDemos([]);
           }
@@ -921,7 +916,7 @@ const MainPage = ({ user, onLogout }) => {
         }
         
         setLoadingEquipments(false); // 장비 목록 로딩 완료
-        // console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
+        console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
 
         // Fetch partner data from Google Sheet instead of CSV
         let allPartnersFromSheet = [];
@@ -953,10 +948,9 @@ const MainPage = ({ user, onLogout }) => {
           });
           
           allPartnersFromSheet = Array.from(uniquePartnersMap.values());
-          // console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
-          // console.log('Sample partner data from GAS:', allPartnersFromSheet[0]); // 디버깅용
+          console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
         } catch (error) {
-          // console.error('Failed to load partner data from sheet:', error);
+          console.error('❌ Failed to load partner data from sheet:', error);
           // Fallback to CSV if sheet fails
           try {
             const partnerResponse = await fetch('/파트너정보.csv');
@@ -976,9 +970,9 @@ const MainPage = ({ user, onLogout }) => {
             });
             
             allPartnersFromSheet = Array.from(uniquePartnersMap.values());
-            // console.log('Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
+            console.log('✅ Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
           } catch (csvError) {
-            // console.error('Failed to load CSV partner data as fallback:', csvError);
+            console.error('❌ Failed to load CSV partner data as fallback:', csvError);
             allPartnersFromSheet = [];
           }
         }
@@ -1101,6 +1095,7 @@ const MainPage = ({ user, onLogout }) => {
       setReturnLogs([...logs]);
     };
 
+    console.log(`\n🚀 총 ${selectedDemos.length}개 장비 반납 시작...`);
     addLog(`총 ${selectedDemos.length}개 장비 반납 시작...`, 'info');
 
     let successCount = 0;
@@ -1108,6 +1103,7 @@ const MainPage = ({ user, onLogout }) => {
 
     for (let i = 0; i < selectedDemos.length; i++) {
       const demo = selectedDemos[i];
+      console.log(`\n🔄 [${i + 1}/${selectedDemos.length}] ${demo.name} (${demo.serial}) 반납 처리 중...`);
       addLog(`[${i + 1}/${selectedDemos.length}] ${demo.name} (${demo.serial}) 반납 처리 중...`, 'processing');
 
       try {
@@ -1115,6 +1111,7 @@ const MainPage = ({ user, onLogout }) => {
         const matchingEquipments = allEquipments.filter(eq => 
           (eq.serial === demo.serial || eq.serialNumber === demo.serial)
         );
+        console.log(`   매칭된 장비: ${matchingEquipments.length}개`);
 
         const fullEquipmentData = matchingEquipments
           .reverse()
@@ -1127,10 +1124,13 @@ const MainPage = ({ user, onLogout }) => {
           });
 
         if (!fullEquipmentData) {
+          console.error(`   ❌ ${demo.name} - 대여 정보를 찾을 수 없습니다.`);
           addLog(`  ❌ ${demo.name} - 대여 정보를 찾을 수 없습니다.`, 'error');
           failCount++;
           continue;
         }
+        
+        console.log(`   ✅ 최신 대여 정보 찾음:`, fullEquipmentData);
 
         // 반납할 장비 데이터 준비
         const equipmentDataToReturn = {
@@ -1153,12 +1153,15 @@ const MainPage = ({ user, onLogout }) => {
         };
 
         // Google Sheets에 반납 히스토리 추가
+        console.log(`   📋 GAS로 전송할 데이터:`, equipmentDataToReturn);
         const result = await returnEquipment(equipmentDataToReturn);
 
         if (result.success) {
+          console.log(`   ✅ ${demo.name} - 반납 완료`);
           addLog(`  ✅ ${demo.name} - 반납 완료`, 'success');
           successCount++;
         } else {
+          console.error(`   ❌ ${demo.name} - 반납 실패:`, result.error || '알 수 없는 오류');
           addLog(`  ❌ ${demo.name} - 반납 실패: ${result.error || '알 수 없는 오류'}`, 'error');
           failCount++;
         }
@@ -1175,6 +1178,7 @@ const MainPage = ({ user, onLogout }) => {
       }
     }
 
+    console.log(`\n✅ 반납 처리 완료! 성공: ${successCount}개, 실패: ${failCount}개`);
     addLog(`\n반납 처리 완료! 성공: ${successCount}개, 실패: ${failCount}개`, successCount > 0 ? 'success' : 'error');
 
     setIsReturning(false);
@@ -1200,8 +1204,19 @@ const MainPage = ({ user, onLogout }) => {
         return;
       }
       
+      // UI 로그 초기화
+      setReturnLogs([]);
+      const logs = [];
+      const addLog = (message, type = 'info') => {
+        const timestamp = new Date().toLocaleTimeString('ko-KR');
+        const logEntry = { timestamp, message, type };
+        logs.push(logEntry);
+        setReturnLogs([...logs]);
+      };
+      
       try {
         console.log('반납 처리 시작:', returnedDemo);
+        addLog(`${returnedDemo.name} (${returnedDemo.serial}) 반납 처리 시작...`, 'processing');
         console.log('전체 장비 데이터 개수:', allEquipments.length);
         
         // 전체 장비 데이터에서 해당 시리얼의 최신 대여 정보 찾기 (역순 검색)
@@ -1230,11 +1245,13 @@ const MainPage = ({ user, onLogout }) => {
           console.error('❌ 대여 중인 상세 정보를 찾을 수 없습니다!');
           console.log('내 데모 목록:', returnedDemo);
           console.log('매칭 시도한 장비들:', matchingEquipments);
+          addLog('❌ 대여 중인 상세 정보를 찾을 수 없습니다!', 'error');
           alert('대여 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.');
           return;
         }
         
         console.log('✅ 최신 대여 정보 찾음:', fullEquipmentData);
+        addLog('✅ 최신 대여 정보 확인 완료', 'success');
         
         // 반납할 장비 데이터 준비 (찾은 전체 데이터 복사)
         const equipmentDataToReturn = {
@@ -1266,12 +1283,14 @@ const MainPage = ({ user, onLogout }) => {
         };
         
         console.log('📋 GAS로 전송할 반납 데이터 (전체):', equipmentDataToReturn);
+        addLog('📋 시트에 반납 히스토리 추가 중...', 'processing');
         
         // Google Sheets에 반납 히스토리 추가
         const result = await returnEquipment(equipmentDataToReturn);
         
         if (result.success) {
           console.log('✅ 반납 처리 성공:', result);
+          addLog(`✅ ${returnedDemo.name} 반납 완료!`, 'success');
           
           // 클라이언트 상태 업데이트
           // 1. 내 데모 목록에서 제거
@@ -1280,14 +1299,19 @@ const MainPage = ({ user, onLogout }) => {
           // 2. 전체 장비 데이터 새로고침 (다음 로딩 시 반영)
           // 실시간 반영을 위해 상태만 업데이트 (서버 데이터는 다음 새로고침 시 반영)
           
-          alert(`✅ ${returnedDemo.name} 반납이 완료되었습니다!\n담당자에게 전달해주세요.`);
-          
-          // 페이지 새로고침으로 최신 데이터 반영
-          window.location.reload();
+          setTimeout(() => {
+            alert(`✅ ${returnedDemo.name} 반납이 완료되었습니다!\n담당자에게 전달해주세요.`);
+            // 페이지 새로고침으로 최신 데이터 반영
+            window.location.reload();
+          }, 1000);
+        } else {
+          addLog(`❌ 반납 실패: ${result.error || '알 수 없는 오류'}`, 'error');
+          alert(`반납 처리에 실패했습니다: ${result.error || '알 수 없는 오류'}`);
         }
         
       } catch (error) {
-        console.error('반납 처리 실패:', error);
+          console.error('❌ 반납 처리 실패:', error);
+          addLog(`❌ 오류 발생: ${error.message}`, 'error');
         alert(`반납 처리 중 오류가 발생했습니다: ${error.message}`);
       }
     }
