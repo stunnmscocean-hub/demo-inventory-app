@@ -131,7 +131,9 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => {
 };
 
 // EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
-const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle }) => {
+const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle, allEquipmentFromSheet }) => {
+  // 확장된 장비 ID를 추적하는 state
+  const [expandedEquipmentIds, setExpandedEquipmentIds] = useState(new Set());
   
   const handleCheckboxChange = (e, equipment) => {
     e.stopPropagation(); // Prevent event bubbling
@@ -139,11 +141,102 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   };
 
   const handleRowClick = (e, equipment) => {
-    // Only toggle if clicking on the row, not the checkbox
-    if (e.target.type !== 'checkbox') {
-      onEquipmentToggle(equipment);
+    // 체크박스 클릭은 무시
+    if (e.target.type === 'checkbox') {
+      return;
     }
+    
+    // 확장/축소 토글
+    setExpandedEquipmentIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(equipment.id)) {
+        newSet.delete(equipment.id);
+      } else {
+        newSet.add(equipment.id);
+      }
+      return newSet;
+    });
   };
+  
+  // 특정 장비의 대여 히스토리 가져오기 (최근 3개)
+  const getEquipmentHistory = React.useCallback((equipment) => {
+    if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
+      return [];
+    }
+    
+    const serial = equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '';
+    if (!serial) return [];
+    
+    // 시리얼넘버로 필터링하고 "반납완료" 상태 제외
+    const history = allEquipmentFromSheet.filter(item => {
+      const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+      const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
+      
+      // 시리얼넘버가 일치하고 "반납완료" 상태가 아닌 것만
+      if (itemSerial !== serial) return false;
+      if (itemStatus === '반납완료') return false;
+      
+      return true;
+    });
+    
+    // 날짜 기준 정렬 (오래된 것부터 - 오름차순)
+    const sortedHistory = history.sort((a, b) => {
+      const dateA = parseDateString(a['시작일'] || a.startDate || '');
+      const dateB = parseDateString(b['시작일'] || b.startDate || '');
+      
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      
+      return dateA.getTime() - dateB.getTime(); // 오래된 것부터 (오름차순)
+    });
+    
+    // 최근 3개만 반환 (오래된 것부터)
+    return sortedHistory.slice(0, 3);
+  }, [allEquipmentFromSheet]);
+  
+  // 같은 시작일과 비고를 가진 다른 장비 찾기
+  const getRelatedEquipments = React.useCallback((historyItem, currentSerial) => {
+    if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
+      return [];
+    }
+    
+    const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
+    const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
+    
+    if (!startDate || !memo) return [];
+    
+    // 같은 시작일과 비고를 가진 다른 장비 찾기 (현재 장비 제외, "반납완료" 상태 제외)
+    const related = allEquipmentFromSheet.filter(item => {
+      const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+      const itemStartDate = (item['시작일'] || item.startDate || '').toString().trim();
+      const itemMemo = (item['비고'] || item.memo || '').toString().trim();
+      const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
+      
+      // 현재 장비는 제외
+      if (itemSerial === currentSerial) return false;
+      
+      // "반납완료" 상태는 제외
+      if (itemStatus === '반납완료') return false;
+      
+      // 시작일과 비고가 모두 일치하는지 확인
+      return itemStartDate === startDate && itemMemo === memo;
+    });
+    
+    // 중복 제거 (시리얼넘버 기준)
+    const uniqueRelated = [];
+    const seenSerials = new Set();
+    
+    related.forEach(item => {
+      const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+      if (!seenSerials.has(itemSerial)) {
+        seenSerials.add(itemSerial);
+        uniqueRelated.push(item);
+      }
+    });
+    
+    return uniqueRelated;
+  }, [allEquipmentFromSheet]);
 
   // 모바일 여부 확인 (600px 이하)
   const [isMobile, setIsMobile] = React.useState(window.innerWidth <= 600);
@@ -308,26 +401,156 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
             <tbody>
               {groupedEquipments[category.id].map((eq) => {
                 const isSelected = selectedEquipments.some(selected => selected.id === eq.id);
+                const isExpanded = expandedEquipmentIds.has(eq.id);
+                const history = isExpanded ? getEquipmentHistory(eq) : [];
+                const currentSerial = eq.serial || eq.serialNumber || eq['시리얼넘버'] || '';
+                
+                
                 return (
-                  <tr 
-                    key={eq.id} 
-                    className={styles.selectableRow}
-                    onClick={(e) => handleRowClick(e, eq)}
-                  >
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={(e) => handleCheckboxChange(e, eq)}
-                        className={styles.equipmentCheckbox}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                    </td>
-                    <td>{eq.name}</td>
-                    <td>{eq.serial}</td>
-                    <td>{eq.location}</td>
-                    <td>{getStatusText(eq.status)}</td>
-                  </tr>
+                  <React.Fragment key={eq.id}>
+                    <tr 
+                      className={styles.selectableRow}
+                      onClick={(e) => handleRowClick(e, eq)}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleCheckboxChange(e, eq)}
+                          className={styles.equipmentCheckbox}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </td>
+                      <td>
+                        <span style={{ marginRight: '8px' }}>
+                          {isExpanded ? '▼' : '▶'}
+                        </span>
+                        {eq.name}
+                      </td>
+                      <td>{eq.serial}</td>
+                      <td>{eq.location}</td>
+                      <td>{getStatusText(eq.status)}</td>
+                    </tr>
+                    {isExpanded && history.length > 0 && (
+                      <>
+                        {history.map((historyItem, idx) => {
+                          // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
+                          const related = getRelatedEquipments(historyItem, currentSerial);
+                          
+                          // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
+                          const equipmentPairs = [];
+                          
+                          // 현재 장비 추가
+                          if (eq.name || eq.serial) {
+                            equipmentPairs.push({
+                              name: (eq.name || '').toString().trim(),
+                              serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
+                            });
+                          }
+                          
+                          // 관련 장비 추가
+                          related.forEach(item => {
+                            const name = (item['제품명'] || item.name || '').toString().trim();
+                            const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+                            
+                            // 현재 장비와 중복되지 않고, 이름이나 시리얼이 있는 경우만 추가
+                            const isDuplicate = equipmentPairs.some(pair => 
+                              (pair.name && pair.name === name) || (pair.serial && pair.serial === serial)
+                            );
+                            
+                            if (!isDuplicate && (name || serial)) {
+                              equipmentPairs.push({ name, serial });
+                            }
+                          });
+                          
+                          // 날짜 포맷팅
+                          const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
+                          const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
+                          const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
+                          
+                          let formattedStartDate = '';
+                          if (startDate) {
+                            const date = parseDateString(startDate);
+                            if (date && !isNaN(date.getTime())) {
+                              const year = String(date.getFullYear()).slice(-2);
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              formattedStartDate = `${year}/${month}/${day}`;
+                            }
+                          }
+                          
+                          let formattedEndDate = '';
+                          if (endDate) {
+                            const date = parseDateString(endDate);
+                            if (date && !isNaN(date.getTime())) {
+                              const month = String(date.getMonth() + 1).padStart(2, '0');
+                              const day = String(date.getDate()).padStart(2, '0');
+                              formattedEndDate = `${month}/${day}`;
+                            }
+                          }
+                          
+                          const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
+                          
+                          // 디버깅: 데이터 확인
+                          if (idx === 0) {
+                            console.log('First History Item Debug:', {
+                              historyItem,
+                              equipmentPairs,
+                              assignee,
+                              formattedStartDate,
+                              memo,
+                              eqName: eq.name,
+                              eqSerial: eq.serial,
+                              currentSerial
+                            });
+                          }
+                          
+                          // 내용이 있는지 확인
+                          const hasAnyContent = equipmentPairs.length > 0 || assignee || formattedStartDate || memo;
+                          
+                          return (
+                            <tr key={`${eq.id}-history-${idx}`} className={styles.historyRow}>
+                              <td className={styles.historyBox} colSpan="5">
+                                <div className={styles.historyBoxContent}>
+                                  {hasAnyContent ? (
+                                    <>
+                                      {equipmentPairs.length > 0 && (
+                                        <div className={styles.historyBoxGrid}>
+                                          {equipmentPairs.map((pair, pairIdx) => (
+                                            <div key={pairIdx} className={styles.historyBoxItem}>
+                                              <div className={styles.historyBoxItemName}>{pair.name}</div>
+                                              <div className={styles.historyBoxItemSerial}>{pair.serial}</div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                      {(assignee || formattedStartDate) && (
+                                        <div className={styles.historyBoxRow}>
+                                          <span>{assignee || '-'}</span>
+                                          {formattedStartDate && (
+                                            <span> ({formattedStartDate}{formattedEndDate ? ` - ${formattedEndDate}` : ''})</span>
+                                          )}
+                                        </div>
+                                      )}
+                                      {memo && (
+                                        <div className={styles.historyBoxRow}>
+                                          <div className={styles.historyBoxMemo}>{memo}</div>
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <div className={styles.historyBoxRow}>
+                                      <span>대여 정보 없음</span>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </>
+                    )}
+                  </React.Fragment>
                 );
               })}
             </tbody>
@@ -470,9 +693,12 @@ const formatDateInput = (inputValue) => {
 
 const MainPage = ({ user, onLogout }) => {
   const [myDemos, setMyDemos] = useState([]);
+  const [allAssigneeDemos, setAllAssigneeDemos] = useState([]); // 모든 담당자별 데모 현황
+  const [currentAssigneeIndex, setCurrentAssigneeIndex] = useState(0); // 현재 보여주는 담당자 인덱스
   const [availableEquipments, setAvailableEquipments] = useState([]);
   const [filteredEquipments, setFilteredEquipments] = useState([]);
   const [allEquipments, setAllEquipments] = useState([]);
+  const [allEquipmentFromSheet, setAllEquipmentFromSheet] = useState([]); // 시트1의 전체 히스토리 데이터
   const [allPartners, setAllPartners] = useState([]); // New state for partner data
   const [showInUseEquipment, setShowInUseEquipment] = useState(false);
   const [isMyDemosFolded, setIsMyDemosFolded] = useState(false); // State for folding MyDemoList
@@ -484,6 +710,9 @@ const MainPage = ({ user, onLogout }) => {
   const lastScrollTopRef = useRef(0); // 마지막 스크롤 위치
   const isProcessingRef = useRef(false); // 상태 변경 처리 중 플래그
   const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
+  const myDemoSectionRef = useRef(null); // 스와이프를 위한 ref
+  const touchStartXRef = useRef(0); // 터치 시작 X 좌표
+  const touchEndXRef = useRef(0); // 터치 종료 X 좌표
   
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
@@ -848,9 +1077,144 @@ const MainPage = ({ user, onLogout }) => {
             }
           });
           
+          // 담당자 이름에서 괄호 이전만 추출하는 함수
+          const getAssigneeBaseName = (assigneeName) => {
+            if (!assigneeName) return '';
+            const trimmed = assigneeName.toString().trim();
+            const parenIndex = trimmed.indexOf('(');
+            return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+          };
+          
+          // 모든 담당자별 데모 현황 생성
+          // 먼저 담당자 이름을 괄호 이전만으로 그룹핑
+          const assigneeBaseNameMap = new Map(); // baseName -> [원본 이름들]
+          allEquipmentFromSheet.forEach(item => {
+            const assignee = (item.assignee || item['대여담당자'] || '').toString().trim();
+            if (assignee) {
+              const baseName = getAssigneeBaseName(assignee);
+              if (baseName) {
+                if (!assigneeBaseNameMap.has(baseName)) {
+                  assigneeBaseNameMap.set(baseName, []);
+                }
+                if (!assigneeBaseNameMap.get(baseName).includes(assignee)) {
+                  assigneeBaseNameMap.get(baseName).push(assignee);
+                }
+              }
+            }
+          });
+          
+          // baseName으로 정렬된 담당자 목록 생성
+          const assignees = Array.from(assigneeBaseNameMap.keys()).sort();
+          const allAssigneeDemosData = {};
+          
+          assignees.forEach(baseName => {
+            // 해당 baseName에 속하는 모든 원본 이름들
+            const originalNames = assigneeBaseNameMap.get(baseName);
+            
+            // 각 담당자별 장비 필터링 (원본 이름들 모두 포함)
+            const assigneeEquipments = allEquipmentFromSheet.filter(item => {
+              const itemAssignee = (item.assignee || item['대여담당자'] || '').toString().trim();
+              return originalNames.includes(itemAssignee);
+            });
+            
+            // 시리얼넘버별로 최신 상태만 추출
+            const latestEquipmentMap = new Map();
+            [...assigneeEquipments].reverse().forEach((item) => {
+              const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+              const status = (item.status || item['대여가능여부'] || '').toString().trim();
+              
+              if (!latestEquipmentMap.has(serial)) {
+                latestEquipmentMap.set(serial, { item, status });
+              }
+            });
+            
+            // 제외할 상태 필터링
+            const excludedStatuses = ['반납완료', '대여 가능', '대여가능', '반납', '완료'];
+            const assigneeDemoData = [];
+            
+            latestEquipmentMap.forEach(({ item, status }, serial) => {
+              const isExcluded = excludedStatuses.some(excluded => 
+                status.toLowerCase().includes(excluded.toLowerCase())
+              );
+              
+              if (!isExcluded && status !== '') {
+                assigneeDemoData.push(item);
+              }
+            });
+            
+            // 데이터 변환
+            const assigneeDemos = assigneeDemoData.map((item, index) => {
+              const demo = {
+                id: `${baseName}-${index}`,
+                name: item.name || item['제품명'] || '',
+                serial: item.serial || item.serialNumber || item['시리얼넘버'] || '',
+                assignee: item.assignee || item['대여담당자'] || '',
+                startDate: item.startDate || item['시작일'] || '',
+                returnDate: item.endDate || item.returnDate || item['종료일'] || '',
+                partnerName: item.partnerName || item['파트너명'] || '',
+                partnerContact: item.partnerContact || item['파트너담당자명'] || '',
+                partnerPhone: item.partnerPhone || '',
+                userName: item.userName || item['사용자명'] || '',
+                userContact: item.userContact || item['사용자담당자명'] || '',
+                userPhone: item.userPhone || '',
+                memo: item.memo || item['비고'] || '',
+                formSubmitted: item.formSubmitted || false,
+                fileUrl: item.fileUrl || item['신청양식제출'] || '',
+                location: item.location || item['보관위치'] || '본사',
+                status: item.status || item['대여가능여부'] || ''
+              };
+              return demo;
+            });
+            
+            // 그룹핑 (같은 담당자, 같은 시작일, 같은 비고)
+            const groupMap = new Map();
+            assigneeDemos.forEach(demo => {
+              const groupKey = `${demo.assignee}-${demo.startDate}-${demo.memo}`;
+              if (!groupMap.has(groupKey)) {
+                groupMap.set(groupKey, {
+                  id: demo.id,
+                  name: demo.name,
+                  serial: demo.serial,
+                  assignee: demo.assignee,
+                  startDate: demo.startDate,
+                  returnDate: demo.returnDate,
+                  partnerName: demo.partnerName,
+                  partnerContact: demo.partnerContact,
+                  partnerPhone: demo.partnerPhone,
+                  userName: demo.userName,
+                  userContact: demo.userContact,
+                  userPhone: demo.userPhone,
+                  memo: demo.memo,
+                  formSubmitted: demo.formSubmitted,
+                  fileUrl: demo.fileUrl,
+                  location: demo.location,
+                  status: demo.status,
+                  relatedEquipments: []
+                });
+              }
+              
+              const group = groupMap.get(groupKey);
+              if (demo.serial !== group.serial) {
+                group.relatedEquipments.push({
+                  name: demo.name,
+                  serial: demo.serial
+                });
+              }
+            });
+            
+            allAssigneeDemosData[baseName] = Array.from(groupMap.values());
+          });
+          
+          // 현재 사용자의 인덱스 찾기 (baseName으로 비교)
+          const userBaseName = getAssigneeBaseName(userName);
+          const currentUserIndex = assignees.findIndex(a => a === userBaseName);
+          setCurrentAssigneeIndex(currentUserIndex >= 0 ? currentUserIndex : 0);
+          
+          setAllAssigneeDemos(allAssigneeDemosData);
           setMyDemos(initialMyDemos);
           setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
           console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
+          console.log(`✅ 전체 담당자 수: ${assignees.length}명`);
           
         } catch (error) {
           console.error('❌ Failed to load equipment data from sheet:', error);
@@ -900,6 +1264,9 @@ const MainPage = ({ user, onLogout }) => {
         
         // 💾 캐시에 저장
         setCacheData(CACHE_KEYS.EQUIPMENT, allEquipmentFromSheet);
+        
+        // 🔄 전체 히스토리 데이터를 state에 저장
+        setAllEquipmentFromSheet(allEquipmentFromSheet);
         
         // 🔄 변경사항 확인 및 업데이트
         if (cachedEquipment && cachedEquipment.length > 0) {
@@ -2038,7 +2405,7 @@ const MainPage = ({ user, onLogout }) => {
     );
   };
 
-  const MyDemoList = ({ demos, onReturn, selectedDemos, onDemoToggle, onSelectAll }) => {
+  const MyDemoList = ({ demos, onReturn, selectedDemos, onDemoToggle, onSelectAll, isCurrentUser = true }) => {
     const isOverdue = (returnDate) => {
       const today = new Date();
       today.setHours(0, 0, 0, 0); // 시간은 비교에서 제외
@@ -2138,9 +2505,11 @@ const MainPage = ({ user, onLogout }) => {
                   )}
                 </td>
                 <td data-label="관리">
-                  <button onClick={() => onReturn(demo.id)} className="button-secondary">
-                    {isMobile ? '반납' : (isTablet ? '반납' : '반납하기')}
-                  </button>
+                  {isCurrentUser && (
+                    <button onClick={() => onReturn(demo.id)} className="button-secondary">
+                      {isMobile ? '반납' : (isTablet ? '반납' : '반납하기')}
+                    </button>
+                  )}
                 </td>
               </tr>
             );
@@ -3291,10 +3660,62 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
       {!isMyDemosFolded && <Header user={user} onLogout={onLogout} />}
       
       <div className={styles.mainContent}>
+        {/* 담당자 선택 버튼 영역 */}
+        {Object.keys(allAssigneeDemos).length > 0 && (
+          <div className={styles.assigneeButtonContainer}>
+            {Object.keys(allAssigneeDemos).sort().map((assignee, index) => {
+              const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+              const getAssigneeBaseName = (name) => {
+                if (!name) return '';
+                const trimmed = name.toString().trim();
+                const parenIndex = trimmed.indexOf('(');
+                return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+              };
+              const userBaseName = getAssigneeBaseName(userName);
+              const isCurrentUser = assignee === userBaseName;
+              const isSelected = currentAssigneeIndex === index;
+              
+              return (
+                <button
+                  key={assignee}
+                  onClick={() => setCurrentAssigneeIndex(index)}
+                  className={`${styles.assigneeButton} ${isSelected ? styles.assigneeButtonActive : ''}`}
+                  style={{
+                    backgroundColor: isSelected ? '#4caf50' : '#ffffff',
+                    color: isSelected ? '#ffffff' : '#495057',
+                    border: `1px solid ${isSelected ? '#4caf50' : '#dee2e6'}`,
+                    fontWeight: isSelected ? '600' : '400'
+                  }}
+                >
+                  {isCurrentUser ? '내 현황' : assignee}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        
         {/* 고정 영역 1: 내 데모 현황 */}
-        <div className={`${styles.fixedArea} ${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}>
+        <div 
+          ref={myDemoSectionRef}
+          className={`${styles.fixedArea} ${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}
+        >
           <div className={styles.sectionHeaderWithButton}>
-            <h2>내 데모 현황</h2>
+            <h2>
+              {(() => {
+                const assignees = Object.keys(allAssigneeDemos).sort();
+                const currentAssignee = assignees[currentAssigneeIndex] || '';
+                const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                const getAssigneeBaseName = (name) => {
+                  if (!name) return '';
+                  const trimmed = name.toString().trim();
+                  const parenIndex = trimmed.indexOf('(');
+                  return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                };
+                const userBaseName = getAssigneeBaseName(userName);
+                const isCurrentUser = currentAssignee === userBaseName;
+                return isCurrentUser ? '내 데모 현황' : `${currentAssignee}님의 데모 현황`;
+              })()}
+            </h2>
             <button 
               onClick={() => setIsMyDemosFolded(!isMyDemosFolded)}
               className={styles.foldButtonInline}
@@ -3307,44 +3728,75 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <div className={styles.tableContainer}>
                 {loadingMyDemos ? (
                   <SkeletonMyDemoTable rows={3} />
-                ) : myDemos.length > 0 ? (
-                  <MyDemoList 
-                    demos={myDemos} 
-                    onReturn={handleReturn}
-                    selectedDemos={selectedDemos}
-                    onDemoToggle={handleDemoToggle}
-                    onSelectAll={handleSelectAllDemos}
-                  />
-                ) : (
-                  <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
-                )}
+                ) : (() => {
+                  const assignees = Object.keys(allAssigneeDemos).sort();
+                  const currentAssignee = assignees[currentAssigneeIndex] || '';
+                  const currentDemos = allAssigneeDemos[currentAssignee] || [];
+                  const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                  const getAssigneeBaseName = (name) => {
+                    if (!name) return '';
+                    const trimmed = name.toString().trim();
+                    const parenIndex = trimmed.indexOf('(');
+                    return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                  };
+                  const userBaseName = getAssigneeBaseName(userName);
+                  const isCurrentUser = currentAssignee === userBaseName;
+                  
+                  return currentDemos.length > 0 ? (
+                    <MyDemoList 
+                      demos={currentDemos} 
+                      onReturn={handleReturn}
+                      selectedDemos={selectedDemos}
+                      onDemoToggle={handleDemoToggle}
+                      onSelectAll={handleSelectAllDemos}
+                      isCurrentUser={isCurrentUser}
+                    />
+                  ) : (
+                    <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
+                  );
+                })()}
               </div>
               
               {/* 일괄 반납 버튼 */}
-              {myDemos.length > 0 && !isMyDemosFolded && (
-                <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button 
-                    onClick={handleBulkReturn}
-                    className="button-primary"
-                    disabled={selectedDemos.length === 0 || isReturning}
-                    style={{
-                      opacity: selectedDemos.length === 0 ? 0.5 : 1,
-                      cursor: selectedDemos.length === 0 || isReturning ? 'not-allowed' : 'pointer'
-                    }}
-                  >
-                    {isReturning ? '반납 처리 중...' : `선택한 장비 반납 (${selectedDemos.length})`}
-                  </button>
-                  {selectedDemos.length > 0 && (
+              {(() => {
+                const assignees = Object.keys(allAssigneeDemos).sort();
+                const currentAssignee = assignees[currentAssigneeIndex] || '';
+                const currentDemos = allAssigneeDemos[currentAssignee] || [];
+                const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                const getAssigneeBaseName = (name) => {
+                  if (!name) return '';
+                  const trimmed = name.toString().trim();
+                  const parenIndex = trimmed.indexOf('(');
+                  return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                };
+                const userBaseName = getAssigneeBaseName(userName);
+                const isCurrentUser = currentAssignee === userBaseName;
+                
+                return currentDemos.length > 0 && !isMyDemosFolded && isCurrentUser ? (
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button 
-                      onClick={() => setSelectedDemos([])}
-                      className="button-secondary"
-                      style={{ padding: '8px 16px' }}
+                      onClick={handleBulkReturn}
+                      className="button-primary"
+                      disabled={selectedDemos.length === 0 || isReturning}
+                      style={{
+                        opacity: selectedDemos.length === 0 ? 0.5 : 1,
+                        cursor: selectedDemos.length === 0 || isReturning ? 'not-allowed' : 'pointer'
+                      }}
                     >
-                      선택 해제
+                      {isReturning ? '반납 처리 중...' : `선택한 장비 반납 (${selectedDemos.length})`}
                     </button>
-                  )}
-                </div>
-              )}
+                    {selectedDemos.length > 0 && (
+                      <button 
+                        onClick={() => setSelectedDemos([])}
+                        className="button-secondary"
+                        style={{ padding: '8px 16px' }}
+                      >
+                        선택 해제
+                      </button>
+                    )}
+                  </div>
+                ) : null;
+              })()}
 
               {/* 반납 진행 로그 UI */}
               {returnLogs.length > 0 && (
@@ -3437,6 +3889,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   equipments={filteredEquipments} 
                   selectedEquipments={selectedEquipments}
                   onEquipmentToggle={handleEquipmentToggle}
+                  allEquipmentFromSheet={allEquipmentFromSheet}
                 />
               )}
             </div>

@@ -1513,6 +1513,7 @@ function handleReturnEquipment(equipmentDataJson) {
       : equipmentDataJson;
     
     console.log('반납할 장비 데이터:', equipmentData);
+    console.log('📅 날짜 변환 전 - 시작일:', equipmentData.startDate, '/ 종료일:', equipmentData.returnDate || equipmentData.endDate);
     
     const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
     const sheet = spreadsheet.getSheetByName('시트1');
@@ -1551,6 +1552,35 @@ function handleReturnEquipment(equipmentDataJson) {
         return '';
       }
       
+      // 날짜 형식 변환 함수 (ISO 8601 → YYYY/MM/DD)
+      const formatDateToSheet = (dateString) => {
+        if (!dateString) return '';
+        
+        try {
+          // 이미 YYYY/MM/DD 형식이면 그대로 반환
+          if (/^\d{4}\/\d{2}\/\d{2}$/.test(dateString)) {
+            return dateString;
+          }
+          
+          // ISO 8601 또는 다른 형식이면 변환
+          const date = new Date(dateString);
+          if (isNaN(date.getTime())) {
+            console.warn(`잘못된 날짜 형식: ${dateString}`);
+            return dateString; // 변환 실패 시 원본 반환
+          }
+          
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          const formatted = `${year}/${month}/${day}`;
+          console.log(`  ✅ 날짜 변환: "${dateString}" → "${formatted}"`);
+          return formatted;
+        } catch (error) {
+          console.error(`날짜 변환 오류: ${dateString}`, error);
+          return dateString;
+        }
+      };
+      
       // 나머지 필드는 기존 데이터 그대로 매핑
       const fieldMapping = {
         '시리얼넘버': equipmentData.serial || equipmentData.serialNumber || '',
@@ -1558,8 +1588,8 @@ function handleReturnEquipment(equipmentDataJson) {
         'Tag': equipmentData.tag || '',
         '보관위치': equipmentData.location || '',
         '대여담당자': equipmentData.assignee || '',
-        '시작일': equipmentData.startDate || '',
-        '종료일': equipmentData.returnDate || equipmentData.endDate || '',
+        '시작일': formatDateToSheet(equipmentData.startDate || ''),
+        '종료일': formatDateToSheet(equipmentData.returnDate || equipmentData.endDate || ''),
         '파트너명': equipmentData.partnerName || '',
         '파트너담당자명': equipmentData.partnerContact || '',
         '사용자명': equipmentData.userName || '',
@@ -1570,7 +1600,7 @@ function handleReturnEquipment(equipmentDataJson) {
       const value = fieldMapping[trimmedHeader] || '';
       
       // 디버깅: 중요 필드 로그
-      if (trimmedHeader === '대여담당자' || trimmedHeader === '파트너명' || trimmedHeader === '사용자명') {
+      if (trimmedHeader === '대여담당자' || trimmedHeader === '파트너명' || trimmedHeader === '사용자명' || trimmedHeader === '시작일' || trimmedHeader === '종료일') {
         console.log(`  ${trimmedHeader}: "${value}"`);
       }
       
