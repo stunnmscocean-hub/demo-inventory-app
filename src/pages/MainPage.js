@@ -422,9 +422,6 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                         />
                       </td>
                       <td>
-                        <span style={{ marginRight: '8px' }}>
-                          {isExpanded ? '▼' : '▶'}
-                        </span>
                         {eq.name}
                       </td>
                       <td>{eq.serial}</td>
@@ -3660,40 +3657,6 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
       {!isMyDemosFolded && <Header user={user} onLogout={onLogout} />}
       
       <div className={styles.mainContent}>
-        {/* 담당자 선택 버튼 영역 */}
-        {Object.keys(allAssigneeDemos).length > 0 && (
-          <div className={styles.assigneeButtonContainer}>
-            {Object.keys(allAssigneeDemos).sort().map((assignee, index) => {
-              const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-              const getAssigneeBaseName = (name) => {
-                if (!name) return '';
-                const trimmed = name.toString().trim();
-                const parenIndex = trimmed.indexOf('(');
-                return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
-              };
-              const userBaseName = getAssigneeBaseName(userName);
-              const isCurrentUser = assignee === userBaseName;
-              const isSelected = currentAssigneeIndex === index;
-              
-              return (
-                <button
-                  key={assignee}
-                  onClick={() => setCurrentAssigneeIndex(index)}
-                  className={`${styles.assigneeButton} ${isSelected ? styles.assigneeButtonActive : ''}`}
-                  style={{
-                    backgroundColor: isSelected ? '#4caf50' : '#ffffff',
-                    color: isSelected ? '#ffffff' : '#495057',
-                    border: `1px solid ${isSelected ? '#4caf50' : '#dee2e6'}`,
-                    fontWeight: isSelected ? '600' : '400'
-                  }}
-                >
-                  {isCurrentUser ? '내 현황' : assignee}
-                </button>
-              );
-            })}
-          </div>
-        )}
-        
         {/* 고정 영역 1: 내 데모 현황 */}
         <div 
           ref={myDemoSectionRef}
@@ -3725,6 +3688,40 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           </div>
           {!isMyDemosFolded && (
             <>
+              {/* 담당자 선택 버튼 영역 */}
+              {Object.keys(allAssigneeDemos).length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginBottom: '12px' }}>
+                  {Object.keys(allAssigneeDemos).sort().map((assignee, index) => {
+                    const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                    const getAssigneeBaseName = (name) => {
+                      if (!name) return '';
+                      const trimmed = name.toString().trim();
+                      const parenIndex = trimmed.indexOf('(');
+                      return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                    };
+                    const userBaseName = getAssigneeBaseName(userName);
+                    const isCurrentUser = assignee === userBaseName;
+                    const isSelected = currentAssigneeIndex === index;
+                    
+                    return (
+                      <button
+                        key={assignee}
+                        onClick={() => setCurrentAssigneeIndex(index)}
+                        className={`${styles.assigneeButton} ${isSelected ? styles.assigneeButtonActive : ''}`}
+                        style={{
+                          backgroundColor: isSelected ? '#4caf50' : '#ffffff',
+                          color: isSelected ? '#ffffff' : '#495057',
+                          border: `1px solid ${isSelected ? '#4caf50' : '#dee2e6'}`,
+                          fontWeight: isSelected ? '600' : '400'
+                        }}
+                      >
+                        {isCurrentUser ? '내 현황' : assignee}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              
               <div className={styles.tableContainer}>
                 {loadingMyDemos ? (
                   <SkeletonMyDemoTable rows={3} />

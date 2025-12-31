@@ -162,9 +162,9 @@
 }
 
 .assigneeButton {
-  padding: 4px 11.2px;
+  padding: 2.4px 6.72px;
   border-radius: 12px;
-  font-size: 12px;
+  font-size: 8.4px;
   font-weight: 400;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -172,7 +172,6 @@
   background-color: #ffffff;
   color: #495057;
   white-space: nowrap;
-  width: 12.5%;
   text-align: center;
   display: flex;
   align-items: center;
