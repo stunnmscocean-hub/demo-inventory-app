@@ -972,16 +972,11 @@ const MainPage = ({ user, onLogout }) => {
             }
           });
           
-          // Step 3: 제외할 상태 필터링
-          const excludedStatuses = ['반납완료', '대여 가능', '대여가능', '반납', '완료'];
-          
+          // Step 3: "대여신청" 또는 "대여중" 상태만 필터링 (GAS와 동일한 로직)
           const myDemoData = [];
           latestEquipmentMap.forEach(({ item, status }, serial) => {
-            const isExcluded = excludedStatuses.some(excluded => 
-              status.toLowerCase().includes(excluded.toLowerCase())
-            );
-            
-            if (!isExcluded && status !== '') {
+            // "대여신청" 또는 "대여중"인 경우만 추가 (GAS handleGetMyDemoData와 동일)
+            if (status === '대여신청' || status === '대여중') {
               myDemoData.push(item);
               // console.log(`✅ [표시] ${item.name} (${serial}) - 상태: ${status}`);
             } else {
@@ -1125,16 +1120,12 @@ const MainPage = ({ user, onLogout }) => {
               }
             });
             
-            // 제외할 상태 필터링
-            const excludedStatuses = ['반납완료', '대여 가능', '대여가능', '반납', '완료'];
+            // "대여신청" 또는 "대여중" 상태만 필터링 (GAS와 동일한 로직)
             const assigneeDemoData = [];
             
             latestEquipmentMap.forEach(({ item, status }, serial) => {
-              const isExcluded = excludedStatuses.some(excluded => 
-                status.toLowerCase().includes(excluded.toLowerCase())
-              );
-              
-              if (!isExcluded && status !== '') {
+              // "대여신청" 또는 "대여중"인 경우만 추가 (GAS handleGetMyDemoData와 동일)
+              if (status === '대여신청' || status === '대여중') {
                 assigneeDemoData.push(item);
               }
             });
@@ -3725,51 +3716,22 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <div className={styles.tableContainer}>
                 {loadingMyDemos ? (
                   <SkeletonMyDemoTable rows={3} />
-                ) : (() => {
-                  const assignees = Object.keys(allAssigneeDemos).sort();
-                  const currentAssignee = assignees[currentAssigneeIndex] || '';
-                  const currentDemos = allAssigneeDemos[currentAssignee] || [];
-                  const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-                  const getAssigneeBaseName = (name) => {
-                    if (!name) return '';
-                    const trimmed = name.toString().trim();
-                    const parenIndex = trimmed.indexOf('(');
-                    return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
-                  };
-                  const userBaseName = getAssigneeBaseName(userName);
-                  const isCurrentUser = currentAssignee === userBaseName;
-                  
-                  return currentDemos.length > 0 ? (
-                    <MyDemoList 
-                      demos={currentDemos} 
-                      onReturn={handleReturn}
-                      selectedDemos={selectedDemos}
-                      onDemoToggle={handleDemoToggle}
-                      onSelectAll={handleSelectAllDemos}
-                      isCurrentUser={isCurrentUser}
-                    />
-                  ) : (
-                    <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
-                  );
-                })()}
+                ) : myDemos.length > 0 ? (
+                  <MyDemoList 
+                    demos={myDemos} 
+                    onReturn={handleReturn}
+                    selectedDemos={selectedDemos}
+                    onDemoToggle={handleDemoToggle}
+                    onSelectAll={handleSelectAllDemos}
+                    isCurrentUser={true}
+                  />
+                ) : (
+                  <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
+                )}
               </div>
               
               {/* 일괄 반납 버튼 */}
-              {(() => {
-                const assignees = Object.keys(allAssigneeDemos).sort();
-                const currentAssignee = assignees[currentAssigneeIndex] || '';
-                const currentDemos = allAssigneeDemos[currentAssignee] || [];
-                const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-                const getAssigneeBaseName = (name) => {
-                  if (!name) return '';
-                  const trimmed = name.toString().trim();
-                  const parenIndex = trimmed.indexOf('(');
-                  return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
-                };
-                const userBaseName = getAssigneeBaseName(userName);
-                const isCurrentUser = currentAssignee === userBaseName;
-                
-                return currentDemos.length > 0 && !isMyDemosFolded && isCurrentUser ? (
+              {myDemos.length > 0 && !isMyDemosFolded ? (
                   <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button 
                       onClick={handleBulkReturn}
@@ -3792,8 +3754,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       </button>
                     )}
                   </div>
-                ) : null;
-              })()}
+              ) : null}
 
               {/* 반납 진행 로그 UI */}
               {returnLogs.length > 0 && (
