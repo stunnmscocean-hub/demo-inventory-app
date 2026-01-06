@@ -1154,43 +1154,8 @@ const MainPage = ({ user, onLogout }) => {
               return demo;
             });
             
-            // 그룹핑 (같은 담당자, 같은 시작일, 같은 비고)
-            const groupMap = new Map();
-            assigneeDemos.forEach(demo => {
-              const groupKey = `${demo.assignee}-${demo.startDate}-${demo.memo}`;
-              if (!groupMap.has(groupKey)) {
-                groupMap.set(groupKey, {
-                  id: demo.id,
-                  name: demo.name,
-                  serial: demo.serial,
-                  assignee: demo.assignee,
-                  startDate: demo.startDate,
-                  returnDate: demo.returnDate,
-                  partnerName: demo.partnerName,
-                  partnerContact: demo.partnerContact,
-                  partnerPhone: demo.partnerPhone,
-                  userName: demo.userName,
-                  userContact: demo.userContact,
-                  userPhone: demo.userPhone,
-                  memo: demo.memo,
-                  formSubmitted: demo.formSubmitted,
-                  fileUrl: demo.fileUrl,
-                  location: demo.location,
-                  status: demo.status,
-                  relatedEquipments: []
-                });
-              }
-              
-              const group = groupMap.get(groupKey);
-              if (demo.serial !== group.serial) {
-                group.relatedEquipments.push({
-                  name: demo.name,
-                  serial: demo.serial
-                });
-              }
-            });
-            
-            allAssigneeDemosData[baseName] = Array.from(groupMap.values());
+            // 그룹핑 제거: 모든 항목을 개별적으로 표시 (검색 목록에서만 그룹핑 사용)
+            allAssigneeDemosData[baseName] = assigneeDemos;
           });
           
           // 현재 사용자의 인덱스 찾기 (baseName으로 비교)
@@ -3716,22 +3681,51 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <div className={styles.tableContainer}>
                 {loadingMyDemos ? (
                   <SkeletonMyDemoTable rows={3} />
-                ) : myDemos.length > 0 ? (
-                  <MyDemoList 
-                    demos={myDemos} 
-                    onReturn={handleReturn}
-                    selectedDemos={selectedDemos}
-                    onDemoToggle={handleDemoToggle}
-                    onSelectAll={handleSelectAllDemos}
-                    isCurrentUser={true}
-                  />
-                ) : (
-                  <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
-                )}
+                ) : (() => {
+                  const assignees = Object.keys(allAssigneeDemos).sort();
+                  const currentAssignee = assignees[currentAssigneeIndex] || '';
+                  const currentDemos = currentAssignee ? (allAssigneeDemos[currentAssignee] || []) : myDemos;
+                  const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                  const getAssigneeBaseName = (name) => {
+                    if (!name) return '';
+                    const trimmed = name.toString().trim();
+                    const parenIndex = trimmed.indexOf('(');
+                    return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                  };
+                  const userBaseName = getAssigneeBaseName(userName);
+                  const isCurrentUser = currentAssignee === userBaseName || !currentAssignee;
+                  
+                  return currentDemos.length > 0 ? (
+                    <MyDemoList 
+                      demos={currentDemos} 
+                      onReturn={handleReturn}
+                      selectedDemos={selectedDemos}
+                      onDemoToggle={handleDemoToggle}
+                      onSelectAll={handleSelectAllDemos}
+                      isCurrentUser={isCurrentUser}
+                    />
+                  ) : (
+                    <p className={styles.noData}>현재 대여 중인 장비가 없습니다.</p>
+                  );
+                })()}
               </div>
               
               {/* 일괄 반납 버튼 */}
-              {myDemos.length > 0 && !isMyDemosFolded ? (
+              {(() => {
+                const assignees = Object.keys(allAssigneeDemos).sort();
+                const currentAssignee = assignees[currentAssigneeIndex] || '';
+                const currentDemos = currentAssignee ? (allAssigneeDemos[currentAssignee] || []) : myDemos;
+                const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
+                const getAssigneeBaseName = (name) => {
+                  if (!name) return '';
+                  const trimmed = name.toString().trim();
+                  const parenIndex = trimmed.indexOf('(');
+                  return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
+                };
+                const userBaseName = getAssigneeBaseName(userName);
+                const isCurrentUser = currentAssignee === userBaseName || !currentAssignee;
+                
+                return currentDemos.length > 0 && !isMyDemosFolded && isCurrentUser ? (
                   <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
                     <button 
                       onClick={handleBulkReturn}
@@ -3754,7 +3748,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       </button>
                     )}
                   </div>
-              ) : null}
+                ) : null;
+              })()}
 
               {/* 반납 진행 로그 UI */}
               {returnLogs.length > 0 && (
