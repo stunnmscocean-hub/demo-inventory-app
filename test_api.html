@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>API 테스트</title>
+</head>
+<body>
+    <h1>API 응답 테스트</h1>
+    <button onclick="testAPI()">API 호출</button>
+    <pre id="result"></pre>
+    
+    <script>
+    function testAPI() {
+        console.log('API 호출 시작...');
+        const result = document.getElementById('result');
+        result.textContent = '로딩중...';
+        
+        fetch('http://192.168.0.32:18273/api/stock')
+            .then(response => {
+                console.log('응답 상태:', response.status);
+                console.log('응답 헤더:', response.headers);
+                return response.text();
+            })
+            .then(text => {
+                console.log('응답 텍스트:', text);
+                result.textContent = text;
+                
+                // JSON 파싱 시도
+                try {
+                    const data = JSON.parse(text);
+                    console.log('파싱된 데이터:', data);
+                    console.log('상품 개수:', data.count);
+                    console.log('products 배열:', data.products);
+                } catch (e) {
+                    console.error('JSON 파싱 에러:', e);
+                }
+            })
+            .catch(error => {
+                console.error('에러:', error);
+                result.textContent = '에러: ' + error.message;
+            });
+    }
+    
+    // 자동 호출
+    window.onload = testAPI;
+    </script>
+</body>
+</html>
+

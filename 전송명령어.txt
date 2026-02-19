@@ -1,0 +1,37 @@
+==========================================
+Ubuntu 서버로 파일 전송 명령어
+==========================================
+
+PowerShell에서 한 줄씩 복사해서 실행하세요:
+
+1. 키 파일 경로 설정:
+$key = "$env:USERPROFILE\Downloads\LightsailDefaultKey-ap-northeast-2.pem"
+
+2. 서버 주소 설정:
+$server = "ubuntu@13.125.123.62"
+
+3. 파일 전송 (한 줄씩 실행):
+scp -i $key server.py $server:~/
+scp -i $key dashboard_modern.html $server:~/
+scp -i $key fetch_erp_stock.py $server:~/
+
+4. 선택 파일 (있는 경우):
+scp -i $key stock_data.json $server:~/
+scp -i $key stock_data.csv $server:~/
+
+==========================================
+또는 한 번에 실행:
+==========================================
+
+$key = "$env:USERPROFILE\Downloads\LightsailDefaultKey-ap-northeast-2.pem"
+$server = "ubuntu@13.125.123.62"
+scp -i $key server.py dashboard_modern.html fetch_erp_stock.py $server:~/
+
+==========================================
+전송 후 서버 접속:
+==========================================
+
+ssh -i $key $server
+
+==========================================
+
