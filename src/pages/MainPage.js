@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  duplicateSpreadsheet, 
-  updateGoogleSheetWithData, 
-  initGoogleApis, 
+import {
+  duplicateSpreadsheet,
+  updateGoogleSheetWithData,
+  initGoogleApis,
   addDataToSheet,
   exportGoogleSheetToPdfAndConvertToJpg,
   TEMPLATE_SPREADSHEET_ID,
@@ -11,12 +11,11 @@ import {
   logOperation,
   checkFolderAccess,
   DRIVE_FOLDER_ID,
-  clearAuthData,
-  testAppsScriptConnection
+  clearAuthData
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
-import { getEquipmentData, initializeEquipmentSheet, getPartnerData, testSheetData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
-import { getCacheData, setCacheData, getForceCacheData, findDataChanges, applyDataChanges, CACHE_KEYS } from '../utils/dataCache';
+import { getEquipmentData, getPartnerData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
+import { setCacheData, getForceCacheData, findDataChanges, CACHE_KEYS } from '../utils/dataCache';
 import JpgViewer from '../components/JpgViewer';
 import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
@@ -24,7 +23,7 @@ import styles from './MainPage.module.css';
 // SearchBar 컴포넌트를 메인 컴포넌트 외부로 이동
 const SearchBar = React.memo(({ onSearch }) => {
   const [term, setTerm] = useState('');
-  
+
   const handleChange = (e) => {
     e.stopPropagation(); // Prevent event bubbling
     const newTerm = e.target.value;
@@ -35,14 +34,14 @@ const SearchBar = React.memo(({ onSearch }) => {
   const handleClick = (e) => {
     e.stopPropagation(); // Prevent event bubbling
   };
-  
+
   return (
     <div className={styles.searchForm} onClick={handleClick}>
-      <input 
-        type="text" 
-        placeholder="장비 이름, 시리얼" 
-        value={term} 
-        onChange={handleChange} 
+      <input
+        type="text"
+        placeholder="장비 이름, 시리얼"
+        value={term}
+        onChange={handleChange}
         onClick={handleClick}
         className={styles.searchInput}
       />
@@ -134,7 +133,7 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => {
 const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle, allEquipmentFromSheet }) => {
   // 확장된 장비 ID를 추적하는 state
   const [expandedEquipmentIds, setExpandedEquipmentIds] = useState(new Set());
-  
+
   const handleCheckboxChange = (e, equipment) => {
     e.stopPropagation(); // Prevent event bubbling
     onEquipmentToggle(equipment);
@@ -145,7 +144,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     if (e.target.type === 'checkbox') {
       return;
     }
-    
+
     // 확장/축소 토글
     setExpandedEquipmentIds(prev => {
       const newSet = new Set(prev);
@@ -157,76 +156,76 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return newSet;
     });
   };
-  
+
   // 특정 장비의 대여 히스토리 가져오기 (최근 3개)
   const getEquipmentHistory = React.useCallback((equipment) => {
     if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
       return [];
     }
-    
+
     const serial = equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '';
     if (!serial) return [];
-    
+
     // 시리얼넘버로 필터링하고 "반납완료" 상태 제외
     const history = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
       const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
-      
+
       // 시리얼넘버가 일치하고 "반납완료" 상태가 아닌 것만
       if (itemSerial !== serial) return false;
       if (itemStatus === '반납완료') return false;
-      
+
       return true;
     });
-    
+
     // 날짜 기준 정렬 (오래된 것부터 - 오름차순)
     const sortedHistory = history.sort((a, b) => {
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
-      
+
       if (!dateA && !dateB) return 0;
       if (!dateA) return 1;
       if (!dateB) return -1;
-      
+
       return dateA.getTime() - dateB.getTime(); // 오래된 것부터 (오름차순)
     });
-    
+
     // 최근 3개만 반환 (오래된 것부터)
     return sortedHistory.slice(0, 3);
   }, [allEquipmentFromSheet]);
-  
+
   // 같은 시작일과 비고를 가진 다른 장비 찾기
   const getRelatedEquipments = React.useCallback((historyItem, currentSerial) => {
     if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
       return [];
     }
-    
+
     const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
     const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
-    
+
     if (!startDate || !memo) return [];
-    
+
     // 같은 시작일과 비고를 가진 다른 장비 찾기 (현재 장비 제외, "반납완료" 상태 제외)
     const related = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
       const itemStartDate = (item['시작일'] || item.startDate || '').toString().trim();
       const itemMemo = (item['비고'] || item.memo || '').toString().trim();
       const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
-      
+
       // 현재 장비는 제외
       if (itemSerial === currentSerial) return false;
-      
+
       // "반납완료" 상태는 제외
       if (itemStatus === '반납완료') return false;
-      
+
       // 시작일과 비고가 모두 일치하는지 확인
       return itemStartDate === startDate && itemMemo === memo;
     });
-    
+
     // 중복 제거 (시리얼넘버 기준)
     const uniqueRelated = [];
     const seenSerials = new Set();
-    
+
     related.forEach(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
       if (!seenSerials.has(itemSerial)) {
@@ -234,7 +233,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
         uniqueRelated.push(item);
       }
     });
-    
+
     return uniqueRelated;
   }, [allEquipmentFromSheet]);
 
@@ -250,7 +249,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   // 상태 텍스트 변환 (모바일에서 짧게)
   const getStatusText = (status) => {
     if (!isMobile) return status;
-    
+
     // 모바일에서 텍스트 축약
     const statusMap = {
       '대여가능': '가능',
@@ -260,7 +259,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       '사용중': '사용중',
       '반납완료': '완료'
     };
-    
+
     return statusMap[status] || status;
   };
 
@@ -287,65 +286,65 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     const lowerName = cleanName.toLowerCase();
 
     // includes 체크는 원본 이름으로 (괄호 안의 내용도 체크)
-    
+
     // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart includes) - 먼저 체크
-    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') || 
-        lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
+    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') ||
+      lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
       console.log(`[PC 카테고리] ${name}`);
       return 'pc';
     }
-    
+
     // 1. Rally 시리즈
     const rallyList = [
-      'Rally Plus', 'Rally System', 'Rally Camera', 'Rally', 'Rally Bar', 'Rally Bar Graphite','Rally Bar Mini', 'Rally Bar Huddle',
-       'Rally Speaker'
+      'Rally Plus', 'Rally System', 'Rally Camera', 'Rally', 'Rally Bar', 'Rally Bar Graphite', 'Rally Bar Mini', 'Rally Bar Huddle',
+      'Rally Speaker'
     ];
     if (rallyList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'rally';
-    
+
     // 2. MeetUp 시리즈
     const meetupList = ['MeetUp', 'MeetUp 2'];
     if (meetupList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'meetup';
-    
+
     // 3. 연장 마이크 (Expansion includes만 허용)
     const micList = ['Rally Mic Pod', 'Mic Pod Expansion', 'MIc Pod'];
-    if (micList.some(model => cleanName === model || lowerName === model.toLowerCase()) || 
-        lowerNameOriginal.includes('expansion')) return 'mic';
-    
+    if (micList.some(model => cleanName === model || lowerName === model.toLowerCase()) ||
+      lowerNameOriginal.includes('expansion')) return 'mic';
+
     // 4. TAP 시리즈 (tap includes, mount 포함된 제목은 제외)
     if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) return 'tap';
-    
+
     // 6. Dock 시리즈
     const dockList = ['Logi Dock Flex', 'Logi Dock'];
     if (dockList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'dock';
-    
+
     // 7. PTZ/카메라
     const ptzList = ['PTZ Pro 2', 'Group', 'Sight', 'Connect', 'BCC950', 'Scribe', 'Reach'];
     if (ptzList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'ptz';
-    
+
     // 8. 웹캠
     const webcamList = [
       'Brio', 'MX Brio 705', 'C930e', 'C925e', 'C920e', 'C505e',
       'Brio 705'
     ];
     if (webcamList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'webcam';
-    
+
     // 9. 케이블
     const cableList = [
       'Active USB Cable', 'CAT5E Kit for TAP', 'Rally Mic Pod Extension Cable', 'Strong USB Cable',
       'Rally Mic Pod Cat Coupler', 'USB Strong Cable'
     ];
     if (cableList.some(model => cleanName === model || lowerName === model.toLowerCase())) return 'cable';
-    
+
     // 10. 마운트류 (mount includes만 허용)
     if (lowerNameOriginal.includes('mount')) return 'mount';
-    
+
     // 기타 (Screen Share, H570e 등)
     const otherList = ['Screen Share', 'H570e'];
     if (otherList.some(model => cleanName === model || lowerName === model.toLowerCase())) {
       console.log(`[기타 카테고리 - 명시적] ${name}`);
       return 'other';
     }
-    
+
     // 기타 (나머지 모든 장비)
     console.log(`[기타 카테고리 - 기본] ${name}`);
     return 'other';
@@ -354,10 +353,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   // 장비를 카테고리별로 그룹화
   const groupedEquipments = React.useMemo(() => {
     const groups = {};
-    
+
     // console.log('===== 전체 장비 목록 =====');
     // console.log('총 장비 수:', equipments.length);
-    
+
     equipments.forEach(eq => {
       const categoryId = getEquipmentCategory(eq);
       if (!groups[categoryId]) {
@@ -365,20 +364,20 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       }
       groups[categoryId].push(eq);
     });
-    
+
     // console.log('===== 카테고리별 그룹화 결과 =====');
     // Object.keys(groups).forEach(catId => {
     //   console.log(`[${catId}] ${groups[catId].length}개:`, groups[catId].map(e => e.name));
     // });
-    
+
     return groups;
   }, [equipments]);
 
   // 렌더링할 카테고리 목록 (장비가 있는 카테고리만)
-  const categoriesToRender = CATEGORIES.filter(cat => 
+  const categoriesToRender = CATEGORIES.filter(cat =>
     groupedEquipments[cat.id] && groupedEquipments[cat.id].length > 0
   );
-  
+
   return (
     <div>
       {categoriesToRender.map((category) => (
@@ -404,11 +403,11 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                 const isExpanded = expandedEquipmentIds.has(eq.id);
                 const history = isExpanded ? getEquipmentHistory(eq) : [];
                 const currentSerial = eq.serial || eq.serialNumber || eq['시리얼넘버'] || '';
-                
-                
+
+
                 return (
                   <React.Fragment key={eq.id}>
-                    <tr 
+                    <tr
                       className={styles.selectableRow}
                       onClick={(e) => handleRowClick(e, eq)}
                     >
@@ -433,10 +432,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                         {history.map((historyItem, idx) => {
                           // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
                           const related = getRelatedEquipments(historyItem, currentSerial);
-                          
+
                           // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
                           const equipmentPairs = [];
-                          
+
                           // 현재 장비 추가
                           if (eq.name || eq.serial) {
                             equipmentPairs.push({
@@ -444,27 +443,27 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                               serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
                             });
                           }
-                          
+
                           // 관련 장비 추가
                           related.forEach(item => {
                             const name = (item['제품명'] || item.name || '').toString().trim();
                             const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-                            
+
                             // 현재 장비와 중복되지 않고, 이름이나 시리얼이 있는 경우만 추가
-                            const isDuplicate = equipmentPairs.some(pair => 
+                            const isDuplicate = equipmentPairs.some(pair =>
                               (pair.name && pair.name === name) || (pair.serial && pair.serial === serial)
                             );
-                            
+
                             if (!isDuplicate && (name || serial)) {
                               equipmentPairs.push({ name, serial });
                             }
                           });
-                          
+
                           // 날짜 포맷팅
                           const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
                           const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
                           const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
-                          
+
                           let formattedStartDate = '';
                           if (startDate) {
                             const date = parseDateString(startDate);
@@ -475,7 +474,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                               formattedStartDate = `${year}/${month}/${day}`;
                             }
                           }
-                          
+
                           let formattedEndDate = '';
                           if (endDate) {
                             const date = parseDateString(endDate);
@@ -485,9 +484,9 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                               formattedEndDate = `${month}/${day}`;
                             }
                           }
-                          
+
                           const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
-                          
+
                           // 디버깅: 데이터 확인
                           if (idx === 0) {
                             console.log('First History Item Debug:', {
@@ -501,10 +500,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                               currentSerial
                             });
                           }
-                          
+
                           // 내용이 있는지 확인
                           const hasAnyContent = equipmentPairs.length > 0 || assignee || formattedStartDate || memo;
-                          
+
                           return (
                             <tr key={`${eq.id}-history-${idx}`} className={styles.historyRow}>
                               <td className={styles.historyBox} colSpan="5">
@@ -558,33 +557,6 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   );
 });
 
-// SelectedEquipmentsList 컴포넌트를 메인 컴포넌트 외부로 이동
-const SelectedEquipmentsList = React.memo(({ selectedEquipments, onRemoveEquipment }) => {
-  if (selectedEquipments.length === 0) return null;
-
-  return (
-    <div className={styles.selectedEquipmentsContainer}>
-      <div className={styles.selectedEquipmentsHeader}>
-        <h3>선택된 장비 ({selectedEquipments.length}개)</h3>
-      </div>
-      <div className={styles.selectedEquipmentsList}>
-        {selectedEquipments.map((equipment) => (
-          <div key={equipment.id} className={styles.selectedEquipmentItem}>
-            <span className={styles.equipmentInfo}>
-              {equipment.name} ({equipment.serial})
-            </span>
-            <button 
-              onClick={() => onRemoveEquipment(equipment.id)}
-              className={styles.removeButton}
-            >
-              ✕
-            </button>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-});
 
 // 사용자 이름 표시 (ACL 시트에서 가져온 이름 사용)
 const getUserDisplayName = (user) => {
@@ -595,19 +567,19 @@ const getUserDisplayName = (user) => {
 // Helper function to parse yyyy/mm/dd or yyyy-mm-dd into a Date object
 const parseDateString = (dateString) => {
   if (!dateString) return null;
-  
+
   // yyyy-mm-dd format (from input type="date")
   if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return new Date(dateString);
   }
-  
+
   // yyyy/mm/dd format (from CSV)
   const parts = dateString.split('/');
   if (parts.length === 3) {
     const [year, month, day] = parts;
     return new Date(`${year}-${month}-${day}`); // Convert to yyyy-mm-dd for reliable Date parsing
   }
-  
+
   // Korean date format (e.g., "12월 12일")
   const koreanMatch = dateString.match(/(\d+)월\s*(\d+)일/);
   if (koreanMatch) {
@@ -616,7 +588,7 @@ const parseDateString = (dateString) => {
     const currentYear = new Date().getFullYear();
     return new Date(`${currentYear}-${month}-${day}`);
   }
-  
+
   // Fallback for other formats
   return new Date(dateString);
 };
@@ -648,17 +620,17 @@ const formatDateToHTML5Date = (dateInput) => {
 // 날짜 입력을 YYYY/MM/DD 형식으로 변환하는 함수
 const formatDateInput = (inputValue) => {
   if (!inputValue) return '';
-  
+
   // 이미 YYYY/MM/DD 형식인 경우
   if (inputValue.match(/^\d{4}\/\d{2}\/\d{2}$/)) {
     return inputValue;
   }
-  
+
   // YYYY-MM-DD 형식인 경우
   if (inputValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
     return inputValue.replace(/-/g, '/');
   }
-  
+
   // DD/MM/YYYY 형식인 경우
   if (inputValue.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
     const parts = inputValue.split('/');
@@ -667,7 +639,7 @@ const formatDateInput = (inputValue) => {
       return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
     }
   }
-  
+
   // MM/DD/YYYY 형식인 경우
   if (inputValue.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
     const parts = inputValue.split('/');
@@ -676,7 +648,7 @@ const formatDateInput = (inputValue) => {
       return `${year}/${month.padStart(2, '0')}/${day.padStart(2, '0')}`;
     }
   }
-  
+
   // 기타 형식은 그대로 반환
   return inputValue;
 };
@@ -709,13 +681,12 @@ const MainPage = ({ user, onLogout }) => {
   const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
   const myDemoSectionRef = useRef(null); // 스와이프를 위한 ref
   const touchStartXRef = useRef(0); // 터치 시작 X 좌표
-  const touchEndXRef = useRef(0); // 터치 종료 X 좌표
-  
+
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
   const [loadingEquipments, setLoadingEquipments] = useState(true);
   const [, setLoadingPartners] = useState(true); // loadingPartners는 사용하지 않지만 setLoadingPartners는 사용
-  
+
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
   const [selectedDemos, setSelectedDemos] = useState([]); // State for selected demos to return
   const [isReturning, setIsReturning] = useState(false); // 반납 진행 중 상태
@@ -731,11 +702,9 @@ const MainPage = ({ user, onLogout }) => {
   const [isExportingToPng, setIsExportingToPng] = useState(false); // State for PNG export loading
   const [processMessage, setProcessMessage] = useState(''); // State for detailed process message
   const [sheetPngFiles, setSheetPngFiles] = useState([]); // State for specific sheet PNG files
-  const [isExportingSheetToPng, setIsExportingSheetToPng] = useState(false); // State for sheet PNG export loading
   const [createdSpreadsheetUrl, setCreatedSpreadsheetUrl] = useState(null); // State for created spreadsheet URL
   const [createdPdfUrl, setCreatedPdfUrl] = useState(null); // State for created PDF URL
   const [createdPdfDownloadUrl, setCreatedPdfDownloadUrl] = useState(null); // State for PDF download URL
-  const [createdPdfFileName, setCreatedPdfFileName] = useState(null); // State for PDF file name
   const [isSheetBoxExpanded, setIsSheetBoxExpanded] = useState(false); // State for sheet box expand/collapse
 
   // Custom sorting order
@@ -758,7 +727,7 @@ const MainPage = ({ user, onLogout }) => {
     // 8. 웹캠
     "Brio", "Brio 705", "MX Brio 705", "C930e", "C925e", "C920e", "C505e",
     // 9. 케이블
-    "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Rally Mic Pod Cat Coupler", 
+    "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Rally Mic Pod Cat Coupler",
     "Strong USB Cable", "USB Strong Cable",
     // 10. 마운트류 (mount 포함)
     "TV Mount", "Wall Mount", "Secure Mount"
@@ -776,36 +745,36 @@ const MainPage = ({ user, onLogout }) => {
     const lowerNameOriginal = name.toLowerCase(); // 원본 이름 (괄호 포함)
     const cleanName = getCleanName(name);
     const lowerName = cleanName.toLowerCase();
-    
+
     // customOrder에 정확히 일치하는 항목이 있으면 그 위치 반환
     const exactIndex = customOrder.indexOf(cleanName);
     if (exactIndex !== -1) {
       return exactIndex;
     }
-    
+
     // includes 체크는 원본 이름으로
-    
+
     // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart 포함) - 먼저 체크
-    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') || 
-        lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
+    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') ||
+      lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
       return customOrder.indexOf("Google Chromebox");
     }
-    
+
     // 3. 연장 마이크 (Expansion 포함)
     if (lowerNameOriginal.includes('expansion')) {
       return customOrder.indexOf("Mic Pod Expansion");
     }
-    
+
     // 4. TAP 시리즈 (tap 포함, mount 포함된 제목은 제외)
     if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) {
       return customOrder.indexOf("TAP");
     }
-    
+
     // 10. 마운트류 (mount 포함)
     if (lowerNameOriginal.includes('mount')) {
       return customOrder.indexOf("TV Mount");
     }
-    
+
     // customOrder에 없으면 맨 뒤로
     return customOrder.length;
   };
@@ -837,20 +806,20 @@ const MainPage = ({ user, onLogout }) => {
   // 장비 데이터 처리 헬퍼 함수 (캐시와 서버 데이터 공통 로직)
   const processEquipmentData = useCallback((allEquipmentFromSheet, userName) => {
     // console.log('📋 [processEquipmentData] 시작 - 전체:', allEquipmentFromSheet.length, '건');
-    
+
     // Step 1: 시리얼 넘버별로 최신 데이터만 추출 (히스토리 중복 제거)
     const latestEquipmentMap = new Map();
-    
+
     // 역순으로 순회하여 각 시리얼 넘버의 최신 상태만 유지
     [...allEquipmentFromSheet].reverse().forEach((item, index) => {
       const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-      
+
       // 빈 시리얼은 건너뛰기
       if (!serial) {
         // console.log(`⚠️ 시리얼 번호 없는 장비 건너뜀:`, item.name);
         return;
       }
-      
+
       // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
       if (!latestEquipmentMap.has(serial)) {
         latestEquipmentMap.set(serial, item);
@@ -859,21 +828,21 @@ const MainPage = ({ user, onLogout }) => {
         // console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${item.status} (이미 최신 존재)`);
       }
     });
-    
+
     // Map에서 배열로 변환
     const uniqueEquipments = Array.from(latestEquipmentMap.values());
     // console.log(`📊 중복 제거 완료: ${allEquipmentFromSheet.length}건 → ${uniqueEquipments.length}건 (고유 장비)`);
-    
+
     // Step 2: 정렬
     const sortedAllEquipment = [...uniqueEquipments].sort(sortEquipment);
     setAllEquipments(sortedAllEquipment);
-    
+
     // console.log('📋 전체 장비 목록 확인 (NUC PC 포함 여부):');
     // const nucPcEquipments = sortedAllEquipment.filter(item => 
     //   item.name && item.name.toLowerCase().includes('nuc')
     // );
     // console.log('NUC 장비들:', nucPcEquipments.map(e => ({ name: e.name, status: e.status, available: isAvailableStatus(e.status) })));
-    
+
     // Step 3: 대여 가능 여부로 필터링
     const initialFiltered = sortedAllEquipment.filter(item => {
       if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
@@ -883,21 +852,21 @@ const MainPage = ({ user, onLogout }) => {
       // }
       return available; // 대여 가능한 장비만 표시
     });
-    
+
     // console.log(`📋 장비 필터링: 전체 ${sortedAllEquipment.length}건 → 표시 ${initialFiltered.length}건 (showInUseEquipment: ${showInUseEquipment})`);
     setAvailableEquipments(initialFiltered);
     setFilteredEquipments(initialFiltered);
-  }, [showInUseEquipment]);
+  }, [showInUseEquipment, sortEquipment]);
 
   useEffect(() => {
     const fetchAllCsvData = async () => {
       const userName = (user.name === '테스트사용자' || user.name === 'test') ? '홍길동' : user.name;
-      
+
       // 🚀 STEP 1: 캐시 데이터 즉시 로드 (빠른 표시)
       // console.log('⚡ [Step 1] 캐시 데이터 로드 시작...');
       const cachedEquipment = getForceCacheData(CACHE_KEYS.EQUIPMENT);
       const cachedPartners = getForceCacheData(CACHE_KEYS.PARTNER);
-      
+
       if (cachedEquipment && cachedEquipment.length > 0) {
         // console.log('✅ [Cache Hit] 장비 데이터 캐시:', cachedEquipment.length, '건');
         // 캐시 데이터로 즉시 표시
@@ -906,7 +875,7 @@ const MainPage = ({ user, onLogout }) => {
       } else {
         setLoadingEquipments(true);
       }
-      
+
       if (cachedPartners && cachedPartners.length > 0) {
         // console.log('✅ [Cache Hit] 파트너 데이터 캐시:', cachedPartners.length, '건');
         setAllPartners(cachedPartners);
@@ -914,13 +883,13 @@ const MainPage = ({ user, onLogout }) => {
       } else {
         setLoadingPartners(true);
       }
-      
+
       // 내 데모는 항상 로딩 (빠르게 변경되므로)
       setLoadingMyDemos(true);
-      
+
       // 🔄 STEP 2: 백그라운드에서 최신 데이터 가져오기
       // console.log('🔄 [Step 2] 서버 데이터 로드 시작...');
-      
+
       try {
         // Fetch equipment data from Google Sheet (1번만 호출!)
         let allEquipmentFromSheet = [];
@@ -929,7 +898,7 @@ const MainPage = ({ user, onLogout }) => {
           const equipmentData = await getEquipmentData();
           allEquipmentFromSheet = equipmentData.data || [];
           // console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
-          
+
           // // 🔍 상태값 분석 (Mini 검색 문제 디버깅)
           // const statusMap = new Map();
           // allEquipmentFromSheet.forEach(item => {
@@ -945,24 +914,24 @@ const MainPage = ({ user, onLogout }) => {
           // 
           // console.log('📊 시트의 상태값 분포:', Object.fromEntries(statusMap));
           // console.log('Sample equipment data:', allEquipmentFromSheet[0]);
-          
+
           // 🎯 클라이언트 사이드 필터링: 내 대여 현황
           // Step 1: 담당자가 나인 장비만 추출
           const myEquipments = allEquipmentFromSheet.filter(item => {
             const assignee = (item.assignee || item['대여담당자'] || '').toString().trim();
             return assignee === userName;
           });
-          
+
           // console.log(`내가 담당한 장비 (전체 히스토리): ${myEquipments.length}건`);
-          
+
           // Step 2: 시리얼넘버별로 최신 상태만 추출 (역순 검색)
           const latestEquipmentMap = new Map();
-          
+
           // 역순으로 순회 (최신이 먼저)
           [...myEquipments].reverse().forEach((item, index) => {
             const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
             const status = (item.status || item['대여가능여부'] || '').toString().trim();
-            
+
             // 이미 해당 시리얼의 최신 상태를 찾았으면 건너뛰기
             if (!latestEquipmentMap.has(serial)) {
               latestEquipmentMap.set(serial, { item, status });
@@ -971,7 +940,7 @@ const MainPage = ({ user, onLogout }) => {
               // console.log(`[건너뜀] ${item.name} (${serial}) - 상태: ${status} (이미 최신 존재)`);
             }
           });
-          
+
           // Step 3: "대여신청" 또는 "대여중" 상태만 필터링 (GAS와 동일한 로직)
           const myDemoData = [];
           latestEquipmentMap.forEach(({ item, status }, serial) => {
@@ -983,12 +952,12 @@ const MainPage = ({ user, onLogout }) => {
               // console.log(`❌ [제외] ${item.name} (${serial}) - 상태: ${status}`);
             }
           });
-          
+
           console.log(`✅ 최종 내 대여 현황: ${myDemoData.length}건`);
-          
+
           // 내 데모 현황 데이터 변환
           console.log('\n🚨🚨🚨 [긴급] GAS에서 받은 원본 데이터:', JSON.stringify(myDemoData[0], null, 2));
-          
+
           let initialMyDemos = myDemoData.map((item, index) => {
             const demo = {
               id: index,
@@ -1009,7 +978,7 @@ const MainPage = ({ user, onLogout }) => {
               location: item.location || item['보관위치'] || '본사',
               status: item.status || item['대여가능여부'] || ''
             };
-            
+
             // 디버깅: 파트너 정보 확인
             if (demo.partnerName || demo.partnerPhone || demo.userPhone) {
               console.log(`\n📱 [React - 휴대폰 번호 디버깅] ${demo.name} (${demo.serial}):`, {
@@ -1022,41 +991,41 @@ const MainPage = ({ user, onLogout }) => {
                 비고: demo.memo
               });
             }
-            
+
             return demo;
           });
-          
+
           // 같은 대여건 그룹핑 및 제출 상태 동기화
           // 그룹 기준: 같은 담당자, 같은 시작일, 같은 비고
           // console.log('🔍 그룹핑 시작 - 총 장비:', initialMyDemos.length);
-          
+
           const groupMap = new Map();
-          
+
           initialMyDemos.forEach((demo, index) => {
             // 날짜 정규화 (YYYY/MM/DD 형식으로 통일)
             const normalizedStartDate = demo.startDate ? demo.startDate.toString().split('T')[0] : '';
             const groupKey = `${demo.assignee}_${normalizedStartDate}_${demo.memo || ''}`;
-            
+
             // console.log(`  [${index}] ${demo.serial}: 담당자=${demo.assignee}, 시작일=${normalizedStartDate}, 비고=${demo.memo}, 제출=${demo.formSubmitted}, 그룹키=${groupKey}`);
-            
+
             if (!groupMap.has(groupKey)) {
               groupMap.set(groupKey, []);
             }
             groupMap.get(groupKey).push(demo);
           });
-          
+
           // console.log(`📦 생성된 그룹 수: ${groupMap.size}`);
-          
+
           // 각 그룹에서 하나라도 제출 완료면 전체를 제출 완료로 처리
           groupMap.forEach((group, groupKey) => {
             const hasSubmitted = group.some(demo => demo.formSubmitted);
             const submittedDemo = group.find(demo => demo.formSubmitted);
-            
+
             // console.log(`  📦 그룹 "${groupKey}": ${group.length}개 장비, 제출 완료=${hasSubmitted}`);
-            
+
             if (hasSubmitted && submittedDemo) {
               // console.log(`    ✅ [그룹 제출 동기화] ${group.length}개 장비를 제출 완료로 처리, 파일 URL: ${submittedDemo.fileUrl}`);
-              
+
               // 같은 그룹의 모든 장비를 제출 완료로 표시
               group.forEach(demo => {
                 const wasPending = !demo.formSubmitted;
@@ -1068,7 +1037,7 @@ const MainPage = ({ user, onLogout }) => {
               });
             }
           });
-          
+
           // 담당자 이름에서 괄호 이전만 추출하는 함수
           const getAssigneeBaseName = (assigneeName) => {
             if (!assigneeName) return '';
@@ -1076,7 +1045,7 @@ const MainPage = ({ user, onLogout }) => {
             const parenIndex = trimmed.indexOf('(');
             return parenIndex >= 0 ? trimmed.substring(0, parenIndex).trim() : trimmed;
           };
-          
+
           // 모든 담당자별 데모 현황 생성
           // 먼저 담당자 이름을 괄호 이전만으로 그룹핑
           const assigneeBaseNameMap = new Map(); // baseName -> [원본 이름들]
@@ -1094,42 +1063,42 @@ const MainPage = ({ user, onLogout }) => {
               }
             }
           });
-          
+
           // baseName으로 정렬된 담당자 목록 생성
           const assignees = Array.from(assigneeBaseNameMap.keys()).sort();
           const allAssigneeDemosData = {};
-          
+
           assignees.forEach(baseName => {
             // 해당 baseName에 속하는 모든 원본 이름들
             const originalNames = assigneeBaseNameMap.get(baseName);
-            
+
             // 각 담당자별 장비 필터링 (원본 이름들 모두 포함)
             const assigneeEquipments = allEquipmentFromSheet.filter(item => {
               const itemAssignee = (item.assignee || item['대여담당자'] || '').toString().trim();
               return originalNames.includes(itemAssignee);
             });
-            
+
             // 시리얼넘버별로 최신 상태만 추출
             const latestEquipmentMap = new Map();
             [...assigneeEquipments].reverse().forEach((item) => {
               const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
               const status = (item.status || item['대여가능여부'] || '').toString().trim();
-              
+
               if (!latestEquipmentMap.has(serial)) {
                 latestEquipmentMap.set(serial, { item, status });
               }
             });
-            
+
             // "대여신청" 또는 "대여중" 상태만 필터링 (GAS와 동일한 로직)
             const assigneeDemoData = [];
-            
+
             latestEquipmentMap.forEach(({ item, status }, serial) => {
               // "대여신청" 또는 "대여중"인 경우만 추가 (GAS handleGetMyDemoData와 동일)
               if (status === '대여신청' || status === '대여중') {
                 assigneeDemoData.push(item);
               }
             });
-            
+
             // 데이터 변환
             const assigneeDemos = assigneeDemoData.map((item, index) => {
               const demo = {
@@ -1153,34 +1122,34 @@ const MainPage = ({ user, onLogout }) => {
               };
               return demo;
             });
-            
+
             // 그룹핑 제거: 모든 항목을 개별적으로 표시 (검색 목록에서만 그룹핑 사용)
             allAssigneeDemosData[baseName] = assigneeDemos;
           });
-          
+
           // 현재 사용자의 인덱스 찾기 (baseName으로 비교)
           const userBaseName = getAssigneeBaseName(userName);
           const currentUserIndex = assignees.findIndex(a => a === userBaseName);
           setCurrentAssigneeIndex(currentUserIndex >= 0 ? currentUserIndex : 0);
-          
+
           setAllAssigneeDemos(allAssigneeDemosData);
           setMyDemos(initialMyDemos);
           setLoadingMyDemos(false); // 내 데모 현황 로딩 완료
           console.log(`✅ 내 데모 현황: ${initialMyDemos.length}건 (클라이언트 필터링)`);
           console.log(`✅ 전체 담당자 수: ${assignees.length}명`);
-          
+
         } catch (error) {
           console.error('❌ Failed to load equipment data from sheet:', error);
-          
+
           // Fallback to CSV if sheet fails
           try {
             console.log('⚠️ CSV 파일로 폴백...');
-            
+
             // 사용내역 CSV
             const usageResponse = await fetch('/사용내역.csv');
             const usageText = await usageResponse.text();
             const parsedUsageData = parseUsageCsv(usageText);
-            
+
             const userPartnerName = userName;
             const initialMyDemos = parsedUsageData
               .filter(item => item.partnerName === userPartnerName && item.status === '사용중')
@@ -1195,7 +1164,7 @@ const MainPage = ({ user, onLogout }) => {
               }));
             setMyDemos(initialMyDemos);
             console.log(`✅ CSV에서 내 데모 현황 로드: ${initialMyDemos.length}건`);
-            
+
             // 장비현황 CSV
             const equipmentResponse = await fetch('/장비현황.csv');
             const equipmentText = await equipmentResponse.text();
@@ -1214,13 +1183,13 @@ const MainPage = ({ user, onLogout }) => {
             setMyDemos([]);
           }
         }
-        
+
         // 💾 캐시에 저장
         setCacheData(CACHE_KEYS.EQUIPMENT, allEquipmentFromSheet);
-        
+
         // 🔄 전체 히스토리 데이터를 state에 저장
         setAllEquipmentFromSheet(allEquipmentFromSheet);
-        
+
         // 🔄 변경사항 확인 및 업데이트
         if (cachedEquipment && cachedEquipment.length > 0) {
           const changes = findDataChanges(cachedEquipment, allEquipmentFromSheet, 'serial');
@@ -1234,7 +1203,7 @@ const MainPage = ({ user, onLogout }) => {
           // 캐시가 없었으면 그냥 표시
           processEquipmentData(allEquipmentFromSheet, userName);
         }
-        
+
         setLoadingEquipments(false); // 장비 목록 로딩 완료
         console.log('✅ 장비 데이터 처리 완료:', allEquipmentFromSheet.length, 'items');
 
@@ -1247,18 +1216,18 @@ const MainPage = ({ user, onLogout }) => {
           // console.log('partnerData.data:', partnerData.data);
           // console.log('partnerData.data type:', typeof partnerData.data);
           // console.log('partnerData.data length:', partnerData.data ? partnerData.data.length : 'undefined');
-          
+
           // GAS에서 이미 UI 형식으로 변환된 데이터 사용
           let rawPartnerData = partnerData.data || [];
           // console.log('Loaded partner data from sheet (raw):', rawPartnerData.length, 'items');
-          
+
           // 🔄 중복 제거: companyName + contactPerson 조합이 같은 것 제거
           const uniquePartnersMap = new Map();
           rawPartnerData.forEach((partner) => {
             const companyName = (partner.companyName || '').trim();
             const contactPerson = (partner.contactPerson || '').trim();
             const uniqueKey = `${companyName}_${contactPerson}`;
-            
+
             // 같은 조합이 없을 때만 추가
             if (!uniquePartnersMap.has(uniqueKey)) {
               uniquePartnersMap.set(uniqueKey, partner);
@@ -1266,7 +1235,7 @@ const MainPage = ({ user, onLogout }) => {
               // console.log(`⚠️ [중복 제거] ${companyName} - ${contactPerson}`);
             }
           });
-          
+
           allPartnersFromSheet = Array.from(uniquePartnersMap.values());
           console.log(`✅ 중복 제거 완료: ${rawPartnerData.length}건 → ${allPartnersFromSheet.length}건`);
         } catch (error) {
@@ -1276,19 +1245,19 @@ const MainPage = ({ user, onLogout }) => {
             const partnerResponse = await fetch('/파트너정보.csv');
             const partnerText = await partnerResponse.text();
             let parsedPartnerData = parsePartnerCsv(partnerText);
-            
+
             // 🔄 중복 제거: companyName + contactPerson 조합이 같은 것 제거
             const uniquePartnersMap = new Map();
             parsedPartnerData.forEach((partner) => {
               const companyName = (partner.companyName || '').trim();
               const contactPerson = (partner.contactPerson || '').trim();
               const uniqueKey = `${companyName}_${contactPerson}`;
-              
+
               if (!uniquePartnersMap.has(uniqueKey)) {
                 uniquePartnersMap.set(uniqueKey, partner);
               }
             });
-            
+
             allPartnersFromSheet = Array.from(uniquePartnersMap.values());
             console.log('✅ Fallback to CSV partner data (중복 제거):', parsedPartnerData.length, '→', allPartnersFromSheet.length, 'items');
           } catch (csvError) {
@@ -1296,10 +1265,10 @@ const MainPage = ({ user, onLogout }) => {
             allPartnersFromSheet = [];
           }
         }
-        
+
         // 💾 캐시에 저장
         setCacheData(CACHE_KEYS.PARTNER, allPartnersFromSheet);
-        
+
         // 🔄 변경사항 확인 및 업데이트
         if (cachedPartners && cachedPartners.length > 0) {
           const changes = findDataChanges(cachedPartners, allPartnersFromSheet, 'id');
@@ -1313,7 +1282,7 @@ const MainPage = ({ user, onLogout }) => {
           // 캐시가 없었으면 그냥 표시
           setAllPartners(allPartnersFromSheet);
         }
-        
+
         setLoadingPartners(false); // 파트너 정보 로딩 완료
         console.log('✅ 파트너 데이터 처리 완료:', allPartnersFromSheet.length, 'items');
 
@@ -1333,22 +1302,22 @@ const MainPage = ({ user, onLogout }) => {
       console.log("MainPage: Google API and GIS are ready!");
     };
     initializeApis();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name, showInUseEquipment]); // sortEquipment는 존재하지 않는 함수
 
   // showInUseEquipment 변경 시 필터링 다시 적용
   useEffect(() => {
     if (allEquipments.length === 0) return;
-    
+
     // console.log('🔄 showInUseEquipment 변경 감지 - 필터링 다시 적용');
     // console.log('showInUseEquipment:', showInUseEquipment);
     // console.log('allEquipments:', allEquipments.length);
-    
+
     const newFiltered = allEquipments.filter(item => {
       if (showInUseEquipment) return true; // 사용중인 장비도 보기가 켜져있으면 모두 표시
       return isAvailableStatus(item.status); // 대여 가능한 장비만 표시
     });
-    
+
     // console.log('필터링 결과:', newFiltered.length);
     setAvailableEquipments(newFiltered);
     setFilteredEquipments(newFiltered);
@@ -1364,14 +1333,14 @@ const MainPage = ({ user, onLogout }) => {
       // console.log('No search term, showing all available:', equipmentToFilter.length);
       return;
     }
-    const filtered = equipmentToFilter.filter(eq => 
-      eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    const filtered = equipmentToFilter.filter(eq =>
+      eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     );
     // console.log('Filtered results:', filtered.length);
     setFilteredEquipments(filtered);
   }, [availableEquipments]);
-  
+
   // 데모 선택/해제 핸들러
   const handleDemoToggle = (demo) => {
     setSelectedDemos(prev => {
@@ -1428,7 +1397,7 @@ const MainPage = ({ user, onLogout }) => {
 
       try {
         // 전체 장비 데이터에서 해당 시리얼의 최신 대여 정보 찾기
-        const matchingEquipments = allEquipments.filter(eq => 
+        const matchingEquipments = allEquipments.filter(eq =>
           (eq.serial === demo.serial || eq.serialNumber === demo.serial)
         );
         console.log(`   매칭된 장비: ${matchingEquipments.length}개`);
@@ -1449,7 +1418,7 @@ const MainPage = ({ user, onLogout }) => {
           failCount++;
           continue;
         }
-        
+
         console.log(`   ✅ 최신 대여 정보 찾음:`, fullEquipmentData);
 
         // 반납할 장비 데이터 준비
@@ -1506,7 +1475,7 @@ const MainPage = ({ user, onLogout }) => {
     if (successCount > 0) {
       // 성공한 경우 선택 초기화 및 페이지 새로고침
       setSelectedDemos([]);
-      
+
       setTimeout(() => {
         alert(`✅ ${successCount}개 장비 반납이 완료되었습니다!${failCount > 0 ? `\n(실패: ${failCount}개)` : ''}\n페이지를 새로고침합니다.`);
         window.location.reload();
@@ -1518,12 +1487,17 @@ const MainPage = ({ user, onLogout }) => {
 
   const handleReturn = async (demoId) => {
     if (window.confirm("반납 하시겠습니까?")) {
-      const returnedDemo = myDemos.find(demo => demo.id === demoId);
+      // 현재 표시된 목록에서 장비 찾기 (내 담당자 또는 다른 담당자 목록)
+      const assignees = Object.keys(allAssigneeDemos).sort();
+      const currentAssignee = assignees[currentAssigneeIndex] || '';
+      const currentDemos = currentAssignee ? (allAssigneeDemos[currentAssignee] || []) : myDemos;
+
+      const returnedDemo = currentDemos.find(demo => demo.id === demoId) || myDemos.find(demo => demo.id === demoId);
       if (!returnedDemo) {
         alert("반납할 장비를 찾을 수 없습니다.");
         return;
       }
-      
+
       // UI 로그 초기화
       setReturnLogs([]);
       const logs = [];
@@ -1533,20 +1507,20 @@ const MainPage = ({ user, onLogout }) => {
         logs.push(logEntry);
         setReturnLogs([...logs]);
       };
-      
+
       try {
         console.log('반납 처리 시작:', returnedDemo);
         addLog(`${returnedDemo.name} (${returnedDemo.serial}) 반납 처리 시작...`, 'processing');
         console.log('전체 장비 데이터 개수:', allEquipments.length);
-        
+
         // 전체 장비 데이터에서 해당 시리얼의 최신 대여 정보 찾기 (역순 검색)
         // 히스토리가 쌓이므로 가장 최근 것을 찾아야 함
-        const matchingEquipments = allEquipments.filter(eq => 
+        const matchingEquipments = allEquipments.filter(eq =>
           (eq.serial === returnedDemo.serial || eq.serialNumber === returnedDemo.serial)
         );
-        
+
         console.log(`시리얼 ${returnedDemo.serial}와 매칭되는 장비:`, matchingEquipments.length, '개');
-        
+
         // 가장 최근 대여 중인 데이터 찾기 (담당자가 본인이고 대여 중인 것)
         const fullEquipmentData = matchingEquipments
           .reverse() // 역순으로 (최신이 먼저)
@@ -1555,12 +1529,12 @@ const MainPage = ({ user, onLogout }) => {
             const status = (eq.status || eq['대여가능여부'] || '').toString().trim();
             const isMyEquipment = assignee === user.name;
             const isActive = status === '대여신청' || status === '대여중' || status === '사용중';
-            
+
             console.log(`체크: ${eq.name} / 담당자:${assignee} / 상태:${status} / 매칭:${isMyEquipment && isActive}`);
-            
+
             return isMyEquipment && isActive;
           });
-        
+
         if (!fullEquipmentData) {
           console.error('❌ 대여 중인 상세 정보를 찾을 수 없습니다!');
           console.log('내 데모 목록:', returnedDemo);
@@ -1569,10 +1543,10 @@ const MainPage = ({ user, onLogout }) => {
           alert('대여 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해주세요.');
           return;
         }
-        
+
         console.log('✅ 최신 대여 정보 찾음:', fullEquipmentData);
         addLog('✅ 최신 대여 정보 확인 완료', 'success');
-        
+
         // 반납할 장비 데이터 준비 (찾은 전체 데이터 복사)
         const equipmentDataToReturn = {
           // 기본 정보
@@ -1581,44 +1555,44 @@ const MainPage = ({ user, onLogout }) => {
           name: fullEquipmentData.name || fullEquipmentData['제품명'] || returnedDemo.name,
           tag: fullEquipmentData.tag || fullEquipmentData['Tag'] || '',
           location: fullEquipmentData.location || fullEquipmentData['보관위치'] || '본사',
-          
+
           // 대여 정보 (필수!)
           assignee: fullEquipmentData.assignee || fullEquipmentData['대여담당자'] || user.name,
           startDate: fullEquipmentData.startDate || fullEquipmentData['시작일'] || returnedDemo.startDate,
           returnDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || returnedDemo.returnDate,
           endDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || returnedDemo.returnDate,
-          
+
           // 파트너 정보
           partnerName: fullEquipmentData.partnerName || fullEquipmentData['파트너명'] || '',
           partnerContact: fullEquipmentData.partnerContact || fullEquipmentData['파트너담당자명'] || '',
           partnerPhone: fullEquipmentData.partnerPhone || fullEquipmentData['휴대폰 번호'] || '',
-          
+
           // 사용자 정보
           userName: fullEquipmentData.userName || fullEquipmentData['사용자명'] || '',
           userContact: fullEquipmentData.userContact || fullEquipmentData['사용자담당자명'] || '',
           userPhone: fullEquipmentData.userPhone || '',
-          
+
           // 비고
           memo: fullEquipmentData.memo || fullEquipmentData['비고'] || ''
         };
-        
+
         console.log('📋 GAS로 전송할 반납 데이터 (전체):', equipmentDataToReturn);
         addLog('📋 시트에 반납 히스토리 추가 중...', 'processing');
-        
+
         // Google Sheets에 반납 히스토리 추가
         const result = await returnEquipment(equipmentDataToReturn);
-        
+
         if (result.success) {
           console.log('✅ 반납 처리 성공:', result);
           addLog(`✅ ${returnedDemo.name} 반납 완료!`, 'success');
-          
+
           // 클라이언트 상태 업데이트
           // 1. 내 데모 목록에서 제거
           setMyDemos(prev => prev.filter(demo => demo.id !== demoId));
-          
+
           // 2. 전체 장비 데이터 새로고침 (다음 로딩 시 반영)
           // 실시간 반영을 위해 상태만 업데이트 (서버 데이터는 다음 새로고침 시 반영)
-          
+
           setTimeout(() => {
             alert(`✅ ${returnedDemo.name} 반납이 완료되었습니다!\n담당자에게 전달해주세요.`);
             // 페이지 새로고침으로 최신 데이터 반영
@@ -1628,10 +1602,10 @@ const MainPage = ({ user, onLogout }) => {
           addLog(`❌ 반납 실패: ${result.error || '알 수 없는 오류'}`, 'error');
           alert(`반납 처리에 실패했습니다: ${result.error || '알 수 없는 오류'}`);
         }
-        
+
       } catch (error) {
-          console.error('❌ 반납 처리 실패:', error);
-          addLog(`❌ 오류 발생: ${error.message}`, 'error');
+        console.error('❌ 반납 처리 실패:', error);
+        addLog(`❌ 오류 발생: ${error.message}`, 'error');
         alert(`반납 처리 중 오류가 발생했습니다: ${error.message}`);
       }
     }
@@ -1653,7 +1627,7 @@ const MainPage = ({ user, onLogout }) => {
       fileInput.type = 'file';
       fileInput.accept = '.pdf,.png,.jpg,.jpeg'; // PDF, PNG, JPG 파일만 허용
       fileInput.style.display = 'none';
-      
+
       // 파일 선택 이벤트 리스너
       fileInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
@@ -1671,28 +1645,28 @@ const MainPage = ({ user, onLogout }) => {
 
         // 파일 확장자 추출
         const fileExtension = file.name.split('.').pop();
-        
+
         // 파일명 생성: 장비대여신청서_{대여담당자}_{시작일}_{파트너명}
         // 시트에서 직접 조회한 데이터 사용 (allEquipments에서 해당 장비 찾기)
         console.log('🔍 [파일명 생성] 검색 대상 시리얼:', demo.serial);
         console.log('🔍 [파일명 생성] 전체 장비 수:', allEquipments.length);
         console.log('🔍 [파일명 생성] 샘플 장비 데이터:', allEquipments[0]);
-        
+
         const fullEquipmentData = allEquipments.find(eq => {
-          const match = eq.serial === demo.serial || 
-                       eq.serialNumber === demo.serial || 
-                       eq['시리얼넘버'] === demo.serial ||
-                       eq.id === demo.id;
+          const match = eq.serial === demo.serial ||
+            eq.serialNumber === demo.serial ||
+            eq['시리얼넘버'] === demo.serial ||
+            eq.id === demo.id;
           if (match) {
             console.log('✅ [파일명 생성] 매칭된 장비:', eq);
           }
           return match;
         });
-        
+
         if (!fullEquipmentData) {
           console.error('❌ [파일명 생성] 장비를 찾을 수 없습니다!');
-          console.error('검색 조건:', { 
-            serial: demo.serial, 
+          console.error('검색 조건:', {
+            serial: demo.serial,
             id: demo.id,
             availableSerials: allEquipments.slice(0, 5).map(eq => ({
               serial: eq.serial,
@@ -1703,12 +1677,12 @@ const MainPage = ({ user, onLogout }) => {
         } else {
           console.log('✅ [파일명 생성] 시트에서 조회한 장비 데이터:', fullEquipmentData);
         }
-        
+
         // 시트 데이터에서 파일명에 필요한 정보 추출
         const assignee = fullEquipmentData?.assignee || fullEquipmentData?.['대여담당자'] || user?.name || '담당자';
         const rawStartDate = fullEquipmentData?.startDate || fullEquipmentData?.['시작일'] || '';
         const partnerName = fullEquipmentData?.partnerName || fullEquipmentData?.['파트너명'] || '파트너미정';
-        
+
         console.log('📝 [파일명 생성] 추출된 정보:', {
           assignee,
           rawStartDate,
@@ -1717,7 +1691,7 @@ const MainPage = ({ user, onLogout }) => {
           '원본 파트너명 필드': fullEquipmentData?.['파트너명'],
           '전체 필드 목록': fullEquipmentData ? Object.keys(fullEquipmentData) : '없음'
         });
-        
+
         // 날짜를 YYYYMMDD 형식으로 변환 (시트 원본 데이터 그대로 사용)
         let startDateFormatted = '';
         if (rawStartDate) {
@@ -1732,9 +1706,9 @@ const MainPage = ({ user, onLogout }) => {
           const day = String(today.getDate()).padStart(2, '0');
           startDateFormatted = `${year}${month}${day}`;
         }
-        
+
         const newFileName = `장비대여신청서_${assignee}_${startDateFormatted}_${partnerName}.${fileExtension}`;
-        
+
         console.log('생성된 파일명:', newFileName);
 
         // 업로드 확인
@@ -1745,10 +1719,10 @@ const MainPage = ({ user, onLogout }) => {
         try {
           // 로딩 표시
           const loadingMessage = alert('파일을 업로드하는 중입니다. 잠시만 기다려주세요...');
-          
+
           // 파일 업로드
           const result = await uploadFile(file, newFileName);
-          
+
           console.log('업로드 결과:', result);
 
           if (result.success) {
@@ -1756,9 +1730,9 @@ const MainPage = ({ user, onLogout }) => {
             try {
               const updateResult = await updateFormSubmission(demo.serial, result.fileUrl);
               console.log('시트 업데이트 결과:', updateResult);
-              
+
               // 성공 시 로컬 상태 업데이트
-              const updatedDemos = myDemos.map(d => 
+              const updatedDemos = myDemos.map(d =>
                 d.id === demoId ? { ...d, formSubmitted: true, fileUrl: result.fileUrl } : d
               );
               setMyDemos(updatedDemos);
@@ -1790,7 +1764,7 @@ const MainPage = ({ user, onLogout }) => {
       alert(`오류가 발생했습니다: ${error.message}`);
     }
   };
-  
+
   const handleEquipmentToggle = (equipment) => {
     setSelectedEquipments(prev => {
       const isSelected = prev.some(eq => eq.id === equipment.id);
@@ -1805,7 +1779,7 @@ const MainPage = ({ user, onLogout }) => {
   const handleRemoveEquipment = (equipmentId) => {
     setSelectedEquipments(prev => prev.filter(eq => eq.id !== equipmentId));
   };
-  
+
 
   const handleMultipleNewDemo = (returnDate) => {
     if (selectedEquipments.length === 0) return;
@@ -1819,7 +1793,7 @@ const MainPage = ({ user, onLogout }) => {
     }));
 
     setMyDemos(prev => [...prev, ...updatedDemos]);
-    
+
     const updatedAllEquipments = allEquipments.map(eq => {
       const selected = selectedEquipments.find(sel => sel.id === eq.id);
       if (selected) {
@@ -1833,7 +1807,7 @@ const MainPage = ({ user, onLogout }) => {
       }
       return eq;
     }).sort(sortEquipment);
-    
+
     setAllEquipments(updatedAllEquipments);
 
     const searchTerm = document.querySelector(`.${styles.searchInput}`)?.value || '';
@@ -1842,7 +1816,7 @@ const MainPage = ({ user, onLogout }) => {
       return isAvailableStatus(item.status);
     });
     setAvailableEquipments(newAvailable);
-    setFilteredEquipments(newAvailable.filter(eq => 
+    setFilteredEquipments(newAvailable.filter(eq =>
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     ));
 
@@ -1859,84 +1833,11 @@ const MainPage = ({ user, onLogout }) => {
     }
   };
 
-  // 새로운 함수: 특정 Google Sheets를 PNG로 변환
-  const handleExportSheetToPng = async () => {
-    // 사용자가 제공한 Google Sheets URL에서 ID와 GID 추출
-    // const sheetUrl = 'https://docs.google.com/spreadsheets/d/1SrMKt20djDcs4zYJZfnfi_yQmQN-OEaId5ZHP3wWqLU/edit?gid=1326732411#gid=1326732411';
-    const spreadsheetId = '1SrMKt20djDcs4zYJZfnfi_yQmQN-OEaId5ZHP3wWqLU';
-    const sheetGid = '1326732411';
-    const fileName = '행사장비요청서_PNG';
 
-    setIsExportingSheetToPng(true);
-
-    try {
-      console.log("특정 Google Sheets PNG 변환 시작:", { spreadsheetId, sheetGid, fileName });
-      
-      // Initialize Google APIs (simplified for Apps Script)
-      await initGoogleApis();
-      
-      // For Apps Script mode, we don't need access token
-      // const accessToken = 'apps-script-mode';
-      console.log("Apps Script mode initialized for sheet PNG export.");
-
-      // ===== PNG 변환 비활성화 (주석처리됨) =====
-      // Export the specific Google Sheet to PNG images
-      console.log('[비활성화] PNG 변환이 주석처리되어 건너뜁니다.');
-      console.log('[비활성화] 원래 실행될 액션: exportSheetToPng', { spreadsheetId, sheetGid, fileName });
-      
-      // logOperation('exportSheetToPng', { spreadsheetId, sheetGid, fileName });
-      // try {
-      //   const result = await exportSheetToPng(
-      //     accessToken, 
-      //     spreadsheetId, 
-      //     sheetGid, 
-      //     fileName
-      //   );
-      //   
-      //   if (!result || !result.pngFiles || result.pngFiles.length === 0) {
-      //     throw new Error("Sheet PNG export returned no files");
-      //   }
-      //   
-      //   logOperation('exportSheetToPng', { 
-      //     success: true, 
-      //     fileCount: result.pngFiles.length
-      //   });
-      //   
-      //   console.log(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다. 파일 수: ${result.pngFiles.length}`);
-      //   
-      //   // PNG 파일 정보를 상태에 저장
-      //   setSheetPngFiles(result.pngFiles);
-      //   
-      //   alert(`Google Sheets가 PNG 이미지로 변환되어 Google Drive에 저장되었습니다!\n생성된 파일 수: ${result.pngFiles.length}개`);
-      //   
-      // } catch (error) {
-      //   logOperation('exportSheetToPng', { success: false, error: error.message }, 'error');
-      //   
-      //   if (error.message.includes('Authentication') || error.message.includes('token')) {
-      //     clearAuthData();
-      //   }
-      //   
-      //   alert(getUserFriendlyErrorMessage(error));
-      //   return;
-      // }
-
-    } catch (error) {
-      logOperation('sheetPngWorkflowError', { error: error.message }, 'error');
-      
-      if (error.message.includes('Authentication') || error.message.includes('token')) {
-        clearAuthData();
-      }
-      
-      alert(getUserFriendlyErrorMessage(error));
-    } finally {
-      setIsExportingSheetToPng(false);
-    }
-  };
-  
   useEffect(() => {
-      // Re-apply search term when availableEquipments changes
-      const searchTerm = document.querySelector(`.${styles.searchInput}`)?.value || '';
-      handleSearch(searchTerm);
+    // Re-apply search term when availableEquipments changes
+    const searchTerm = document.querySelector(`.${styles.searchInput}`)?.value || '';
+    handleSearch(searchTerm);
   }, [availableEquipments, showInUseEquipment, selectedEquipments, handleSearch]);
 
   useEffect(() => {
@@ -1965,7 +1866,7 @@ const MainPage = ({ user, onLogout }) => {
       if (selectedEquipments.length > 0 && showApplicationForm) {
         const currentScrollTop = scrollTop;
         const scrollDelta = Math.abs(currentScrollTop - lastScrollTopRef.current);
-        
+
         // 의미있는 스크롤인지 확인 (최소 10px 이상)
         if (scrollDelta > 10) {
           lastScrollTopRef.current = currentScrollTop;
@@ -2013,7 +1914,7 @@ const MainPage = ({ user, onLogout }) => {
       console.log('[useEffect] bottomArea not found, skipping event listener setup');
       return;
     }
-    
+
     console.log('[useEffect] Setting up event listeners for bottom area');
 
     let touchStartY = 0;
@@ -2021,7 +1922,7 @@ const MainPage = ({ user, onLogout }) => {
 
     const handleBottomScroll = () => {
       const scrollTop = bottomArea.scrollTop;
-      
+
       // 접힌 상태이거나 축소 상태일 때만 확대
       if (applicationFormState === 'folded') {
         setApplicationFormState('compact');
@@ -2122,7 +2023,7 @@ const MainPage = ({ user, onLogout }) => {
           setTimeout(() => { isProcessingRef.current = false; }, 300);
         }
       }
-      
+
       // 아래로 스와이프: 맨 위에서 아래로 스와이프 시 접기 (접힌 상태가 아닐 때)
       else if (isAtTop && isSwipingDown && swipeDistance > 40 && applicationFormState !== 'folded' && !stateChangedRef.current) {
         isProcessingRef.current = true;
@@ -2186,39 +2087,39 @@ const MainPage = ({ user, onLogout }) => {
     // 툴팁 위치 계산 함수
     const calculateTooltipPosition = useCallback(() => {
       if (!containerRef.current || !tooltipRef.current) return;
-      
+
       const containerRect = containerRef.current.getBoundingClientRect();
       const tooltipRect = tooltipRef.current.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
       const viewportWidth = window.innerWidth;
-      
+
       // 기본적으로 아래쪽에 표시
       let top = containerRect.bottom + 8;
       let left = containerRect.left + containerRect.width / 2;
       let tooltipAbove = false;
-      
+
       // 아래쪽이 잘리면 위쪽에 표시
       if (top + tooltipRect.height > viewportHeight) {
         top = containerRect.top - tooltipRect.height - 8;
         tooltipAbove = true;
       }
-      
+
       // 위쪽이 잘리면 다시 아래쪽에 표시
       if (top < 0) {
         top = containerRect.bottom + 8;
         tooltipAbove = false;
       }
-      
+
       // 왼쪽이 잘리면 조정
       if (left - tooltipRect.width / 2 < 0) {
         left = tooltipRect.width / 2 + 10;
       }
-      
+
       // 오른쪽이 잘리면 조정
       if (left + tooltipRect.width / 2 > viewportWidth) {
         left = viewportWidth - tooltipRect.width / 2 - 10;
       }
-      
+
       setIsTooltipAbove(tooltipAbove);
       setTooltipStyle({
         position: 'fixed',
@@ -2232,10 +2133,10 @@ const MainPage = ({ user, onLogout }) => {
     // 툴팁 위치 계산 및 표시
     const showTooltip = () => {
       if (!containerRef.current) return;
-      
+
       // 먼저 isVisible을 true로 설정하여 툴팁을 렌더링
       setIsVisible(true);
-      
+
       // 먼저 툴팁을 보이지 않게 렌더링 (높이 계산을 위해)
       setTooltipStyle({
         position: 'fixed',
@@ -2249,12 +2150,12 @@ const MainPage = ({ user, onLogout }) => {
     // isVisible이 true가 되면 위치 계산
     useEffect(() => {
       if (!isVisible) return;
-      
+
       // 툴팁이 렌더링된 후 위치 계산
       const timer = setTimeout(() => {
         calculateTooltipPosition();
       }, 10);
-      
+
       return () => clearTimeout(timer);
     }, [isVisible, calculateTooltipPosition]);
 
@@ -2299,11 +2200,11 @@ const MainPage = ({ user, onLogout }) => {
     }, [isVisible, hideTooltip]);
 
     return (
-      <div 
+      <div
         className={styles.partnerTooltipContainer}
         ref={containerRef}
       >
-        <span 
+        <span
           className={styles.partnerNameText}
           onClick={handleClick}
           style={{ cursor: 'pointer' }}
@@ -2311,48 +2212,48 @@ const MainPage = ({ user, onLogout }) => {
           {partnerName}
         </span>
         {isVisible && (
-          <div 
+          <div
             className={`${styles.partnerTooltip} ${isTooltipAbove ? styles.tooltipAbove : styles.tooltipBelow}`}
             ref={tooltipRef}
             style={tooltipStyle}
             onClick={(e) => e.stopPropagation()}
           >
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>파트너명:</span>
-            <span className={styles.tooltipValue}>{partnerName || '-'}</span>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>파트너명:</span>
+              <span className={styles.tooltipValue}>{partnerName || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>파트너 담당자명:</span>
+              <span className={styles.tooltipValue}>{partnerContact || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>파트너 휴대폰 번호:</span>
+              <span className={styles.tooltipValue}>{partnerPhone || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>사용자명:</span>
+              <span className={styles.tooltipValue}>{userName || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>사용자 담당자명:</span>
+              <span className={styles.tooltipValue}>{userContact || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>사용자 휴대폰 번호:</span>
+              <span className={styles.tooltipValue}>{userPhone || '-'}</span>
+            </div>
+            <div className={styles.tooltipRow}>
+              <span className={styles.tooltipLabel}>비고:</span>
+              <span className={styles.tooltipValue}>{memo || '-'}</span>
+            </div>
+            <button
+              className={styles.tooltipCloseButton}
+              onClick={hideTooltip}
+              aria-label="닫기"
+            >
+              ×
+            </button>
           </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>파트너 담당자명:</span>
-            <span className={styles.tooltipValue}>{partnerContact || '-'}</span>
-          </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>파트너 휴대폰 번호:</span>
-            <span className={styles.tooltipValue}>{partnerPhone || '-'}</span>
-          </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>사용자명:</span>
-            <span className={styles.tooltipValue}>{userName || '-'}</span>
-          </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>사용자 담당자명:</span>
-            <span className={styles.tooltipValue}>{userContact || '-'}</span>
-          </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>사용자 휴대폰 번호:</span>
-            <span className={styles.tooltipValue}>{userPhone || '-'}</span>
-          </div>
-          <div className={styles.tooltipRow}>
-            <span className={styles.tooltipLabel}>비고:</span>
-            <span className={styles.tooltipValue}>{memo || '-'}</span>
-          </div>
-          <button 
-            className={styles.tooltipCloseButton}
-            onClick={hideTooltip}
-            aria-label="닫기"
-          >
-            ×
-          </button>
-        </div>
         )}
       </div>
     );
@@ -2394,7 +2295,7 @@ const MainPage = ({ user, onLogout }) => {
     };
 
     const allSelected = demos.length > 0 && selectedDemos.length === demos.length;
-    
+
     return (
       <table>
         <thead>
@@ -2476,8 +2377,8 @@ const MainPage = ({ user, onLogout }) => {
 
 
 
-// MultiEquipmentApplicationForm 컴포넌트를 메인 컴포넌트 외부로 이동
-const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel, isGoogleApiLoaded, googleTokenClient, onJpgImagesGenerated }) => {
+  // MultiEquipmentApplicationForm 컴포넌트를 메인 컴포넌트 외부로 이동
+  const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applicantName, allPartners, onNewDemo, onCancel, isGoogleApiLoaded, googleTokenClient, onJpgImagesGenerated }) => {
     console.log("MultiEquipmentApplicationForm: isGoogleApiLoaded =", isGoogleApiLoaded);
     const todayFormatted = formatDateToYYYYMMDD(new Date());
     const [formData, setFormData] = useState({
@@ -2504,7 +2405,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     const [showCompanyNameSearchResults, setShowCompanyNameSearchResults] = useState(false);
     const [contactPersonSearchResults, setContactPersonSearchResults] = useState([]);
     const [showContactPersonSearchResults, setShowContactPersonSearchResults] = useState(false);
-    
+
     // 사용처 검색을 위한 상태
     const [usageCompanyNameSearchResults, setUsageCompanyNameSearchResults] = useState([]);
     const [showUsageCompanyNameSearchResults, setShowUsageCompanyNameSearchResults] = useState(false);
@@ -2514,7 +2415,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
     const handleChange = (e) => {
       const { name, value } = e.target;
-      
+
       // 날짜 필드의 경우 YYYY/MM/DD 형식으로 변환
       if (name === 'checkoutDate' || name === 'returnDate') {
         const formattedValue = formatDateInput(value);
@@ -2537,7 +2438,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     // 키보드 입력으로 숫자 선택
     const handleKeyDown = (e) => {
       const { name } = e.target;
-      
+
       if (name === 'partnerCompanyName' && showCompanyNameSearchResults) {
         const number = parseInt(e.key);
         if (!isNaN(number) && number > 0 && number <= companyNameSearchResults.length) {
@@ -2568,9 +2469,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     // 파트너 정보 검색 (파트너 정보만 검색)
     const handleCompanyNameSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
-        const results = allPartners.filter(partner => 
-          partner.companyName && 
-          partner.companyName !== '-' && 
+        const results = allPartners.filter(partner =>
+          partner.companyName &&
+          partner.companyName !== '-' &&
           partner.companyName.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setCompanyNameSearchResults(results);
@@ -2583,9 +2484,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
     const handleContactPersonSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
-        const results = allPartners.filter(partner => 
-          partner.contactPerson && 
-          partner.contactPerson !== '-' && 
+        const results = allPartners.filter(partner =>
+          partner.contactPerson &&
+          partner.contactPerson !== '-' &&
           partner.contactPerson.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setContactPersonSearchResults(results);
@@ -2599,9 +2500,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     // 사용처 정보 검색 (사용처 정보만 검색)
     const handleUsageCompanyNameSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
-        const results = allPartners.filter(partner => 
-          partner.usageCompany && 
-          partner.usageCompany !== '-' && 
+        const results = allPartners.filter(partner =>
+          partner.usageCompany &&
+          partner.usageCompany !== '-' &&
           partner.usageCompany.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setUsageCompanyNameSearchResults(results);
@@ -2614,9 +2515,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
     const handleUsageContactPersonSearch = (searchTerm) => {
       if (searchTerm.length > 0) {
-        const results = allPartners.filter(partner => 
-          partner.usageContactPerson && 
-          partner.usageContactPerson !== '-' && 
+        const results = allPartners.filter(partner =>
+          partner.usageContactPerson &&
+          partner.usageContactPerson !== '-' &&
           partner.usageContactPerson.toLowerCase().includes(searchTerm.toLowerCase())
         );
         setUsageContactPersonSearchResults(results);
@@ -2664,13 +2565,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     // 숫자로 파트너 선택하는 함수
     const handlePartnerSelectByNumber = (searchType, number) => {
       let results;
-      
+
       if (searchType === 'company') {
         results = companyNameSearchResults;
       } else {
         results = contactPersonSearchResults;
       }
-      
+
       if (number > 0 && number <= results.length) {
         const selectedPartner = results[number - 1];
         handlePartnerSelect(selectedPartner);
@@ -2680,83 +2581,19 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
     // 숫자로 사용처 선택하는 함수
     const handleUsageSelectByNumber = (searchType, number) => {
       let results;
-      
+
       if (searchType === 'company') {
         results = usageCompanyNameSearchResults;
       } else {
         results = usageContactPersonSearchResults;
       }
-      
+
       if (number > 0 && number <= results.length) {
         const selectedPartner = results[number - 1];
         handleUsageSelect(selectedPartner);
       }
     };
 
-
-    const testConnection = async () => {
-      try {
-        console.log("Testing Apps Script connection...");
-        const result = await testAppsScriptConnection();
-        console.log("Apps Script connection test result:", result);
-        alert(`Apps Script 연결 테스트 성공: ${result.message}`);
-      } catch (error) {
-        console.error("Apps Script connection test failed:", error);
-        alert(`Apps Script 연결 테스트 실패: ${error.message}`);
-      }
-    };
-
-    const initializeSheet = async () => {
-      try {
-        console.log("Initializing equipment sheet...");
-        const result = await initializeEquipmentSheet();
-        console.log("Sheet initialization result:", result);
-        alert(`시트 초기화 성공: ${result.message}`);
-        
-        // Refresh equipment data after initialization
-        window.location.reload();
-      } catch (error) {
-        console.error("Sheet initialization failed:", error);
-        alert(`시트 초기화 실패: ${error.message}`);
-      }
-    };
-
-    const handleTestSheetData = async () => {
-      try {
-        console.log('=== 시트 데이터 테스트 시작 ===');
-        const result = await testSheetData();
-        console.log('테스트 결과:', result);
-        
-        if (result.success) {
-          alert(`테스트 성공!\n\n총 행 수: ${result.totalRows}\n데이터 행 수: ${result.dataRows}\n비어있지 않은 행 수: ${result.nonEmptyRows}\n파트너 데이터 수: ${result.data.length}\n\n자세한 내용은 콘솔을 확인하세요.`);
-        } else {
-          alert(`테스트 실패: ${result.error}`);
-        }
-      } catch (error) {
-        console.error('시트 테스트 오류:', error);
-        alert('시트 테스트에 실패했습니다: ' + error.message);
-      }
-    };
-
-    const handleFillDummyData = () => {
-      setFormData(prev => ({
-        ...prev,
-        returnDate: '2025/09/26',
-        checkoutReason: '고객사 기능 시연 및 제품 성능 테스트',
-        checkoutLocation: '서울시 강남구 테헤란로 445, 2층',
-        partnerCompanyName: '(주)테크파트너스',
-        partnerBusinessNumber: '123-45-67890',
-        partnerContactPerson: '김파트너',
-        partnerContactNumber: '02-1234-5678',
-        partnerAddress: '서울시 서초구 서초대로 123, 4층',
-        usageCompanyName: '(주)에이비씨사용처',
-        usageBusinessNumber: '234-56-78901',
-        usageContactPerson: '이사용',
-        usageContactNumber: '031-987-6543',
-        usageAddress: '경기도 성남시 분당구 판교역로 456, 7층',
-      }));
-      console.log('✅ 빈칸에 더미 데이터가 채워졌습니다.');
-    };
 
     const handleDownloadPng = async (e) => {
       e.preventDefault(); // Prevent default form submission behavior
@@ -2779,7 +2616,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         }
       }
       console.log("MultiEquipmentApplicationForm: Validation passed.");
-      
+
       const memoData = memoItems.filter(memo => memo.trim() !== '');
       if (memoData.length > 0) {
         formData.memoItems = memoData;
@@ -2791,11 +2628,11 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
       try {
         console.log("MultiEquipmentApplicationForm: Initiating PNG export workflow.");
-        
+
         setProcessMessage('🔧 Google API 초기화 중...');
         // Initialize Google APIs (simplified for Apps Script)
         await initGoogleApis();
-        
+
         // For Apps Script mode, we don't need real access token
         const accessToken = 'apps-script-mode';
         console.log("MultiEquipmentApplicationForm: Apps Script mode initialized.");
@@ -2810,11 +2647,11 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           if (!addDataSuccess) {
             throw new Error("Main sheet data addition returned false");
           }
-          
+
           logOperation('addDataToMainSheet', { success: true });
           console.log('✅ 기존 시트에 데이터가 추가되었습니다!');
           setProcessMessage('✅ 기존 시트에 데이터 추가 완료!');
-          
+
         } catch (error) {
           logOperation('addDataToMainSheet', { success: false, error: error.message }, 'error');
           console.error('기존 시트 데이터 추가 실패:', error);
@@ -2825,26 +2662,26 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         // 1. Duplicate the template spreadsheet
         logOperation('duplicateSpreadsheet', { requester: formData.requester });
         const newSpreadsheetTitle = `장비_대여요청서_${formData.requester}_${new Date().toISOString().slice(0, 10)}`;
-        
+
         setProcessMessage('📋 템플릿 시트 복사 중...');
         let newSpreadsheetId;
         try {
           newSpreadsheetId = await duplicateSpreadsheet(accessToken, TEMPLATE_SPREADSHEET_ID, newSpreadsheetTitle);
-          
+
           if (!newSpreadsheetId) {
             throw new Error("Spreadsheet duplication returned no ID");
           }
-          
+
           logOperation('duplicateSpreadsheet', { success: true, spreadsheetId: newSpreadsheetId });
           setProcessMessage('✅ 템플릿 시트 복사 완료!');
         } catch (error) {
           logOperation('duplicateSpreadsheet', { success: false, error: error.message }, 'error');
-          
+
           // Clear auth data if there's an authentication error
           if (error.message.includes('Authentication') || error.message.includes('token')) {
             clearAuthData();
           }
-          
+
           setProcessMessage('');
           alert(`❌ 스프레드시트 복제 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
@@ -2858,18 +2695,18 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           if (!updateSuccess) {
             throw new Error("Sheet update returned false");
           }
-          
+
           logOperation('updateGoogleSheet', { success: true });
-          
+
           // Generate Google Sheets URL
           const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
           setCreatedSpreadsheetUrl(spreadsheetUrl);
-          
+
           console.log('✅ 스프레드시트 생성 및 업데이트 완료!');
           console.log('📄 스프레드시트 URL:', spreadsheetUrl);
           console.log('📋 스프레드시트 ID:', newSpreadsheetId);
           setProcessMessage('✅ 신청 정보 입력 완료!');
-          
+
           // 스프레드시트 URL을 클립보드에 복사
           if (navigator.clipboard && navigator.clipboard.writeText) {
             try {
@@ -2879,15 +2716,15 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               console.log('클립보드 복사 실패:', clipboardError);
             }
           }
-          
+
         } catch (error) {
           logOperation('updateGoogleSheet', { success: false, error: error.message }, 'error');
-          
+
           // Clear auth data if there's an authentication error
           if (error.message.includes('Authentication') || error.message.includes('token')) {
             clearAuthData();
           }
-          
+
           setProcessMessage('');
           alert(`❌ Google Sheet 업데이트 실패: ${getUserFriendlyErrorMessage(error)}`);
           return;
@@ -2904,7 +2741,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         // 4. Export the updated Google Sheet to PNG images
         console.log('[비활성화] PNG 변환이 주석처리되어 건너뜁니다.');
         console.log('[비활성화] 원래 실행될 액션: exportGoogleSheetToPng', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
-        
+
         // logOperation('exportToPng', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
         // try {
         //   const result = await exportGoogleSheetToPng(
@@ -2960,14 +2797,14 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         try {
           setProcessMessage('📄 PDF 변환 중...');
           logOperation('exportToPdf', { spreadsheetId: newSpreadsheetId, fileName: newSpreadsheetTitle });
-          
+
           const pdfResult = await exportGoogleSheetToPdfAndConvertToJpg(
-            accessToken, 
-            newSpreadsheetId, 
-            TEMPLATE_SHEET_GID, 
+            accessToken,
+            newSpreadsheetId,
+            TEMPLATE_SHEET_GID,
             newSpreadsheetTitle
           );
-          
+
           console.log('=== PDF Export 응답 상세 ===');
           console.log('전체 응답:', pdfResult);
           console.log('success:', pdfResult?.success);
@@ -2976,18 +2813,15 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           console.log('fileName:', pdfResult?.fileName);
           console.log('pdfUrl:', pdfResult?.pdfUrl);
           console.log('error:', pdfResult?.error);
-          
+
           if (pdfResult && pdfResult.success && pdfResult.fileId && pdfResult.fileUrl) {
-            pdfFileUrl = pdfResult.fileUrl;
             const pdfDownloadUrl = pdfResult.pdfUrl || pdfResult.fileUrl;
-            const pdfFileName = pdfResult.fileName || `${newSpreadsheetTitle}.pdf`;
-            
+
             setCreatedPdfUrl(pdfFileUrl); // PDF URL을 state에 저장
             setCreatedPdfDownloadUrl(pdfDownloadUrl); // PDF 다운로드 URL 저장
-            setCreatedPdfFileName(pdfFileName); // PDF 파일명 저장
-            
-            logOperation('exportToPdf', { 
-              success: true, 
+
+            logOperation('exportToPdf', {
+              success: true,
               fileId: pdfResult.fileId,
               fileUrl: pdfResult.fileUrl,
               downloadUrl: pdfDownloadUrl,
@@ -3023,7 +2857,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           setProcessMessage('⚠️ PDF 변환 실패 (신청은 완료됨)');
           // PDF 변환 실패해도 신청은 완료된 것으로 간주
         }
-        
+
         // ===== 워크플로우 완료 =====
         const spreadsheetUrl = `https://docs.google.com/spreadsheets/d/${newSpreadsheetId}/edit`;
         console.log('🎉 전체 워크플로우 완료!');
@@ -3032,20 +2866,20 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
         if (pdfFileUrl) {
           console.log('📄 생성된 PDF:', pdfFileUrl);
         }
-        
+
         setProcessMessage('🎉 데모 신청이 완료되었습니다!');
-        
+
         // 최종 완료 메시지 (간단하게)
         alert('🎉 모든 작업이 완료되었습니다!');
 
       } catch (error) {
         logOperation('workflowError', { error: error.message }, 'error');
-        
+
         // Clear auth data if there's an authentication error
         if (error.message.includes('Authentication') || error.message.includes('token')) {
           clearAuthData();
         }
-        
+
         setProcessMessage('');
         alert(`❌ 전체 워크플로우 중 오류 발생: ${getUserFriendlyErrorMessage(error)}`);
       } finally {
@@ -3066,7 +2900,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             ))}
           </ul>
         </div>
-        
+
         <div className={styles.infoBox}>
           <h3>[기본정보]</h3>
           <div className={styles.formGrid}>
@@ -3099,7 +2933,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 파트너 담당자 *(필수) :
 파트너 연락처 *(필수) :
 파트너 주소 *(필수) :`;
-                  
+
                   if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(formText)
                       .then(() => alert('✅ 파트너 정보 양식이 클립보드에 복사되었습니다!'))
@@ -3133,7 +2967,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 onClick={async () => {
                   try {
                     let clipboardText = '';
-                    
+
                     // 클립보드에서 텍스트 읽기
                     if (navigator.clipboard && navigator.clipboard.readText) {
                       clipboardText = await navigator.clipboard.readText();
@@ -3142,9 +2976,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       clipboardText = prompt('클립보드 내용을 붙여넣으세요:');
                       if (!clipboardText) return;
                     }
-                    
+
                     console.log('클립보드 내용:', clipboardText);
-                    
+
                     // 파트너 정보 파싱
                     const patterns = {
                       partnerCompanyName: /파트너\s*상호[^:]*:\s*(.+)/i,
@@ -3153,10 +2987,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       partnerContactNumber: /파트너\s*연락처[^:]*:\s*(.+)/i,
                       partnerAddress: /파트너\s*주소[^:]*:\s*(.+)/i
                     };
-                    
+
                     const newData = {};
                     let foundCount = 0;
-                    
+
                     Object.keys(patterns).forEach(key => {
                       const match = clipboardText.match(patterns[key]);
                       if (match && match[1]) {
@@ -3164,14 +2998,14 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                         foundCount++;
                       }
                     });
-                    
+
                     if (foundCount > 0) {
                       setFormData(prev => ({ ...prev, ...newData }));
                       alert(`✅ ${foundCount}개 항목이 자동으로 입력되었습니다!`);
                     } else {
                       alert('❌ 파트너 정보 양식을 찾을 수 없습니다.\n\n올바른 양식 형식인지 확인해주세요.');
                     }
-                    
+
                   } catch (err) {
                     console.error('붙여넣기 실패:', err);
                     alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
@@ -3187,13 +3021,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             <div className={styles.formField}>
               <label>파트너 상호 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input 
-                  type="text" 
-                  name="partnerCompanyName" 
-                  value={formData.partnerCompanyName} 
-                  onChange={handleChange} 
+                <input
+                  type="text"
+                  name="partnerCompanyName"
+                  value={formData.partnerCompanyName}
+                  onChange={handleChange}
                   onKeyDown={handleKeyDown}
-                  style={{ width: '150px' }} 
+                  style={{ width: '150px' }}
                 />
                 {showCompanyNameSearchResults && companyNameSearchResults.length > 0 && (
                   <ul className={styles.searchResults}>
@@ -3217,13 +3051,13 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
               <label>파트너 담당자 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input 
-                  type="text" 
-                  name="partnerContactPerson" 
-                  value={formData.partnerContactPerson} 
-                  onChange={handleChange} 
+                <input
+                  type="text"
+                  name="partnerContactPerson"
+                  value={formData.partnerContactPerson}
+                  onChange={handleChange}
                   onKeyDown={handleKeyDown}
-                  style={{ width: '150px' }} 
+                  style={{ width: '150px' }}
                 />
                 {showContactPersonSearchResults && contactPersonSearchResults.length > 0 && (
                   <ul className={styles.searchResults}>
@@ -3285,7 +3119,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 사용처 담당자 *(필수) :
 사용처 담당자 연락처 *(필수) :
 사용처 주소 *(필수) :`;
-                  
+
                   if (navigator.clipboard && navigator.clipboard.writeText) {
                     navigator.clipboard.writeText(formText)
                       .then(() => alert('✅ 사용처 정보 양식이 클립보드에 복사되었습니다!'))
@@ -3321,7 +3155,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 onClick={async () => {
                   try {
                     let clipboardText = '';
-                    
+
                     // 클립보드에서 텍스트 읽기
                     if (navigator.clipboard && navigator.clipboard.readText) {
                       clipboardText = await navigator.clipboard.readText();
@@ -3330,9 +3164,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       clipboardText = prompt('클립보드 내용을 붙여넣으세요:');
                       if (!clipboardText) return;
                     }
-                    
+
                     console.log('클립보드 내용:', clipboardText);
-                    
+
                     // 사용처 정보 파싱
                     const patterns = {
                       usageCompanyName: /사용처\s*상호[^:]*:\s*(.+)/i,
@@ -3341,10 +3175,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       usageContactNumber: /사용처\s*담당자\s*연락처[^:]*:\s*(.+)/i,
                       usageAddress: /사용처\s*주소[^:]*:\s*(.+)/i
                     };
-                    
+
                     const newData = {};
                     let foundCount = 0;
-                    
+
                     Object.keys(patterns).forEach(key => {
                       const match = clipboardText.match(patterns[key]);
                       if (match && match[1]) {
@@ -3352,14 +3186,14 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                         foundCount++;
                       }
                     });
-                    
+
                     if (foundCount > 0) {
                       setFormData(prev => ({ ...prev, ...newData }));
                       alert(`✅ ${foundCount}개 항목이 자동으로 입력되었습니다!`);
                     } else {
                       alert('❌ 사용처 정보 양식을 찾을 수 없습니다.\n\n올바른 양식 형식인지 확인해주세요.');
                     }
-                    
+
                   } catch (err) {
                     console.error('붙여넣기 실패:', err);
                     alert('❌ 클립보드 읽기에 실패했습니다.\n\n브라우저 권한을 확인해주세요.');
@@ -3375,21 +3209,21 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             <div className={styles.formField}>
               <label>사용처 상호 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input 
-                  type="text" 
-                  name="usageCompanyName" 
-                  value={formData.usageCompanyName} 
+                <input
+                  type="text"
+                  name="usageCompanyName"
+                  value={formData.usageCompanyName}
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
-                  required 
+                  required
                   disabled={skipUsageInfo}
-                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} 
+                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }}
                 />
                 {showUsageCompanyNameSearchResults && usageCompanyNameSearchResults.length > 0 && (
                   <div className={styles.searchResults}>
                     {usageCompanyNameSearchResults.map((partner, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className={styles.searchResultContent}
                         onClick={() => handleUsageSelect(partner)}
                       >
@@ -3410,21 +3244,21 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             <div className={styles.formField} style={{ gridColumn: '1 / span 1' }}>
               <label>사용처 담당자 *(필수) :</label>
               <div className={styles.inputWithResults}>
-                <input 
-                  type="text" 
-                  name="usageContactPerson" 
-                  value={formData.usageContactPerson} 
+                <input
+                  type="text"
+                  name="usageContactPerson"
+                  value={formData.usageContactPerson}
                   onChange={handleChange}
                   onKeyDown={handleKeyDown}
-                  required 
+                  required
                   disabled={skipUsageInfo}
-                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }} 
+                  style={{ width: '150px', backgroundColor: skipUsageInfo ? '#f0f0f0' : 'white' }}
                 />
                 {showUsageContactPersonSearchResults && usageContactPersonSearchResults.length > 0 && (
                   <div className={styles.searchResults}>
                     {usageContactPersonSearchResults.map((partner, index) => (
-                      <div 
-                        key={index} 
+                      <div
+                        key={index}
                         className={styles.searchResultContent}
                         onClick={() => handleUsageSelect(partner)}
                       >
@@ -3478,7 +3312,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             입력 테스트
           </button>
           */}
-          
+
           {/* 실시간 처리 메시지 표시 */}
           {processMessage && (
             <div className={styles.processMessage}>
@@ -3486,11 +3320,11 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <p>{processMessage}</p>
             </div>
           )}
-          
+
           <div>
-            <button 
-              onClick={handleDownloadPng} 
-              className="button-primary" 
+            <button
+              onClick={handleDownloadPng}
+              className="button-primary"
               disabled={!isGoogleApiLoaded || isExportingToPng}
             >
               {isExportingToPng ? '신청 처리 중...' : '데모 신청하기'}
@@ -3507,7 +3341,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 <span className={styles.successIcon}>✅</span>
                 <h4>스프레드시트가 생성되었습니다!</h4>
               </div>
-              <button 
+              <button
                 className={styles.foldButtonInline}
                 style={{ marginLeft: 'auto' }}
               >
@@ -3517,16 +3351,16 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             {isSheetBoxExpanded && (
               <div className={styles.spreadsheetResultContent}>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <a 
-                    href={createdSpreadsheetUrl} 
-                    target="_blank" 
+                  <a
+                    href={createdSpreadsheetUrl}
+                    target="_blank"
                     rel="noopener noreferrer"
                     className={styles.spreadsheetResultButton}
                     style={{ textDecoration: 'none' }}
                   >
                     📄 열기
                   </a>
-                  <button 
+                  <button
                     onClick={() => {
                       if (navigator.clipboard && navigator.clipboard.writeText) {
                         navigator.clipboard.writeText(createdSpreadsheetUrl)
@@ -3543,7 +3377,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             )}
           </div>
         )}
-        
+
         {/* 생성된 PDF 결과 표시 */}
         {createdPdfUrl && (
           <div className={styles.spreadsheetResultBox}>
@@ -3553,16 +3387,16 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
             </div>
             <div className={styles.spreadsheetResultContent}>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <a 
-                  href={createdPdfUrl} 
-                  target="_blank" 
+                <a
+                  href={createdPdfUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className={styles.spreadsheetResultButton}
                   style={{ textDecoration: 'none' }}
                 >
                   📄 열기
                 </a>
-                <button 
+                <button
                   onClick={() => {
                     const downloadUrl = createdPdfDownloadUrl || createdPdfUrl;
                     window.open(downloadUrl, '_blank');
@@ -3571,7 +3405,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 >
                   📥 다운로드
                 </button>
-                <button 
+                <button
                   onClick={() => {
                     const urlToCopy = createdPdfUrl || createdPdfDownloadUrl;
                     if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -3594,8 +3428,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
           <div className={styles.pngDisplayArea}>
             {pngFiles.map((pngFile, index) => (
               <div key={index} className={styles.pngImageContainer}>
-                <img 
-                  src={pngFile.fileUrl} 
+                <img
+                  src={pngFile.fileUrl}
                   alt={pngFile.fileName}
                   className={styles.pngImage}
                 />
@@ -3611,10 +3445,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
   return (
     <div className={styles.container}>
       {!isMyDemosFolded && <Header user={user} onLogout={onLogout} />}
-      
+
       <div className={styles.mainContent}>
         {/* 고정 영역 1: 내 데모 현황 */}
-        <div 
+        <div
           ref={myDemoSectionRef}
           className={`${styles.fixedArea} ${styles.section} ${styles.myDemoSection} ${isMyDemosFolded ? styles.folded : ''}`}
         >
@@ -3635,7 +3469,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 return isCurrentUser ? '내 데모 현황' : `${currentAssignee}님의 데모 현황`;
               })()}
             </h2>
-            <button 
+            <button
               onClick={() => setIsMyDemosFolded(!isMyDemosFolded)}
               className={styles.foldButtonInline}
             >
@@ -3658,7 +3492,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     const userBaseName = getAssigneeBaseName(userName);
                     const isCurrentUser = assignee === userBaseName;
                     const isSelected = currentAssigneeIndex === index;
-                    
+
                     return (
                       <button
                         key={assignee}
@@ -3677,7 +3511,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   })}
                 </div>
               )}
-              
+
               <div className={styles.tableContainer}>
                 {loadingMyDemos ? (
                   <SkeletonMyDemoTable rows={3} />
@@ -3694,10 +3528,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   };
                   const userBaseName = getAssigneeBaseName(userName);
                   const isCurrentUser = currentAssignee === userBaseName || !currentAssignee;
-                  
+
                   return currentDemos.length > 0 ? (
-                    <MyDemoList 
-                      demos={currentDemos} 
+                    <MyDemoList
+                      demos={currentDemos}
                       onReturn={handleReturn}
                       selectedDemos={selectedDemos}
                       onDemoToggle={handleDemoToggle}
@@ -3709,7 +3543,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   );
                 })()}
               </div>
-              
+
               {/* 일괄 반납 버튼 */}
               {(() => {
                 const assignees = Object.keys(allAssigneeDemos).sort();
@@ -3724,10 +3558,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 };
                 const userBaseName = getAssigneeBaseName(userName);
                 const isCurrentUser = currentAssignee === userBaseName || !currentAssignee;
-                
+
                 return currentDemos.length > 0 && !isMyDemosFolded && isCurrentUser ? (
                   <div style={{ marginTop: '12px', display: 'flex', gap: '8px', alignItems: 'center' }}>
-                    <button 
+                    <button
                       onClick={handleBulkReturn}
                       className="button-primary"
                       disabled={selectedDemos.length === 0 || isReturning}
@@ -3739,7 +3573,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       {isReturning ? '반납 처리 중...' : `선택한 장비 반납 (${selectedDemos.length})`}
                     </button>
                     {selectedDemos.length > 0 && (
-                      <button 
+                      <button
                         onClick={() => setSelectedDemos([])}
                         className="button-secondary"
                         style={{ padding: '8px 16px' }}
@@ -3762,9 +3596,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   maxHeight: '400px',
                   overflowY: 'auto'
                 }}>
-                  <h4 style={{ 
-                    margin: '0 0 12px 0', 
-                    fontSize: '16px', 
+                  <h4 style={{
+                    margin: '0 0 12px 0',
+                    fontSize: '16px',
                     fontWeight: 600,
                     color: '#495057',
                     display: 'flex',
@@ -3782,22 +3616,22 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                     lineHeight: '1.8'
                   }}>
                     {returnLogs.map((log, index) => (
-                      <div 
+                      <div
                         key={index}
                         style={{
                           padding: '4px 8px',
                           marginBottom: '2px',
                           borderRadius: '4px',
-                          backgroundColor: 
+                          backgroundColor:
                             log.type === 'success' ? '#d4edda' :
-                            log.type === 'error' ? '#f8d7da' :
-                            log.type === 'processing' ? '#fff3cd' :
-                            'transparent',
+                              log.type === 'error' ? '#f8d7da' :
+                                log.type === 'processing' ? '#fff3cd' :
+                                  'transparent',
                           color:
                             log.type === 'success' ? '#155724' :
-                            log.type === 'error' ? '#721c24' :
-                            log.type === 'processing' ? '#856404' :
-                            '#495057'
+                              log.type === 'error' ? '#721c24' :
+                                log.type === 'processing' ? '#856404' :
+                                  '#495057'
                         }}
                       >
                         <span style={{ color: '#6c757d', marginRight: '8px' }}>
@@ -3838,8 +3672,8 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               {loadingEquipments ? (
                 <SkeletonTable rows={5} />
               ) : (
-                <EquipmentList 
-                  equipments={filteredEquipments} 
+                <EquipmentList
+                  equipments={filteredEquipments}
                   selectedEquipments={selectedEquipments}
                   onEquipmentToggle={handleEquipmentToggle}
                   allEquipmentFromSheet={allEquipmentFromSheet}
@@ -3851,12 +3685,11 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
         {/* 하단 고정 영역: 데모 신청 정보 */}
         {(selectedEquipments.length > 0 || pdfPreviewImages?.length > 0 || pngFiles?.length > 0 || sheetPngFiles?.length > 0 || pdfBase64 || pdfUrl) && (
-          <div 
+          <div
             ref={bottomFixedAreaRef}
-            className={`${styles.bottomFixedArea} ${
-              applicationFormState === 'compact' ? styles.bottomFixedAreaCompact : 
+            className={`${styles.bottomFixedArea} ${applicationFormState === 'compact' ? styles.bottomFixedAreaCompact :
               applicationFormState === 'folded' ? styles.bottomFixedAreaFolded : ''
-            } ${isBottomAreaExpanded ? styles.bottomFixedAreaExpanded : ''}`}
+              } ${isBottomAreaExpanded ? styles.bottomFixedAreaExpanded : ''}`}
           >
             {/* 데모 신청 정보 */}
             {showApplicationForm && selectedEquipments.length > 0 && (
@@ -3864,7 +3697,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                 <div className={styles.applicationFormHeader}>
                   <h3>데모 신청 정보</h3>
                   <div className={styles.formControlButtons}>
-                    <button 
+                    <button
                       onClick={() => {
                         if (applicationFormState === 'folded') {
                           setApplicationFormState('expanded');
@@ -3881,7 +3714,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                   </div>
                 </div>
                 {applicationFormState !== 'folded' && (
-                  <MultiEquipmentApplicationForm 
+                  <MultiEquipmentApplicationForm
                     selectedEquipments={selectedEquipments}
                     applicantName={getUserDisplayName(user)}
                     allPartners={allPartners}
@@ -3897,10 +3730,10 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
             {/* JPG 이미지 미리보기 */}
             {pdfPreviewImages && pdfPreviewImages.length > 0 && (
-              <JpgViewer 
+              <JpgViewer
                 images={pdfPreviewImages}
                 title="데모 신청 양식 미리보기"
-                showDownload={true} 
+                showDownload={true}
                 onClose={() => {
                   setPdfPreviewImages([]);
                   setPdfUrl(null);
@@ -3914,7 +3747,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <div className={styles.pngViewer}>
                 <div className={styles.pngViewerHeader}>
                   <h3>PNG 이미지 미리보기</h3>
-                  <button 
+                  <button
                     onClick={() => setPngFiles([])}
                     className={styles.closeButton}
                   >
@@ -3927,9 +3760,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       <h4>{pngFile.fileName}</h4>
                       <p>페이지: {pngFile.pageNumber || index + 1}</p>
                       <p>시트: {pngFile.sheetName || 'N/A'}</p>
-                      <a 
-                        href={pngFile.fileUrl} 
-                        target="_blank" 
+                      <a
+                        href={pngFile.fileUrl}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className={styles.downloadLink}
                       >
@@ -3946,7 +3779,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
               <div className={styles.pngViewer}>
                 <div className={styles.pngViewerHeader}>
                   <h3>Google Sheets PNG 이미지 미리보기</h3>
-                  <button 
+                  <button
                     onClick={() => setSheetPngFiles([])}
                     className={styles.closeButton}
                   >
@@ -3959,9 +3792,9 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
                       <h4>{pngFile.fileName}</h4>
                       <p>페이지: {pngFile.pageNumber || index + 1}</p>
                       <p>시트: {pngFile.sheetName || '행사장비요청서'}</p>
-                      <a 
-                        href={pngFile.fileUrl} 
-                        target="_blank" 
+                      <a
+                        href={pngFile.fileUrl}
+                        target="_blank"
                         rel="noopener noreferrer"
                         className={styles.downloadLink}
                       >
@@ -3975,7 +3808,7 @@ const MultiEquipmentApplicationForm = React.memo(({ selectedEquipments, applican
 
             {/* PDF 뷰어 (JPG 이미지가 없을 때만) */}
             {!pdfPreviewImages && (pdfBase64 || pdfUrl) && (
-              <PdfViewer 
+              <PdfViewer
                 pdfUrl={pdfBase64 ? `data:application/pdf;base64,${pdfBase64}` : pdfUrl}
                 onImagesGenerated={handleJpgImagesGenerated}
               />
