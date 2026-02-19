@@ -1614,10 +1614,8 @@ const MainPage = ({ user, onLogout }) => {
     }
   };
 
-  const handleFormSubmit = async (demoId) => {
+  const handleFormSubmit = async (demo) => {
     try {
-      // 해당 데모 정보 찾기
-      const demo = myDemos.find(d => d.id === demoId);
       if (!demo) {
         alert('데모 정보를 찾을 수 없습니다.');
         return;
@@ -1734,11 +1732,20 @@ const MainPage = ({ user, onLogout }) => {
               const updateResult = await updateFormSubmission(demo.serial, result.fileUrl);
               console.log('시트 업데이트 결과:', updateResult);
 
-              // 성공 시 로컬 상태 업데이트
-              const updatedDemos = myDemos.map(d =>
-                d.id === demoId ? { ...d, formSubmitted: true, fileUrl: result.fileUrl } : d
+              // 성공 시 로컬 상태 업데이트 (모든 리스트 동기화)
+              const updateDemoInList = (list) => list.map(d =>
+                d.serial === demo.serial ? { ...d, formSubmitted: true, fileUrl: result.fileUrl } : d
               );
-              setMyDemos(updatedDemos);
+
+              setMyDemos(prev => updateDemoInList(prev));
+
+              setAllAssigneeDemos(prev => {
+                const newMap = { ...prev };
+                Object.keys(newMap).forEach(assignee => {
+                  newMap[assignee] = updateDemoInList(newMap[assignee]);
+                });
+                return newMap;
+              });
 
               alert(`✅ 파일이 성공적으로 업로드되었습니다!\n\n파일명: ${result.fileName}\n\n시트에 제출 상태가 기록되었습니다.\n\nGoogle Drive에서 확인하세요:\n${result.fileUrl}`);
             } catch (updateError) {
@@ -2351,7 +2358,7 @@ const MainPage = ({ user, onLogout }) => {
                 </td>
                 <td data-label="신청 양식">
                   {demo.formSubmitted ? (isMobile ? '완료' : (isTablet ? '완료' : '제출 완료')) : (
-                    <button onClick={() => handleFormSubmit(demo.id)} className="button-primary">
+                    <button onClick={() => handleFormSubmit(demo)} className="button-primary">
                       {isMobile ? '제출' : (isTablet ? '제출' : '제출하기')}
                     </button>
                   )}
