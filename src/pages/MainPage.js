@@ -657,6 +657,105 @@ const formatDateInput = (inputValue) => {
 
 
 // ----------------------------------------------------------------
+// Helper functions and constants
+// ----------------------------------------------------------------
+
+// Custom sorting order
+const customOrder = [
+  // 1. Rally 시리즈
+  "Rally Plus", "Rally System", "Rally Camera", "Rally", "Rally Bar", "Rally Bar Mini", "Rally Bar Huddle",
+  "Rally Bar Graphite", "Rally Speaker",
+  // 2. MeetUp 시리즈
+  "MeetUp", "MeetUp 2",
+  // 3. 연장 마이크 (Expansion 포함 + Rally Mic Pod)
+  "Rally Mic Pod", "MIc Pod", "Mic Pod Expansion",
+  // 4. TAP 시리즈 (tap includes)
+  "TAP", "TAP IP",
+  // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart includes)
+  "Google Chromebox",
+  // 6. Dock 시리즈
+  "Logi Dock Flex", "Logi Dock",
+  // 7. PTZ/카메라
+  "PTZ Pro 2", "Group", "Sight", "Connect", "BCC950", "Scribe", "Reach",
+  // 8. 웹캠
+  "Brio", "Brio 705", "MX Brio 705", "C930e", "C925e", "C920e", "C505e",
+  // 9. 케이블
+  "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Rally Mic Pod Cat Coupler",
+  "Strong USB Cable", "USB Strong Cable",
+  // 10. 마운트류 (mount 포함)
+  "TV Mount", "Wall Mount", "Secure Mount"
+];
+
+// Function to clean equipment names for sorting
+const getCleanName = (name) => {
+  let clean = name.replace(/\s*\([^)]*\)/g, '').trim(); // Remove text in parentheses
+  // Do not remove numbers, as "MeetUp 2" is a distinct item
+  return clean;
+};
+
+// 장비 카테고리 결정 함수
+const getCategoryRank = (name) => {
+  const lowerNameOriginal = name.toLowerCase(); // 원본 이름 (괄호 포함)
+  const cleanName = getCleanName(name);
+
+  // customOrder에 정확히 일치하는 항목이 있으면 그 위치 반환
+  const exactIndex = customOrder.indexOf(cleanName);
+  if (exactIndex !== -1) {
+    return exactIndex;
+  }
+
+  // includes 체크는 원본 이름으로
+
+  // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart 포함) - 먼저 체크
+  if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') ||
+    lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
+    return customOrder.indexOf("Google Chromebox");
+  }
+
+  // 3. 연장 마이크 (Expansion 포함)
+  if (lowerNameOriginal.includes('expansion')) {
+    return customOrder.indexOf("Mic Pod Expansion");
+  }
+
+  // 4. TAP 시리즈 (tap 포함, mount 포함된 제목은 제외)
+  if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) {
+    return customOrder.indexOf("TAP");
+  }
+
+  // 10. 마운트류 (mount 포함)
+  if (lowerNameOriginal.includes('mount')) {
+    return customOrder.indexOf("TV Mount");
+  }
+
+  // customOrder에 없으면 맨 뒤로
+  return customOrder.length;
+};
+
+// Sorting function
+const sortEquipment = (a, b) => {
+  const rankA = getCategoryRank(a.name);
+  const rankB = getCategoryRank(b.name);
+
+  // Sort by category rank first
+  if (rankA !== rankB) {
+    return rankA - rankB;
+  }
+
+  // 같은 카테고리 내에서는 이름 순으로 정렬
+  const cleanNameA = getCleanName(a.name);
+  const cleanNameB = getCleanName(b.name);
+  return cleanNameA.localeCompare(cleanNameB);
+};
+
+// 대여 가능 상태 체크 (다양한 표기 허용)
+const isAvailableStatus = (status) => {
+  if (!status) return false;
+  const normalizedStatus = status.toString().trim().toLowerCase().replace(/\s+/g, '');
+  // '대여 가능', '대여가능', '대여  가능', '반납완료', '반납 완료' 등 모두 허용
+  return normalizedStatus === '대여가능' || normalizedStatus === '반납완료';
+};
+
+// ----------------------------------------------------------------
 // Main Page Component
 // ----------------------------------------------------------------
 
@@ -680,7 +779,6 @@ const MainPage = ({ user, onLogout }) => {
   const isProcessingRef = useRef(false); // 상태 변경 처리 중 플래그
   const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
   const myDemoSectionRef = useRef(null); // 스와이프를 위한 ref
-  const touchStartXRef = useRef(0); // 터치 시작 X 좌표
 
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
@@ -707,101 +805,6 @@ const MainPage = ({ user, onLogout }) => {
   const [createdPdfDownloadUrl, setCreatedPdfDownloadUrl] = useState(null); // State for PDF download URL
   const [isSheetBoxExpanded, setIsSheetBoxExpanded] = useState(false); // State for sheet box expand/collapse
 
-  // Custom sorting order
-  const customOrder = [
-    // 1. Rally 시리즈
-    "Rally Plus", "Rally System", "Rally Camera", "Rally", "Rally Bar", "Rally Bar Mini", "Rally Bar Huddle",
-    "Rally Bar Graphite", "Rally Speaker",
-    // 2. MeetUp 시리즈
-    "MeetUp", "MeetUp 2",
-    // 3. 연장 마이크 (Expansion 포함 + Rally Mic Pod)
-    "Rally Mic Pod", "MIc Pod", "Mic Pod Expansion",
-    // 4. TAP 시리즈 (tap includes)
-    "TAP", "TAP IP",
-    // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart includes)
-    "Google Chromebox",
-    // 6. Dock 시리즈
-    "Logi Dock Flex", "Logi Dock",
-    // 7. PTZ/카메라
-    "PTZ Pro 2", "Group", "Sight", "Connect", "BCC950", "Scribe", "Reach",
-    // 8. 웹캠
-    "Brio", "Brio 705", "MX Brio 705", "C930e", "C925e", "C920e", "C505e",
-    // 9. 케이블
-    "Active USB Cable", "CAT5E Kit for TAP", "Rally Mic Pod Extension Cable", "Rally Mic Pod Cat Coupler",
-    "Strong USB Cable", "USB Strong Cable",
-    // 10. 마운트류 (mount 포함)
-    "TV Mount", "Wall Mount", "Secure Mount"
-  ];
-
-  // Function to clean equipment names for sorting
-  const getCleanName = (name) => {
-    let clean = name.replace(/\s*\([^)]*\)/g, '').trim(); // Remove text in parentheses
-    // Do not remove numbers, as "MeetUp 2" is a distinct item
-    return clean;
-  };
-
-  // 장비 카테고리 결정 함수
-  const getCategoryRank = (name) => {
-    const lowerNameOriginal = name.toLowerCase(); // 원본 이름 (괄호 포함)
-    const cleanName = getCleanName(name);
-    const lowerName = cleanName.toLowerCase();
-
-    // customOrder에 정확히 일치하는 항목이 있으면 그 위치 반환
-    const exactIndex = customOrder.indexOf(cleanName);
-    if (exactIndex !== -1) {
-      return exactIndex;
-    }
-
-    // includes 체크는 원본 이름으로
-
-    // 5. PC/컴퓨팅 (Roommate, NUC, CTL, ThinkSmart 포함) - 먼저 체크
-    if (lowerNameOriginal.includes('roommate') || lowerNameOriginal.includes('nuc') ||
-      lowerNameOriginal.includes('ctl') || lowerNameOriginal.includes('thinksmart')) {
-      return customOrder.indexOf("Google Chromebox");
-    }
-
-    // 3. 연장 마이크 (Expansion 포함)
-    if (lowerNameOriginal.includes('expansion')) {
-      return customOrder.indexOf("Mic Pod Expansion");
-    }
-
-    // 4. TAP 시리즈 (tap 포함, mount 포함된 제목은 제외)
-    if (lowerNameOriginal.includes('tap') && !lowerNameOriginal.includes('mount')) {
-      return customOrder.indexOf("TAP");
-    }
-
-    // 10. 마운트류 (mount 포함)
-    if (lowerNameOriginal.includes('mount')) {
-      return customOrder.indexOf("TV Mount");
-    }
-
-    // customOrder에 없으면 맨 뒤로
-    return customOrder.length;
-  };
-
-  // Sorting function
-  const sortEquipment = (a, b) => {
-    const rankA = getCategoryRank(a.name);
-    const rankB = getCategoryRank(b.name);
-
-    // Sort by category rank first
-    if (rankA !== rankB) {
-      return rankA - rankB;
-    }
-
-    // 같은 카테고리 내에서는 이름 순으로 정렬
-    const cleanNameA = getCleanName(a.name);
-    const cleanNameB = getCleanName(b.name);
-    return cleanNameA.localeCompare(cleanNameB);
-  };
-
-  // 대여 가능 상태 체크 (다양한 표기 허용)
-  const isAvailableStatus = (status) => {
-    if (!status) return false;
-    const normalizedStatus = status.toString().trim().toLowerCase().replace(/\s+/g, '');
-    // '대여 가능', '대여가능', '대여  가능', '반납완료', '반납 완료' 등 모두 허용
-    return normalizedStatus === '대여가능' || normalizedStatus === '반납완료';
-  };
 
   // 장비 데이터 처리 헬퍼 함수 (캐시와 서버 데이터 공통 로직)
   const processEquipmentData = useCallback((allEquipmentFromSheet, userName) => {
@@ -856,7 +859,7 @@ const MainPage = ({ user, onLogout }) => {
     // console.log(`📋 장비 필터링: 전체 ${sortedAllEquipment.length}건 → 표시 ${initialFiltered.length}건 (showInUseEquipment: ${showInUseEquipment})`);
     setAvailableEquipments(initialFiltered);
     setFilteredEquipments(initialFiltered);
-  }, [showInUseEquipment, sortEquipment]);
+  }, [showInUseEquipment]);
 
   useEffect(() => {
     const fetchAllCsvData = async () => {
@@ -1718,7 +1721,7 @@ const MainPage = ({ user, onLogout }) => {
 
         try {
           // 로딩 표시
-          const loadingMessage = alert('파일을 업로드하는 중입니다. 잠시만 기다려주세요...');
+          alert('파일을 업로드하는 중입니다. 잠시만 기다려주세요...');
 
           // 파일 업로드
           const result = await uploadFile(file, newFileName);
@@ -1776,9 +1779,6 @@ const MainPage = ({ user, onLogout }) => {
     });
   };
 
-  const handleRemoveEquipment = (equipmentId) => {
-    setSelectedEquipments(prev => prev.filter(eq => eq.id !== equipmentId));
-  };
 
 
   const handleMultipleNewDemo = (returnDate) => {
@@ -1918,7 +1918,6 @@ const MainPage = ({ user, onLogout }) => {
     console.log('[useEffect] Setting up event listeners for bottom area');
 
     let touchStartY = 0;
-    let touchStartTime = 0;
 
     const handleBottomScroll = () => {
       const scrollTop = bottomArea.scrollTop;
@@ -1985,7 +1984,6 @@ const MainPage = ({ user, onLogout }) => {
     // 터치 이벤트 - 스와이프 감지
     const handleTouchStart = (e) => {
       touchStartY = e.touches[0].clientY;
-      touchStartTime = Date.now();
       isProcessingRef.current = false;
       stateChangedRef.current = false;
       console.log(`[Touch Start] Y: ${touchStartY}, State: ${applicationFormState}`);
