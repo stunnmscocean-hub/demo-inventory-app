@@ -1,0 +1,1680 @@
+<!DOCTYPE html>
+<html class="light" lang="ko">
+
+<head>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>재고 조회 시스템</title>
+    <link rel="icon" type="image/png" sizes="96x96" href="/favicon-96x96.png" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-icon-180x180.png" />
+    <link href="https://fonts.googleapis.com" rel="preconnect" />
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+        rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1337ec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#101322",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+    <style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+
+        .hide-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        details>summary {
+            list-style: none;
+        }
+
+        details>summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .break-words {
+            word-break: break-word;
+            overflow-wrap: break-word;
+            white-space: normal;
+        }
+
+        /* 모바일에서도 품명이 완전히 표시되도록 */
+        @media (max-width: 640px) {
+            .break-words {
+                word-break: break-word;
+                overflow-wrap: break-word;
+                white-space: normal;
+                hyphens: auto;
+            }
+
+            /* 재고 숫자 칸 너비 고정 (모바일에서도 동일) */
+            .min-w-\[45px\] {
+                min-width: 45px !important;
+            }
+
+            .min-w-\[50px\] {
+                min-width: 50px !important;
+            }
+        }
+    </style>
+</head>
+
+<body
+    class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-white transition-colors duration-200">
+    <div class="relative flex min-h-screen w-full flex-col pb-24">
+
+        <!-- Header -->
+        <header id="mainHeader"
+            class="sticky top-0 z-50 flex flex-col gap-3 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md p-4 pb-4 border-b border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out">
+            <!-- 업데이트 시간 (맨 위) -->
+            <div id="headerTopSection"
+                class="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 transition-opacity duration-300">
+                <span class="font-medium">업데이트: <span id="headerUpdateTime" class="font-mono">로딩중...</span></span>
+                <div class="flex items-center gap-2">
+                    <a href="/logout"
+                        class="flex items-center gap-1 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-600 dark:text-slate-300">
+                        <span class="material-symbols-outlined text-sm">logout</span>
+                        <span class="font-medium">로그아웃</span>
+                    </a>
+                    <button onclick="toggleDarkMode()"
+                        class="flex size-8 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-900 dark:text-white">
+                        <span class="material-symbols-outlined text-base">brightness_6</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 메인 헤더 -->
+            <div id="headerMainSection" class="flex items-center justify-between gap-2 transition-opacity duration-300">
+                <!-- <button onclick="showVerificationModal()" class="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors flex-shrink-0" id="verificationBadge">
+            <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">verified</span>
+            <span class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">검증완료</span>
+        </button> -->
+                <h1 class="text-lg font-bold leading-tight tracking-tight text-center flex-1">NSS 재고 조회시스템</h1>
+                <!-- <button onclick="fetchFromERP()" class="px-3 py-1.5 rounded-lg bg-primary hover:bg-primary/90 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 flex-shrink-0" id="refreshButton">
+            <span class="material-symbols-outlined text-sm" id="refreshIcon">refresh</span>
+            <span>데이터 최신화</span>
+        </button> -->
+            </div>
+
+            <!-- 검증 정보 (모바일에서도 보이도록) -->
+            <!-- <div id="headerAuthSection" class="flex items-center gap-1.5 px-2 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 overflow-x-auto transition-opacity duration-300">
+        <div class="flex items-center gap-1 text-xs whitespace-nowrap">
+            <span class="text-slate-600 dark:text-slate-400">BizID</span>
+            <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-sm">check_circle</span>
+        </div>
+        <div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>
+        <div class="flex items-center gap-1 text-xs whitespace-nowrap">
+            <span class="text-slate-600 dark:text-slate-400">UserVersion</span>
+            <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-sm">check_circle</span>
+        </div>
+        <div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>
+        <div class="flex items-center gap-1 text-xs whitespace-nowrap">
+            <span class="text-slate-600 dark:text-slate-400">P_USER_NM</span>
+            <span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-sm">check_circle</span>
+        </div>
+        <div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>
+        <div class="text-xs font-mono text-slate-700 dark:text-slate-300 whitespace-nowrap" id="headerTime">-</div>
+    </div> -->
+
+            <!-- 대분류명 필터 (버튼형) -->
+            <div
+                class="px-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-opacity duration-300">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-600 dark:text-slate-400">대분류 필터 (<span
+                            id="selectedCategoryCount">0</span>개 선택)</span>
+                    <button onclick="deselectAllCategories()"
+                        class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-medium transition-colors">전체
+                        해제</button>
+                </div>
+                <div class="flex flex-wrap gap-1.5" id="categoryFilterContainer">
+                    <!-- 버튼들이 여기에 동적으로 추가됨 -->
+                </div>
+            </div>
+
+            <!-- 창고명 필터 (버튼형) - NEW -->
+            <div
+                class="px-2 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-opacity duration-300">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-xs font-medium text-slate-600 dark:text-slate-400">창고 필터 (<span
+                            id="selectedWarehouseCount">0</span>개 선택)</span>
+                    <div class="flex gap-2">
+                        <button onclick="selectAllWarehouses()"
+                            class="text-xs px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-medium transition-colors">전체
+                            선택</button>
+                        <button onclick="deselectAllWarehouses()"
+                            class="text-xs px-2 py-0.5 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 font-medium transition-colors">전체
+                            해제</button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap gap-1.5" id="warehouseFilterContainer">
+                    <!-- 버튼들이 여기에 동적으로 추가됨 -->
+                </div>
+            </div>
+
+        </header>
+
+        <!-- 검색창 (별도 sticky - 항상 표시) -->
+        <div id="headerSearchSection"
+            class="sticky top-0 z-40 p-4 pb-4 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 transition-opacity duration-300">
+            <div class="relative w-full">
+                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+                    <span class="material-symbols-outlined text-slate-400">search</span>
+                </div>
+                <input id="searchInput"
+                    class="block w-full rounded-xl border-0 bg-white dark:bg-slate-800 py-3 pl-10 pr-4 text-slate-900 dark:text-white ring-1 ring-inset ring-slate-200 dark:ring-slate-700 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 shadow-sm"
+                    placeholder="상품명, 모델명 또는 SKU 검색..." type="text" />
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <main class="flex flex-col gap-4 p-4">
+            <!-- Stats Section -->
+            <section class="grid grid-cols-2 gap-3">
+                <div class="rounded-xl bg-primary p-4 text-white shadow-lg shadow-primary/20">
+                    <div class="flex items-center gap-2 mb-2 opacity-80">
+                        <span class="material-symbols-outlined text-xl">inventory_2</span>
+                        <span class="text-xs font-semibold uppercase tracking-wider">총 상품</span>
+                    </div>
+                    <p class="text-3xl font-bold" id="totalProducts">0</p>
+                    <p class="text-xs mt-1 opacity-70" id="totalCategories">10개 카테고리</p>
+                </div>
+                <button onclick="showLowStockModal()"
+                    class="rounded-xl bg-white dark:bg-slate-800 p-4 border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition-shadow text-left w-full">
+                    <div class="flex items-center gap-2 mb-2 text-orange-600 dark:text-orange-400">
+                        <span class="material-symbols-outlined text-xl">warning</span>
+                        <span class="text-xs font-semibold uppercase tracking-wider">재고 부족</span>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white" id="lowStockCount">0</p>
+                    <p class="text-xs mt-1 text-slate-500 dark:text-slate-400">클릭하여 상세보기</p>
+                </button>
+                <div
+                    class="rounded-xl bg-white dark:bg-slate-800 p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center gap-2 mb-2 text-emerald-600 dark:text-emerald-400">
+                        <span class="material-symbols-outlined text-xl">check_circle</span>
+                        <span class="text-xs font-semibold uppercase tracking-wider">총 재고</span>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white" id="totalStock">0</p>
+                    <p class="text-xs mt-1 text-slate-500 dark:text-slate-400" id="lastUpdate">로딩중...</p>
+                </div>
+                <div
+                    class="rounded-xl bg-white dark:bg-slate-800 p-4 border border-slate-200 dark:border-slate-700 shadow-sm">
+                    <div class="flex items-center gap-2 mb-2 text-blue-600 dark:text-blue-400">
+                        <span class="material-symbols-outlined text-xl">package_2</span>
+                        <span class="text-xs font-semibold uppercase tracking-wider">가용 재고</span>
+                    </div>
+                    <p class="text-3xl font-bold text-slate-900 dark:text-white" id="availableStock">0</p>
+                    <p class="text-xs mt-1 text-slate-500 dark:text-slate-400" id="reservedStock">예약: 0</p>
+                </div>
+            </section>
+
+            <!-- 고정된 항목 -->
+            <div id="pinnedSection" class="flex flex-col gap-3 hidden">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">고정된
+                        항목</h2>
+                    <button onclick="clearAllPinned()"
+                        class="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300">전체
+                        해제</button>
+                </div>
+                <div id="pinnedContainer" class="space-y-2"></div>
+            </div>
+
+            <!-- Categories -->
+            <div class="flex flex-col gap-3">
+                <h2 class="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider ml-1">SKU 카테고리
+                </h2>
+                <div id="categoriesContainer"></div>
+            </div>
+        </main>
+
+        <!-- Verification Modal -->
+        <div id="verificationModal" onclick="closeVerificationModal()"
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+            <div onclick="event.stopPropagation()"
+                class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                <div
+                    class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20">
+                    <div class="flex items-center gap-2">
+                        <span
+                            class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-2xl">shield_with_heart</span>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white">데이터 검증 정보</h2>
+                    </div>
+                    <button onclick="closeVerificationModal()"
+                        class="flex size-8 items-center justify-center rounded-full hover:bg-white/50 dark:hover:bg-slate-700 transition-colors">
+                        <span class="material-symbols-outlined text-slate-500">close</span>
+                    </button>
+                </div>
+                <div class="p-4 space-y-3">
+                    <!-- 타임스탬프 -->
+                    <div
+                        class="bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span
+                                class="material-symbols-outlined text-blue-600 dark:text-blue-400 text-lg">schedule</span>
+                            <h3 class="font-semibold text-slate-900 dark:text-white text-sm">데이터 처리 시간</h3>
+                        </div>
+                        <div class="space-y-1 text-sm">
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-600 dark:text-slate-400">요청 시점:</span>
+                                <span class="font-mono font-medium text-slate-900 dark:text-white"
+                                    id="verifyStartTime">-</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-slate-600 dark:text-slate-400">응답 시점:</span>
+                                <span class="font-mono font-medium text-slate-900 dark:text-white"
+                                    id="verifyEndTime">-</span>
+                            </div>
+                            <div
+                                class="flex justify-between items-center pt-1 border-t border-slate-200 dark:border-slate-700">
+                                <span class="text-slate-600 dark:text-slate-400">처리 시간:</span>
+                                <span class="font-semibold text-emerald-600 dark:text-emerald-400"
+                                    id="verifyDuration">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 인증 파라미터 -->
+                    <div
+                        class="bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span
+                                class="material-symbols-outlined text-purple-600 dark:text-purple-400 text-lg">verified_user</span>
+                            <h3 class="font-semibold text-slate-900 dark:text-white text-sm">인증 파라미터</h3>
+                        </div>
+                        <div class="space-y-1.5 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">BizID</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-slate-700 dark:text-slate-300"
+                                        id="verifyBizID">-</span>
+                                    <span
+                                        class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">check_circle</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">UserVersion</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-slate-700 dark:text-slate-300"
+                                        id="verifyUserVersion">-</span>
+                                    <span
+                                        class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">check_circle</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">P_USER_NM</span>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-mono text-xs text-slate-700 dark:text-slate-300"
+                                        id="verifyUserNM">-</span>
+                                    <span
+                                        class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">check_circle</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 서버 응답 -->
+                    <div
+                        class="bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span
+                                class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">cloud_done</span>
+                            <h3 class="font-semibold text-slate-900 dark:text-white text-sm">서버 응답</h3>
+                        </div>
+                        <div class="space-y-1.5 text-sm">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">IsError</span>
+                                <span class="font-semibold text-emerald-600 dark:text-emerald-400"
+                                    id="verifyIsError">false</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">Message</span>
+                                <span class="font-semibold text-emerald-600 dark:text-emerald-400"
+                                    id="verifyMessage">OK</span>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">Protocol</span>
+                                <span
+                                    class="font-mono text-xs text-slate-700 dark:text-slate-300">PIV_STCK_SUM_LIST0</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 보안 채널 -->
+                    <div
+                        class="bg-slate-50 dark:bg-slate-900/40 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                        <div class="flex items-center gap-2 mb-2">
+                            <span
+                                class="material-symbols-outlined text-orange-600 dark:text-orange-400 text-lg">security</span>
+                            <h3 class="font-semibold text-slate-900 dark:text-white text-sm">보안 채널</h3>
+                        </div>
+                        <div class="text-sm">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-600 dark:text-slate-400">Host</span>
+                                <span
+                                    class="font-mono text-xs text-slate-700 dark:text-slate-300">do3.dwcts.co.kr</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div
+                        class="p-3 rounded-lg bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 border border-emerald-200 dark:border-emerald-800">
+                        <div class="flex items-start gap-2">
+                            <span
+                                class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg flex-shrink-0">shield_with_heart</span>
+                            <p class="text-xs text-emerald-800 dark:text-emerald-300 font-medium leading-relaxed">
+                                이 데이터는 두드림 ERP 서버에서 실시간으로 생성된 검증된 원본 데이터입니다.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Low Stock Modal -->
+        <div id="lowStockModal" onclick="closeLowStockModal()"
+            class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] hidden items-center justify-center p-4">
+            <div onclick="event.stopPropagation()"
+                class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+                <div class="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <span class="material-symbols-outlined text-orange-600 dark:text-orange-400">warning</span>
+                        <h2 class="text-lg font-bold text-slate-900 dark:text-white">재고 부족 항목</h2>
+                    </div>
+                    <button onclick="closeLowStockModal()"
+                        class="flex size-8 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">
+                        <span class="material-symbols-outlined text-slate-500">close</span>
+                    </button>
+                </div>
+                <div id="lowStockContent" class="overflow-y-auto flex-1 p-4"></div>
+            </div>
+        </div>
+
+        <!-- Bottom Navigation -->
+        <div
+            class="fixed bottom-0 left-0 right-0 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 pb-safe shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+            <div class="grid grid-cols-4 h-16">
+                <button class="flex flex-col items-center justify-center gap-1 text-primary">
+                    <span class="material-symbols-outlined text-2xl">dashboard</span>
+                    <span class="text-[10px] font-medium">재고현황</span>
+                </button>
+                <button onclick="openAllCategories()"
+                    class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                    <span class="material-symbols-outlined text-2xl">expand_all</span>
+                    <span class="text-[10px] font-medium">전체펼치기</span>
+                </button>
+                <button onclick="closeAllCategories()"
+                    class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                    <span class="material-symbols-outlined text-2xl">collapse_all</span>
+                    <span class="text-[10px] font-medium">전체접기</span>
+                </button>
+                <button onclick="toggleDarkMode()"
+                    class="flex flex-col items-center justify-center gap-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+                    <span class="material-symbols-outlined text-2xl">dark_mode</span>
+                    <span class="text-[10px] font-medium">테마</span>
+                </button>
+            </div>
+            <div class="h-6 w-full bg-white dark:bg-slate-900"></div>
+        </div>
+
+    </div>
+
+    <script>
+        // API URL (상대 경로 사용 - 현재 서버)
+        const API_BASE = window.location.origin;
+        let allProducts = [];
+        let pinnedProducts = new Set(); // 고정된 제품명 저장
+        let selectedCategories = new Set(); // 선택된 대분류명들 (여러 개 가능)
+        let selectedWarehouses = new Set(); // 선택된 창고명들 (NEW)
+        let availableWarehouses = new Set(); // 데이터에서 발견된 모든 창고명 (NEW)
+
+        let verificationData = {
+            isError: false,
+            message: 'OK',
+            startTime: null,
+            endTime: null,
+            bizID: null,
+            userVersion: null,
+            userNM: null
+        };
+
+        // [NEW] localStorage에서 선택된 창고명 로드
+        function loadSelectedWarehouses() {
+            const saved = localStorage.getItem('selectedWarehouses');
+            if (saved) {
+                try {
+                    selectedWarehouses = new Set(JSON.parse(saved));
+                } catch (e) {
+                    selectedWarehouses = new Set();
+                }
+            }
+        }
+
+        // [NEW] localStorage에 선택된 창고명 저장
+        function saveSelectedWarehouses() {
+            localStorage.setItem('selectedWarehouses', JSON.stringify(Array.from(selectedWarehouses)));
+        }
+
+        // [NEW] 유효 재고 계산 (선택된 창고 기준)
+        function calculateEffectiveStock(product) {
+            // 상품에 창고 정보가 없으면 (구버전 데이터 등) 원본 그대로 반환
+            if (!product.warehouses) {
+                return {
+                    total: product.total_stock,
+                    reserved: product.reserved_stock,
+                    available: product.available_stock
+                };
+            }
+
+            // 선택된 창고가 없으면 전체 창고 재고 합산
+            if (selectedWarehouses.size === 0) {
+                let total = 0;
+                let reserved = 0;
+                let available = 0;
+                
+                // 모든 창고의 재고 합산
+                Object.keys(product.warehouses).forEach(wh => {
+                    if (product.warehouses[wh]) {
+                        total += product.warehouses[wh].total;
+                        reserved += product.warehouses[wh].reserved;
+                        available += product.warehouses[wh].available;
+                    }
+                });
+                
+                return { total, reserved, available };
+            }
+
+            let total = 0;
+            let reserved = 0;
+            let available = 0;
+
+            // 선택된 창고만 합산
+            selectedWarehouses.forEach(wh => {
+                if (product.warehouses[wh]) {
+                    total += product.warehouses[wh].total;
+                    reserved += product.warehouses[wh].reserved;
+                    available += product.warehouses[wh].available;
+                }
+            });
+
+            return { total, reserved, available };
+        }
+
+        // [NEW] 창고 필터 UI 업데이트
+        function updateWarehouseFilter() {
+            const container = document.getElementById('warehouseFilterContainer');
+            availableWarehouses.clear();
+
+            // 모든 제품에서 발견된 창고명 수집
+            allProducts.forEach(p => {
+                if (p.warehouses) {
+                    Object.keys(p.warehouses).forEach(wh => availableWarehouses.add(wh));
+                }
+            });
+
+            // 정렬
+            const sortedWarehouses = Array.from(availableWarehouses).sort();
+
+            // 만약 초기 로드 시 선택된 창고가 없다면(첫 방문), 전체 선택으로 설정
+            if (selectedWarehouses.size === 0 && availableWarehouses.size > 0 && !localStorage.getItem('selectedWarehouses')) {
+                availableWarehouses.forEach(wh => selectedWarehouses.add(wh));
+                saveSelectedWarehouses();
+            }
+
+            container.innerHTML = '';
+
+            sortedWarehouses.forEach(wh => {
+                const isSelected = selectedWarehouses.has(wh);
+                const button = document.createElement('button');
+                button.className = `px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isSelected
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:border-blue-500 hover:text-blue-600'
+                    }`;
+                button.textContent = wh;
+                button.onclick = () => toggleWarehouseSelection(wh);
+                container.appendChild(button);
+            });
+
+            document.getElementById('selectedWarehouseCount').textContent = selectedWarehouses.size;
+        }
+
+        // [NEW] 창고 선택 토글
+        function toggleWarehouseSelection(wh) {
+            if (selectedWarehouses.has(wh)) {
+                selectedWarehouses.delete(wh);
+            } else {
+                selectedWarehouses.add(wh);
+            }
+            saveSelectedWarehouses();
+            updateWarehouseFilter();
+            updateStats(); // 통계 갱신
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        function selectAllWarehouses() {
+            availableWarehouses.forEach(wh => selectedWarehouses.add(wh));
+            saveSelectedWarehouses();
+            updateWarehouseFilter();
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        function deselectAllWarehouses() {
+            selectedWarehouses.clear();
+            saveSelectedWarehouses();
+            updateWarehouseFilter();
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        // 카테고리 정의 (중복 제거 및 올바른 분류)
+        const categories = {
+            '메인 컨퍼런싱 시스템': {
+                icon: 'video_camera_front',
+                color: 'blue',
+                products: ['Rally Bar-Graphite', 'Rally Bar White', 'Rally Bar Mini EU/AP Graphite', 'Rally Bar Mini White', 'Rally Bar Mini EU/AP Graphite_OB', 'Rally Plus', 'Rally System', 'Meet up2', 'Meet up', 'Meet Up', 'Meet Up_OB', 'Group', 'Roommate', 'Rally Bar Huddle-GRAPHITE', 'MeetUp + RoomMate + TAP IP', 'Rally Bar Mini + TAP IP', 'Rally Bar + TAP IP']
+            },
+            '카메라/비디오 솔루션': {
+                icon: 'videocam',
+                color: 'purple',
+                products: ['PTZ Pro2 Camera', 'Rally Camera', 'Webcam C930e', 'Logitech Webcam C925e', 'Logitech Webcam Brio', 'Logitech Webcam Brio-BOX', 'Logitech Reach Content Camera, Clamp Mount', 'Logitech Reach Content Camera, Base Mount', 'Scribe', 'Scribe_OB', 'Sight White', 'Sight Graphite', 'Sight Graphite_OB']
+            },
+            '마이크 및 음성 솔루션': {
+                icon: 'mic',
+                color: 'orange',
+                products: ['Rally Mic Pod Graphite', 'Rally Mic Pod White', 'Rally Mic Pod Mount', 'Rally Mic Pod Extension Cable EU/AP White', 'Rally Mic Pod Cat Coupler', 'Rally Mic Pod Cat Coupler_OB', 'Mic Pod Pendant Mount', 'Mic Pod Pendant Mount_OB', 'Mic Pod Mount White', 'Group Expansion Mic', 'Expansion Mic for MeetUp', 'Expansion Mic for MeetUp_OB', 'Rally Speaker, Graphite']
+            },
+            'TAP 시리즈': {
+                icon: 'touch_app',
+                color: 'green',
+                products: ['TAP IP Graphite', 'TAP IP Off White', 'TAP Scheduler', 'TAP Scheduler Off White', 'Tap Wall Mount', 'Tap Table Mount', 'Tap Scheduler Angle Mount-Graphite', 'Tap Scheduler Angle Mount (White)', 'Tap Riser Mount', 'Tap with USB Kit', 'Tap Graphite 25m']
+            },
+            '브라켓 & 마운팅': {
+                icon: 'construction',
+                color: 'slate',
+                products: ['TV Mount for Video Bars', 'TV Mount for MeetUp', 'TV Mount XL for MeetUp', 'Rally Mounting Kit', 'Wall Mount for Video Bars', 'Wall Mount for Extension Kit', 'Rally Table Hub', 'Logitech Compute Mount', 'Rally Camera Extension Kit', 'Scribe Glass Mount', 'Scribe Polarizer', 'Rally Board 65-White', 'Rally Board 65-Black', 'Rally Board 65 Cart']
+            },
+            '케이블 & 연결': {
+                icon: 'cable',
+                color: 'indigo',
+                products: ['5m USB Alt Model Cable Accessory for Meetup 2', 'Strong USB 3.1 Cable - 10m', 'Meetup 10m Mic Cable,Graphite', 'Logitech Extend Cable', 'Group 15M Extender Cable', 'Group 10M MINI-DIN CABLE', 'Spare parts; USB-A to USB-C cable 2.2m', 'Spare parts; MeetUp USB Cable', 'SWYTCH', 'SWYTCH_OB', 'Swytch Y Cable', 'Riachi - Cat5E Kit Graphite']
+            },
+            '도킹 & 컴퓨팅': {
+                icon: 'computer',
+                color: 'cyan',
+                products: ['Logi Dock for UC Graphite', 'Logi Dock for UC White', 'Logi Dock for UC Graphite-Special', 'Logi Dock for MS Teams Graphite', 'Logi Dock Flex', 'Chromebox for Google 4세대', 'Chromebox for Google 4세대_OB', 'ThinkSmart SP Core L W11IOT', 'ThinkSmart SP Core Gen 2 Logi Z W11IOT', 'MX Anywhere 3S 블랙']
+            },
+            '원격제어 & 인터페이스': {
+                icon: 'settings_remote',
+                color: 'pink',
+                products: ['Rally Bar Remote Control ,GRAPHITE', 'Rally Bar Remote Contol - Off White', 'MeetUp Remote Control', 'Rally Remote Control', 'Share Button for Logitech Scribe in White', 'Logitech Screen Share', 'Logitech R500s Graphite']
+            },
+            '허브 & 어댑터': {
+                icon: 'hub',
+                color: 'yellow',
+                products: ['Rally Pod Hub, Graphite', 'Rally Pod Hub, Graphite_OB', 'Rally Display Hub', 'Rally Ultra HD ConferenceCam Adaptor 48V', 'Rally Ultra HD ConferenceCam Adaptor 19V', 'Rally Camera Power Splitter', 'Power Adaptor (Spare)', 'PoE Injector with plug set (OFF WHITE)']
+            },
+            '번들 & 기타': {
+                icon: 'category',
+                color: 'gray',
+                products: ['Raichu - TAP, Display, Flare', 'Rally Streamline Kit', 'Logitech ConferenceCam Connect', 'Logitech ConferenceCam Connect-BOX', 'BCC950 ConferenceCam', 'BCC950 ConferenceCam-BOX', 'Logitech Zone Wired', 'Damage Box_Rally Bar Mini EU/AP Graphite']
+            }
+        };
+
+        // 다크모드 토글
+        function toggleDarkMode() {
+            document.documentElement.classList.toggle('dark');
+            localStorage.setItem('darkMode', document.documentElement.classList.contains('dark'));
+        }
+
+        // 다크모드 초기화
+        if (localStorage.getItem('darkMode') === 'true') {
+            document.documentElement.classList.add('dark');
+        }
+
+        // UTC 시간을 한국 시간(KST)으로 변환
+        function toKST(utcDateString) {
+            const dt = new Date(utcDateString);
+            // UTC 시간에 9시간 추가 (KST = UTC + 9)
+            const kstTime = new Date(dt.getTime() + (9 * 60 * 60 * 1000));
+            return kstTime;
+        }
+
+        // 날짜를 YYYY-MM-DD HH:MM:SS 형식으로 포맷
+        function formatDateTime(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return year + '-' + month + '-' + day + ' ' + hours + ':' + minutes + ':' + seconds;
+        }
+
+        // 시간만 HH:MM:SS 형식으로 포맷
+        function formatTime(date) {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return hours + ':' + minutes + ':' + seconds;
+        }
+
+        // 헤더 시간 업데이트
+        function updateHeaderTime() {
+            const timeEl = document.getElementById('headerTime');
+            const updateTimeEl = document.getElementById('headerUpdateTime');
+
+            // lastUpdate를 사용 (데이터를 불러온 시각)
+            const lastUpdateEl = document.getElementById('lastUpdate');
+            if (lastUpdateEl && lastUpdateEl.textContent !== '로딩중...') {
+                const updateText = lastUpdateEl.textContent;
+                // "업데이트: YYYY-MM-DD HH:MM:SS" 형식에서 시간 추출
+                const match = updateText.match(/(\d{4}-\d{2}-\d{2} (\d{2}:\d{2}:\d{2}))/);
+                if (match) {
+                    const fullTime = match[1];
+                    const timeOnly = match[2];
+
+                    if (updateTimeEl) updateTimeEl.textContent = fullTime;
+                    if (timeEl) timeEl.textContent = timeOnly;
+                    return;
+                }
+            }
+
+            // fallback: verificationData 사용 (ERP 원본 데이터)
+            if (verificationData.startTime) {
+                const kstDate = toKST(verificationData.startTime);
+                const timeStr = formatTime(kstDate);
+                if (timeEl) timeEl.textContent = timeStr;
+
+                // 업데이트 시간 (맨 위)
+                const dateStr = formatDateTime(kstDate);
+                if (updateTimeEl) updateTimeEl.textContent = dateStr;
+            } else {
+                if (timeEl) timeEl.textContent = '-';
+                if (updateTimeEl) updateTimeEl.textContent = '로딩중...';
+            }
+        }
+
+        // 헤더 인증 정보 업데이트 (실제로는 이미 HTML에 표시되어 있지만, 값이 없을 때 숨기기 위해)
+        function updateHeaderAuthInfo() {
+            // 헤더의 인증 정보는 이미 HTML에 고정되어 있으므로
+            // 필요시 여기서 동적으로 업데이트할 수 있습니다
+            // 현재는 JSON에서 읽어온 값이 verificationData에 저장되어 있음
+        }
+
+        // JSON 파일 검증 (공통 함수)
+        function verifyJSONData(data) {
+            const checks = {
+                hasStartTime: !!data.StartTime,
+                hasEndTime: !!data.EndTime,
+                hasIsError: data.IsError !== undefined,
+                hasMessage: !!data.Message,
+                hasRequestInfo: !!data.RequestInfo,
+                hasBizID: !!(data.RequestInfo && data.RequestInfo.BizID),
+                hasUserVersion: !!(data.RequestInfo && data.RequestInfo.UserVersion),
+                hasUserNM: !!(data.RequestInfo && data.RequestInfo.P_USER_NM)
+            };
+
+            const allValid = Object.values(checks).every(function (v) { return v; });
+
+            if (!allValid) {
+                console.warn('JSON 검증 실패:', checks);
+            }
+
+            return { valid: allValid, checks: checks };
+        }
+
+        // 데이터 로드
+        function loadStock() {
+            fetch(API_BASE + '/api/stock')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    allProducts = data.products || [];
+                    const lastUpdate = data.last_update || 'N/A';
+
+                    // 디버깅: 처음 5개 제품의 category 확인
+                    console.log('[데이터 로드] 전체 제품 수:', allProducts.length);
+
+                    // category 통계
+                    const categoryStats = {};
+                    const emptyCategories = [];
+                    allProducts.forEach(function (p) {
+                        const cat = normalizeCategory(p);
+                        categoryStats[cat] = (categoryStats[cat] || 0) + 1;
+                        if (!p.category || p.category === '') {
+                            emptyCategories.push(p.name);
+                        }
+                    });
+                    console.log('[대분류 통계]:', categoryStats);
+                    if (emptyCategories.length > 0) {
+                        console.log('[빈 대분류 제품] ' + emptyCategories.length + '개:');
+                        emptyCategories.slice(0, 5).forEach(function (name) {
+                            console.log('  -', name);
+                        });
+                        if (emptyCategories.length > 5) {
+                            console.log('  ... 외 ' + (emptyCategories.length - 5) + '개');
+                        }
+                    }
+
+                    if (allProducts.length > 0) {
+                        console.log('[데이터 샘플] 처음 5개 제품:', allProducts.slice(0, 5).map(function (p) {
+                            return {
+                                name: p.name,
+                                category: p.category,
+                                categoryType: typeof p.category,
+                                normalized: normalizeCategory(p)
+                            };
+                        }));
+                    }
+
+                    // 서버에서 이미 한국 시간(KST)으로 보내므로 변환 불필요
+                    // 그대로 사용
+                    document.getElementById('lastUpdate').textContent = '업데이트: ' + lastUpdate;
+
+                    // 헤더 시간 업데이트 (데이터를 불러온 시각과 동일하게)
+                    updateHeaderTime();
+
+                    loadSelectedCategories();
+                    loadSelectedWarehouses(); // [NEW] 창고 필터 설정 로드
+
+                    updateCategoryFilter(); // 대분류명 필터 업데이트
+                    updateWarehouseFilter(); // [NEW] 창고 필터 버튼 렌더링
+
+                    updateStats();
+                    renderPinnedSection();
+                    renderCategories();
+                    updateVerificationBadge();
+                })
+                .catch(function (e) {
+                    console.error('Error:', e);
+                });
+
+            // 검증 정보 로드 (JSON 원본) - 캐시 방지를 위해 타임스탬프 추가
+            fetch('stock_data.json?' + new Date().getTime())
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    // JSON 검증
+                    const verification = verifyJSONData(data);
+
+                    if (verification.valid) {
+                        verificationData.isError = data.IsError !== undefined ? data.IsError : false;
+                        verificationData.message = data.Message || 'OK';
+                        verificationData.startTime = data.StartTime || null;
+                        verificationData.endTime = data.EndTime || null;
+
+                        // 요청 정보 추출
+                        if (data.RequestInfo) {
+                            verificationData.bizID = data.RequestInfo.BizID || null;
+                            verificationData.userVersion = data.RequestInfo.UserVersion || null;
+                            verificationData.userNM = data.RequestInfo.P_USER_NM || null;
+                        }
+
+                        updateVerificationBadge();
+                        updateHeaderTime();
+                        updateHeaderAuthInfo();
+
+                        console.log('✅ JSON 검증 완료 (loadStock)');
+                    } else {
+                        console.warn('⚠️ JSON 검증 실패:', verification.checks);
+                    }
+                })
+                .catch(function (e) {
+                    console.log('검증 정보 로드 실패 (정상 동작 가능):', e);
+                });
+        }
+
+        // localStorage에서 선택된 대분류명 로드
+        function loadSelectedCategories() {
+            const saved = localStorage.getItem('selectedCategories');
+            if (saved) {
+                try {
+                    selectedCategories = new Set(JSON.parse(saved));
+                } catch (e) {
+                    selectedCategories = new Set();
+                }
+            }
+        }
+
+        // localStorage에 선택된 대분류명 저장
+        function saveSelectedCategories() {
+            localStorage.setItem('selectedCategories', JSON.stringify(Array.from(selectedCategories)));
+        }
+
+        // 대분류명 필터 옵션 업데이트 (체크박스)
+        function updateCategoryFilter() {
+            const container = document.getElementById('categoryFilterContainer');
+            const categories = new Set();
+
+            // 모든 제품의 대분류명 수집
+            allProducts.forEach(function (p) {
+                const category = normalizeCategory(p);
+                categories.add(category);
+            });
+
+            console.log('[대분류] 수집된 대분류 목록:', Array.from(categories));
+
+            // 정렬 (SKU 미분류는 맨 아래)
+            const sortedCategories = Array.from(categories).sort(function (a, b) {
+                if (a === 'SKU 미분류') return 1;
+                if (b === 'SKU 미분류') return -1;
+                return a.localeCompare(b);
+            });
+
+            // 컨테이너 초기화
+            container.innerHTML = '';
+
+            // 버튼 생성
+            sortedCategories.forEach(function (cat) {
+                const isSelected = selectedCategories.has(cat);
+
+                const button = document.createElement('button');
+                button.className = 'px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ' +
+                    (isSelected
+                        ? 'bg-primary text-white shadow-sm'
+                        : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-600 hover:border-primary hover:text-primary dark:hover:border-primary dark:hover:text-primary');
+                button.textContent = cat;
+                button.onclick = function () {
+                    toggleCategorySelection(cat);
+                };
+
+                container.appendChild(button);
+            });
+
+            // 선택 개수 업데이트
+            updateSelectedCategoryCount();
+        }
+
+        // 대분류명 선택 토글
+        function toggleCategorySelection(category) {
+            if (selectedCategories.has(category)) {
+                selectedCategories.delete(category);
+            } else {
+                selectedCategories.add(category);
+            }
+
+            saveSelectedCategories();
+            updateCategoryFilter(); // 버튼 UI 업데이트
+            updateSelectedCategoryCount();
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        // 전체 선택
+        function selectAllCategories() {
+            const buttons = document.querySelectorAll('#categoryFilterContainer button');
+            buttons.forEach(function (btn) {
+                selectedCategories.add(btn.textContent);
+            });
+
+            saveSelectedCategories();
+            updateCategoryFilter(); // 버튼 UI 업데이트
+            updateSelectedCategoryCount();
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        // 전체 해제
+        function deselectAllCategories() {
+            selectedCategories.clear();
+            saveSelectedCategories();
+            updateCategoryFilter(); // 버튼 UI 업데이트
+            updateSelectedCategoryCount();
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        // 선택된 대분류 개수 업데이트
+        function updateSelectedCategoryCount() {
+            const countEl = document.getElementById('selectedCategoryCount');
+            if (countEl) {
+                countEl.textContent = selectedCategories.size;
+            }
+        }
+
+        // 제품의 대분류명을 정규화 (빈 값이면 "SKU 미분류")
+        function normalizeCategory(product) {
+            if (!product.category || product.category === '' || !product.category.trim()) {
+                return 'SKU 미분류';
+            }
+            return product.category.trim();
+        }
+
+        // 제품이 선택된 대분류에 속하는지 확인
+        function matchesSelectedCategories(product) {
+            if (selectedCategories.size === 0) return true; // 선택된 것이 없으면 전체 표시
+
+            const productCategory = normalizeCategory(product);
+            return selectedCategories.has(productCategory);
+        }
+
+        // 통계 업데이트
+        function updateStats() {
+            // 선택된 대분류가 없으면 0으로 표시
+            if (selectedCategories.size === 0) {
+                document.getElementById('totalProducts').textContent = '0';
+                document.getElementById('totalStock').textContent = '0';
+                document.getElementById('availableStock').textContent = '0';
+                document.getElementById('reservedStock').textContent = '예약: 0';
+                document.getElementById('lowStockCount').textContent = '0';
+                return;
+            }
+
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().replace(/\s+/g, '');
+            const filtered = allProducts.filter(function (p) {
+                // 상품명과 모델명 모두 검색
+                const productName = p.name.toLowerCase().replace(/\s+/g, '');
+                const modelName = (p.model_name || '').toLowerCase().replace(/\s+/g, '');
+                const matchesSearch = productName.indexOf(searchTerm) >= 0 || modelName.indexOf(searchTerm) >= 0;
+                const matchesCategory = matchesSelectedCategories(p);
+                return matchesSearch && matchesCategory;
+            });
+
+            let totalStock = 0, reservedStock = 0, availableStock = 0, lowStockCount = 0;
+
+            filtered.forEach(function (p) {
+                const stock = calculateEffectiveStock(p); // [NEW] 창고 필터 적용
+                totalStock += stock.total;
+                reservedStock += stock.reserved;
+                availableStock += stock.available;
+                if (stock.available < 10 && stock.available > 0) lowStockCount++;
+                if (stock.available === 0 && stock.total > 0) lowStockCount++;
+            });
+
+            document.getElementById('totalProducts').textContent = filtered.length.toLocaleString();
+            document.getElementById('totalStock').textContent = totalStock.toLocaleString();
+            document.getElementById('availableStock').textContent = availableStock.toLocaleString();
+            document.getElementById('reservedStock').textContent = '예약: ' + reservedStock.toLocaleString();
+            document.getElementById('lowStockCount').textContent = lowStockCount;
+        }
+
+        // 재고 부족 모달 표시
+        function showLowStockModal() {
+            const modal = document.getElementById('lowStockModal');
+            const content = document.getElementById('lowStockContent');
+
+            const lowStockProducts = allProducts.filter(function (p) {
+                const stock = calculateEffectiveStock(p); // [NEW] 창고 필터 적용
+                // 재고가 10개 미만이고 0보다 크거나, 재고가 0이고 총재고는 있는 경우(품절)
+                const matchesLowStock = (stock.available < 10 && stock.available > 0) || (stock.available === 0 && stock.total > 0);
+                const matchesCategory = matchesSelectedCategories(p);
+                return matchesLowStock && matchesCategory;
+            });
+
+            if (lowStockProducts.length === 0) {
+                content.innerHTML = '<div class="text-center text-slate-500 dark:text-slate-400 py-8">재고 부족 항목이 없습니다</div>';
+            } else {
+                // 카테고리별로 그룹화 (중복 방지)
+                let html = '<div class="space-y-4">';
+                const assignedProducts = new Set();
+
+                Object.keys(categories).forEach(function (catName) {
+                    const cat = categories[catName];
+                    const catLowStockProducts = lowStockProducts.filter(function (p) {
+                        // 이미 다른 카테고리에 할당된 제품은 제외
+                        if (assignedProducts.has(p.name)) return false;
+
+                        const matches = cat.products.some(function (cp) {
+                            return p.name.indexOf(cp) >= 0 || cp.indexOf(p.name) >= 0;
+                        });
+
+                        // 매칭되면 할당 목록에 추가
+                        if (matches) {
+                            assignedProducts.add(p.name);
+                            return true;
+                        }
+                        return false;
+                    });
+
+                    if (catLowStockProducts.length === 0) return;
+
+                    html += '<div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">';
+                    html += '<div class="bg-slate-50 dark:bg-slate-800/50 px-4 py-2 border-b border-slate-200 dark:border-slate-700">';
+                    html += '<div class="flex items-center gap-2">';
+                    html += '<div class="flex size-8 items-center justify-center rounded-lg bg-' + cat.color + '-100 dark:bg-' + cat.color + '-900/30 text-' + cat.color + '-600 dark:text-' + cat.color + '-400">';
+                    html += '<span class="material-symbols-outlined text-lg">' + cat.icon + '</span></div>';
+                    html += '<h3 class="font-bold text-slate-900 dark:text-white text-sm">' + catName + '</h3>';
+                    html += '<span class="text-xs text-slate-500 dark:text-slate-400">(' + catLowStockProducts.length + ')</span>';
+                    html += '</div></div>';
+
+                    html += '<div class="divide-y divide-slate-100 dark:divide-slate-700/50">';
+                    catLowStockProducts.forEach(function (p) {
+                        const stock = calculateEffectiveStock(p); // [NEW] 표시용 재고 계산
+                        const statusColor = stock.available === 0 ? 'text-red-600 dark:text-red-400' : 'text-yellow-600 dark:text-yellow-500';
+
+                        html += '<div class="py-2 px-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors">';
+                        html += '<div class="flex items-start justify-between gap-1.5">';
+                        html += '<div class="flex-1 min-w-0 pr-1">';
+                        html += '<p class="font-semibold text-slate-900 dark:text-white text-sm leading-tight break-words" style="word-break: break-word; white-space: normal;">' + p.name + '</p>';
+                        if (p.model_name) {
+                            html += '<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + p.model_name + '</p>';
+                        }
+                        html += '</div>';
+                        html += '<div class="flex items-center gap-1 flex-shrink-0">';
+                        html += '<div class="text-right min-w-[45px]">';
+                        html += '<span class="text-[10px] text-slate-500 dark:text-slate-400">총</span>';
+                        html += '<span class="block text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight">' + stock.total.toLocaleString() + '</span>';
+                        html += '</div>';
+                        html += '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>';
+                        html += '<div class="text-right min-w-[45px]">';
+                        html += '<span class="text-[10px] text-slate-500 dark:text-slate-400">예약</span>';
+                        html += '<span class="block text-xs font-bold text-orange-600 dark:text-orange-400 leading-tight">' + stock.reserved.toLocaleString() + '</span>';
+                        html += '</div>';
+                        html += '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>';
+                        html += '<div class="text-right min-w-[50px]">';
+                        html += '<span class="text-[10px] text-slate-500 dark:text-slate-400">가용</span>';
+                        html += '<span class="block text-sm font-bold ' + statusColor + ' leading-tight">' + stock.available.toLocaleString() + '</span>';
+                        html += '</div>';
+                        html += '</div>';
+                        html += '</div></div>';
+                    });
+                    html += '</div></div>';
+                });
+
+                html += '</div>';
+                content.innerHTML = html;
+            }
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // 재고 부족 모달 닫기
+        function closeLowStockModal() {
+            const modal = document.getElementById('lowStockModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // 검증 배지 업데이트
+        function updateVerificationBadge() {
+            const badge = document.getElementById('verificationBadge');
+            if (!badge) return;
+
+            if (verificationData.isError === false && verificationData.message === 'OK') {
+                badge.className = 'flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-colors';
+                badge.innerHTML = '<span class="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-lg">verified</span>' +
+                    '<span class="text-xs font-semibold text-emerald-700 dark:text-emerald-400">검증완료</span>';
+            } else {
+                badge.className = 'flex items-center gap-1 px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors';
+                badge.innerHTML = '<span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-lg">help</span>' +
+                    '<span class="text-xs font-semibold text-slate-700 dark:text-slate-400">검증중</span>';
+            }
+        }
+
+        // 검증 모달 표시
+        function showVerificationModal() {
+            const modal = document.getElementById('verificationModal');
+
+            // IsError & Message
+            document.getElementById('verifyIsError').textContent = String(verificationData.isError);
+            document.getElementById('verifyMessage').textContent = verificationData.message || 'OK';
+
+            // 시작 시간 (한국 시간으로 변환)
+            if (verificationData.startTime) {
+                const dtStartKST = toKST(verificationData.startTime);
+                const startStr = formatDateTime(dtStartKST);
+                document.getElementById('verifyStartTime').textContent = startStr;
+
+                // 종료 시간 (한국 시간으로 변환)
+                if (verificationData.endTime) {
+                    const dtEndKST = toKST(verificationData.endTime);
+                    const endStr = formatDateTime(dtEndKST);
+                    document.getElementById('verifyEndTime').textContent = endStr;
+
+                    // 처리 시간 계산 (원본 UTC 시간 사용)
+                    const dtStart = new Date(verificationData.startTime);
+                    const dtEnd = new Date(verificationData.endTime);
+                    const duration = (dtEnd - dtStart);
+                    document.getElementById('verifyDuration').textContent = duration + 'ms';
+                } else {
+                    document.getElementById('verifyEndTime').textContent = '-';
+                    document.getElementById('verifyDuration').textContent = '-';
+                }
+            } else {
+                document.getElementById('verifyStartTime').textContent = '데이터 로딩 중...';
+                document.getElementById('verifyEndTime').textContent = '-';
+                document.getElementById('verifyDuration').textContent = '-';
+            }
+
+            // 인증 파라미터 (JSON에서 읽어온 실제 요청 값)
+            document.getElementById('verifyBizID').textContent = verificationData.bizID || 'OCT';
+            document.getElementById('verifyUserVersion').textContent = verificationData.userVersion || '1.3.2022.1533';
+            document.getElementById('verifyUserNM').textContent = verificationData.userNM || '최진호';
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        // 검증 모달 닫기
+        function closeVerificationModal() {
+            const modal = document.getElementById('verificationModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // 핀 토글
+        function togglePin(productName) {
+            if (pinnedProducts.has(productName)) {
+                pinnedProducts.delete(productName);
+            } else {
+                pinnedProducts.add(productName);
+            }
+
+            // localStorage에 저장
+            localStorage.setItem('pinnedProducts', JSON.stringify(Array.from(pinnedProducts)));
+
+            renderPinnedSection();
+            renderCategories();
+        }
+
+        // 고정된 항목 섹션 렌더링
+        function renderPinnedSection() {
+            const pinnedSection = document.getElementById('pinnedSection');
+            const pinnedContainer = document.getElementById('pinnedContainer');
+
+            if (!pinnedSection || !pinnedContainer) return;
+
+            if (pinnedProducts.size === 0) {
+                pinnedSection.classList.add('hidden');
+                return;
+            }
+
+            pinnedSection.classList.remove('hidden');
+            pinnedContainer.innerHTML = '';
+
+            const pinnedItems = allProducts.filter(function (p) {
+                const matchesPinned = pinnedProducts.has(p.name);
+                const matchesCategory = matchesSelectedCategories(p);
+                return matchesPinned && matchesCategory;
+            });
+
+            pinnedItems.forEach(function (p) {
+                const stock = calculateEffectiveStock(p); // [NEW] 창고 필터 적용
+
+                const itemDiv = document.createElement('div');
+                itemDiv.className = 'py-2 px-3 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 border border-primary/20 dark:border-primary/30 hover:from-primary/15 hover:to-primary/10 transition-colors';
+
+                let modelNameHtml = '';
+                if (p.model_name) {
+                    modelNameHtml = '<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + p.model_name + '</p>';
+                }
+
+                itemDiv.innerHTML = '<div class="flex items-start justify-between gap-1.5">' +
+                    '<div class="flex-1 min-w-0 pr-1">' +
+                    '<p class="font-semibold text-slate-900 dark:text-white text-sm leading-tight break-words" style="word-break: break-word; white-space: normal;">' + p.name + '</p>' +
+                    modelNameHtml +
+                    '</div>' +
+                    '<div class="flex items-center gap-1 flex-shrink-0">' +
+                    '<div class="text-right min-w-[45px]">' +
+                    '<span class="text-[10px] text-slate-500 dark:text-slate-400">총</span>' +
+                    '<span class="block text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight">' + stock.total.toLocaleString() + '</span>' +
+                    '</div>' +
+                    '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                    '<div class="text-right min-w-[45px]">' +
+                    '<span class="text-[10px] text-slate-500 dark:text-slate-400">예약</span>' +
+                    '<span class="block text-xs font-bold text-orange-600 dark:text-orange-400 leading-tight">' + stock.reserved.toLocaleString() + '</span>' +
+                    '</div>' +
+                    '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                    '<div class="text-right min-w-[50px]">' +
+                    '<span class="text-[10px] text-slate-500 dark:text-slate-400">가용</span>' +
+                    '<span class="block text-sm font-bold text-emerald-600 dark:text-emerald-400 leading-tight">' + stock.available.toLocaleString() + '</span>' +
+                    '</div>' +
+                    '<button onclick="togglePin(\'' + p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\')" class="ml-1 flex items-center justify-center size-6 rounded-full hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors text-primary">' +
+                    '<span class="material-symbols-outlined text-base fill">push_pin</span>' +
+                    '</button>' +
+                    '</div>' +
+                    '</div>';
+                pinnedContainer.appendChild(itemDiv);
+            });
+        }
+
+        // 전체 고정 해제
+        function clearAllPinned() {
+            if (confirm('모든 고정을 해제하시겠습니까?')) {
+                pinnedProducts.clear();
+                localStorage.setItem('pinnedProducts', JSON.stringify([]));
+                renderPinnedSection();
+                renderCategories();
+            }
+        }
+
+        // localStorage에서 고정된 항목 로드
+        function loadPinnedProducts() {
+            const saved = localStorage.getItem('pinnedProducts');
+            if (saved) {
+                try {
+                    pinnedProducts = new Set(JSON.parse(saved));
+                } catch (e) {
+                    pinnedProducts = new Set();
+                }
+            }
+        }
+
+        // 카테고리 렌더링 (중복 방지)
+        function renderCategories() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().replace(/\s+/g, '');
+            const container = document.getElementById('categoriesContainer');
+            container.innerHTML = '';
+
+            // 선택된 대분류가 없으면 안내 메시지 표시
+            if (selectedCategories.size === 0) {
+                const emptyDiv = document.createElement('div');
+                emptyDiv.className = 'text-center py-12';
+                emptyDiv.innerHTML = '<div class="inline-flex flex-col items-center gap-3 px-6 py-8 rounded-xl bg-slate-100 dark:bg-slate-800 border-2 border-dashed border-slate-300 dark:border-slate-600">' +
+                    '<span class="material-symbols-outlined text-4xl text-slate-400">filter_alt</span>' +
+                    '<div>' +
+                    '<p class="text-base font-semibold text-slate-700 dark:text-slate-300 mb-1">대분류 필터를 선택해주세요</p>' +
+                    '<p class="text-sm text-slate-500 dark:text-slate-400">위의 대분류 버튼을 클릭하여 재고를 확인하세요</p>' +
+                    '</div>' +
+                    '</div>';
+                container.appendChild(emptyDiv);
+                return;
+            }
+
+            // 각 제품이 이미 할당되었는지 추적
+            const assignedProducts = new Set();
+
+            Object.keys(categories).forEach(function (catName) {
+                const cat = categories[catName];
+                const catProducts = allProducts.filter(function (p) {
+                    // 이미 다른 카테고리에 할당된 제품은 제외
+                    if (assignedProducts.has(p.name)) return false;
+
+                    const matchesCategory = cat.products.some(function (cp) {
+                        return p.name.indexOf(cp) >= 0 || cp.indexOf(p.name) >= 0;
+                    });
+                    // 상품명과 모델명 모두 검색
+                    const productName = p.name.toLowerCase().replace(/\s+/g, '');
+                    const modelName = (p.model_name || '').toLowerCase().replace(/\s+/g, '');
+                    const matchesSearch = productName.indexOf(searchTerm) >= 0 || modelName.indexOf(searchTerm) >= 0;
+                    const matchesCategoryFilter = matchesSelectedCategories(p);
+
+                    // 매칭되면 할당 목록에 추가
+                    if (matchesCategory && matchesSearch && matchesCategoryFilter) {
+                        assignedProducts.add(p.name);
+                        return true;
+                    }
+                    return false;
+                });
+
+                if (catProducts.length === 0) return;
+
+                // [NEW] 카테고리 전체 재고 계산 (필터창고 기준)
+                const totalAvail = catProducts.reduce(function (sum, p) {
+                    const stock = calculateEffectiveStock(p);
+                    return sum + stock.available;
+                }, 0);
+
+                const statusText = totalAvail > 50 ? 'Healthy Stock' : totalAvail > 20 ? 'Normal' : totalAvail > 0 ? 'Low Stock' : 'Critical';
+                const statusColor = totalAvail > 50 ? 'text-emerald-600 dark:text-emerald-400' : totalAvail > 20 ? 'text-slate-500 dark:text-slate-400' : totalAvail > 0 ? 'text-yellow-600 dark:text-yellow-500' : 'text-red-500 dark:text-red-400';
+
+                const detailsEl = document.createElement('details');
+                detailsEl.className = 'group rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden';
+                detailsEl.open = true;
+
+                detailsEl.innerHTML = '<summary class="flex items-center justify-between p-4 cursor-pointer select-none bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors">' +
+                    '<div class="flex items-center gap-3">' +
+                    '<div class="flex size-10 items-center justify-center rounded-lg bg-' + cat.color + '-100 dark:bg-' + cat.color + '-900/30 text-' + cat.color + '-600 dark:text-' + cat.color + '-400">' +
+                    '<span class="material-symbols-outlined">' + cat.icon + '</span></div>' +
+                    '<div><h3 class="font-bold text-slate-900 dark:text-white">' + catName + '</h3>' +
+                    '<div class="flex items-center gap-2 mt-0.5">' +
+                    '<span class="text-xs text-slate-500 dark:text-slate-400">' + catProducts.length + ' 제품</span>' +
+                    '<span class="size-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>' +
+                    '<span class="text-xs font-medium ' + statusColor + '">' + statusText + '</span></div></div></div>' +
+                    '<span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span></summary>';
+
+                const itemsDiv = document.createElement('div');
+                itemsDiv.className = 'divide-y divide-slate-100 dark:divide-slate-700/50 border-t border-slate-100 dark:border-slate-700/50';
+
+                catProducts.forEach(function (p) {
+                    const isPinned = pinnedProducts.has(p.name);
+                    const stock = calculateEffectiveStock(p); // [NEW] 개별 재고 계산
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'py-2 px-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors';
+
+                    let modelNameHtml = '';
+                    if (p.model_name) {
+                        modelNameHtml = '<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + p.model_name + '</p>';
+                    }
+
+                    itemDiv.innerHTML = '<div class="flex items-start justify-between gap-1.5">' +
+                        '<div class="flex-1 min-w-0 pr-1">' +
+                        '<p class="font-semibold text-slate-900 dark:text-white text-sm leading-tight break-words" style="word-break: break-word; white-space: normal;">' + p.name + '</p>' +
+                        modelNameHtml +
+                        '</div>' +
+                        '<div class="flex items-center gap-1 flex-shrink-0">' +
+                        '<div class="text-right min-w-[45px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">총</span>' +
+                        '<span class="block text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight">' + stock.total.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                        '<div class="text-right min-w-[45px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">예약</span>' +
+                        '<span class="block text-xs font-bold text-orange-600 dark:text-orange-400 leading-tight">' + stock.reserved.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                        '<div class="text-right min-w-[50px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">가용</span>' +
+                        '<span class="block text-sm font-bold text-emerald-600 dark:text-emerald-400 leading-tight">' + stock.available.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<button onclick="togglePin(\'' + p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\')" class="ml-1 flex items-center justify-center size-6 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ' + (isPinned ? 'text-primary' : 'text-slate-400') + '">' +
+                        '<span class="material-symbols-outlined text-base ' + (isPinned ? 'fill' : '') + '">push_pin</span>' +
+                        '</button>' +
+                        '</div>' +
+                        '</div>';
+                    itemsDiv.appendChild(itemDiv);
+                });
+
+                detailsEl.appendChild(itemsDiv);
+                container.appendChild(detailsEl);
+            });
+
+            // 매칭되지 않은 제품들을 "기타" 카테고리로 표시
+            const unassignedProducts = allProducts.filter(function (p) {
+                if (assignedProducts.has(p.name)) return false;
+
+                // 상품명과 모델명 모두 검색
+                const productName = p.name.toLowerCase().replace(/\s+/g, '');
+                const modelName = (p.model_name || '').toLowerCase().replace(/\s+/g, '');
+                const matchesSearch = productName.indexOf(searchTerm) >= 0 || modelName.indexOf(searchTerm) >= 0;
+                const matchesCategoryFilter = matchesSelectedCategories(p);
+
+                return matchesSearch && matchesCategoryFilter;
+            });
+
+            if (unassignedProducts.length > 0) {
+                const totalAvail = unassignedProducts.reduce(function (sum, p) {
+                    const stock = calculateEffectiveStock(p);
+                    return sum + stock.available;
+                }, 0);
+                const statusText = totalAvail > 50 ? 'Healthy Stock' : totalAvail > 20 ? 'Normal' : totalAvail > 0 ? 'Low Stock' : 'Critical';
+                const statusColor = totalAvail > 50 ? 'text-emerald-600 dark:text-emerald-400' : totalAvail > 20 ? 'text-slate-500 dark:text-slate-400' : totalAvail > 0 ? 'text-yellow-600 dark:text-yellow-500' : 'text-red-500 dark:text-red-400';
+
+                const detailsEl = document.createElement('details');
+                detailsEl.className = 'group rounded-xl bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden';
+                detailsEl.open = true;
+
+                detailsEl.innerHTML = '<summary class="flex items-center justify-between p-4 cursor-pointer select-none bg-slate-50/50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-colors">' +
+                    '<div class="flex items-center gap-3">' +
+                    '<div class="flex size-10 items-center justify-center rounded-lg bg-slate-100 dark:bg-slate-900/30 text-slate-600 dark:text-slate-400">' +
+                    '<span class="material-symbols-outlined">category</span></div>' +
+                    '<div><h3 class="font-bold text-slate-900 dark:text-white">기타</h3>' +
+                    '<div class="flex items-center gap-2 mt-0.5">' +
+                    '<span class="text-xs text-slate-500 dark:text-slate-400">' + unassignedProducts.length + ' 제품</span>' +
+                    '<span class="size-1 rounded-full bg-slate-300 dark:bg-slate-600"></span>' +
+                    '<span class="text-xs font-medium ' + statusColor + '">' + statusText + '</span></div></div></div>' +
+                    '<span class="material-symbols-outlined text-slate-400 transition-transform group-open:rotate-180">expand_more</span></summary>';
+
+                const itemsDiv = document.createElement('div');
+                itemsDiv.className = 'divide-y divide-slate-100 dark:divide-slate-700/50 border-t border-slate-100 dark:border-slate-700/50';
+
+                unassignedProducts.forEach(function (p) {
+                    const isPinned = pinnedProducts.has(p.name);
+                    const stock = calculateEffectiveStock(p); // [NEW] 개별 재고 계산
+
+                    const itemDiv = document.createElement('div');
+                    itemDiv.className = 'py-2 px-3 hover:bg-slate-50 dark:hover:bg-slate-700/20 transition-colors';
+
+                    let modelNameHtml = '';
+                    if (p.model_name) {
+                        modelNameHtml = '<p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">' + p.model_name + '</p>';
+                    }
+
+                    itemDiv.innerHTML = '<div class="flex items-start justify-between gap-1.5">' +
+                        '<div class="flex-1 min-w-0 pr-1">' +
+                        '<p class="font-semibold text-slate-900 dark:text-white text-sm leading-tight break-words" style="word-break: break-word; white-space: normal;">' + p.name + '</p>' +
+                        modelNameHtml +
+                        '</div>' +
+                        '<div class="flex items-center gap-1 flex-shrink-0">' +
+                        '<div class="text-right min-w-[45px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">총</span>' +
+                        '<span class="block text-xs font-bold text-slate-700 dark:text-slate-300 leading-tight">' + stock.total.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                        '<div class="text-right min-w-[45px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">예약</span>' +
+                        '<span class="block text-xs font-bold text-orange-600 dark:text-orange-400 leading-tight">' + stock.reserved.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<div class="w-px h-3 bg-slate-300 dark:bg-slate-600"></div>' +
+                        '<div class="text-right min-w-[50px]">' +
+                        '<span class="text-[10px] text-slate-500 dark:text-slate-400">가용</span>' +
+                        '<span class="block text-sm font-bold text-emerald-600 dark:text-emerald-400 leading-tight">' + stock.available.toLocaleString() + '</span>' +
+                        '</div>' +
+                        '<button onclick="togglePin(\'' + p.name.replace(/'/g, "\\'").replace(/"/g, '&quot;') + '\')" class="ml-1 flex items-center justify-center size-6 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ' + (isPinned ? 'text-primary' : 'text-slate-400') + '">' +
+                        '<span class="material-symbols-outlined text-base ' + (isPinned ? 'fill' : '') + '">push_pin</span>' +
+                        '</button>' +
+                        '</div>' +
+                        '</div>';
+                    itemsDiv.appendChild(itemDiv);
+                });
+
+                detailsEl.appendChild(itemsDiv);
+                container.appendChild(detailsEl);
+            }
+        }
+
+        // JSON 파일 재시도 로드 (Python 스크립트 완료 대기)
+        function loadJSONWithRetry(retries, delay) {
+            if (retries === undefined) retries = 10;
+            if (delay === undefined) delay = 500;
+
+            fetch('stock_data.json?' + new Date().getTime())
+                .then(function (r) {
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    return r.json();
+                })
+                .then(function (data) {
+                    const verification = verifyJSONData(data);
+
+                    if (verification.valid) {
+                        // 검증 성공 - 데이터 업데이트
+                        verificationData.isError = data.IsError !== undefined ? data.IsError : false;
+                        verificationData.message = data.Message || 'OK';
+                        verificationData.startTime = data.StartTime || null;
+                        verificationData.endTime = data.EndTime || null;
+
+                        if (data.RequestInfo) {
+                            verificationData.bizID = data.RequestInfo.BizID || null;
+                            verificationData.userVersion = data.RequestInfo.UserVersion || null;
+                            verificationData.userNM = data.RequestInfo.P_USER_NM || null;
+                        }
+
+                        updateVerificationBadge();
+                        updateHeaderTime();
+                        updateHeaderAuthInfo();
+
+                        console.log('✅ JSON 검증 완료:', {
+                            StartTime: verificationData.startTime,
+                            EndTime: verificationData.endTime,
+                            BizID: verificationData.bizID,
+                            UserVersion: verificationData.userVersion,
+                            P_USER_NM: verificationData.userNM
+                        });
+                    } else {
+                        // 검증 실패 - 재시도
+                        if (retries > 0) {
+                            console.log('JSON 검증 실패, 재시도 중... (' + retries + '회 남음)');
+                            setTimeout(function () {
+                                loadJSONWithRetry(retries - 1, delay);
+                            }, delay);
+                        } else {
+                            console.error('JSON 검증 실패: 최대 재시도 횟수 초과');
+                        }
+                    }
+                })
+                .catch(function (e) {
+                    if (retries > 0) {
+                        console.log('JSON 로드 실패, 재시도 중... (' + retries + '회 남음)');
+                        setTimeout(function () {
+                            loadJSONWithRetry(retries - 1, delay);
+                        }, delay);
+                    } else {
+                        console.error('JSON 로드 실패: 최대 재시도 횟수 초과', e);
+                    }
+                });
+        }
+
+        // ERP 데이터 가져오기
+        function fetchFromERP() {
+            const button = document.getElementById('refreshButton');
+            const icon = document.getElementById('refreshIcon');
+
+            // 버튼 비활성화 및 로딩 상태
+            button.disabled = true;
+            button.classList.add('opacity-70', 'cursor-not-allowed');
+            icon.style.animation = 'spin 1s linear infinite';
+
+            fetch(API_BASE + '/api/refresh', { method: 'POST' })
+                .then(function (r) { return r.json(); })
+                .then(function () {
+                    // Python 스크립트 실행 시작 - JSON 파일 업데이트 대기
+                    console.log('🔄 ERP 데이터 새로고침 시작...');
+
+                    // 3초 후부터 JSON 파일 재시도 로드 시작
+                    setTimeout(function () {
+                        loadJSONWithRetry(10, 500); // 최대 10회, 0.5초 간격
+                    }, 3000);
+
+                    // 5초 후 재고 데이터도 새로고침
+                    setTimeout(function () {
+                        loadStock();
+                        button.disabled = false;
+                        button.classList.remove('opacity-70', 'cursor-not-allowed');
+                        icon.style.animation = '';
+                    }, 5000);
+                })
+                .catch(function () {
+                    button.disabled = false;
+                    button.classList.remove('opacity-70', 'cursor-not-allowed');
+                    icon.style.animation = '';
+                    console.error('ERP 새로고침 실패');
+                });
+        }
+
+        // 전체 펼치기/접기
+        function openAllCategories() {
+            document.querySelectorAll('details').forEach(function (d) { d.open = true; });
+        }
+
+        function closeAllCategories() {
+            document.querySelectorAll('details').forEach(function (d) { d.open = false; });
+        }
+
+        // 검색
+        document.getElementById('searchInput').addEventListener('input', function () {
+            updateStats();
+            renderPinnedSection();
+            renderCategories();
+        });
+
+        // 초기 로드
+        loadPinnedProducts();
+        loadSelectedCategories();
+        loadSelectedWarehouses(); // [NEW]
+        loadStock();
+        setInterval(loadStock, 30000);
+
+        // ESC 키로 모달 닫기
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') {
+                closeLowStockModal();
+                closeVerificationModal();
+            }
+        });
+
+        // CSS 애니메이션
+        const style = document.createElement('style');
+        style.textContent = '@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }';
+        document.head.appendChild(style);
+
+        // 스크롤 시 헤더 숨기기/보이기
+        let lastScrollTop = 0;
+        let scrollTimeout = null;
+        const SCROLL_THRESHOLD = 50; // 헤더를 숨기기 시작하는 스크롤 위치
+
+        function handleScroll() {
+            const header = document.getElementById('mainHeader');
+            const topSection = document.getElementById('headerTopSection');
+            const mainSection = document.getElementById('headerMainSection');
+            const authSection = document.getElementById('headerAuthSection');
+            const searchSection = document.getElementById('headerSearchSection');
+
+            if (!header) return;
+
+            const currentScrollTop = window.pageYOffset || document.documentElement.scrollTop;
+
+            // 맨 위 (0px 근처) - 전체 헤더 표시
+            if (currentScrollTop <= SCROLL_THRESHOLD) {
+                header.style.transform = 'translateY(0)';
+                if (topSection) topSection.style.opacity = '1';
+                if (mainSection) mainSection.style.opacity = '1';
+                if (authSection) authSection.style.opacity = '1';
+                // 검색창은 항상 보이도록
+                if (searchSection) searchSection.style.opacity = '1';
+            }
+            // 스크롤 다운 (아래로) - 헤더 숨기고 검색창만 표시
+            else if (currentScrollTop > lastScrollTop) {
+                // 헤더 전체를 위로 숨김
+                header.style.transform = 'translateY(-100%)';
+
+                // 상단 부분들 투명하게
+                if (topSection) topSection.style.opacity = '0';
+                if (mainSection) mainSection.style.opacity = '0';
+                if (authSection) authSection.style.opacity = '0';
+                // 검색창은 항상 보이도록
+                if (searchSection) searchSection.style.opacity = '1';
+            }
+            // 스크롤 업 (위로) - 헤더는 그대로 유지 (맨 위로 가야만 나타남)
+            // 아무것도 하지 않음 - 맨 위로 스크롤해야만 나타남
+
+            lastScrollTop = currentScrollTop <= 0 ? 0 : currentScrollTop;
+        }
+
+        // 스크롤 이벤트 리스너 (throttle 적용)
+        window.addEventListener('scroll', function () {
+            if (scrollTimeout) {
+                clearTimeout(scrollTimeout);
+            }
+            scrollTimeout = setTimeout(handleScroll, 10);
+        }, { passive: true });
+
+        // 초기 상태 설정
+        handleScroll();
+    </script>
+
+</body>
+
+</html>

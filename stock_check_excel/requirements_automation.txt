@@ -1,0 +1,15 @@
+# ERP 자동화를 위한 Python 패키지
+
+# 프로세스 관리
+psutil>=5.9.0
+
+# Windows GUI 자동화
+pywin32>=306
+pywinauto>=0.6.8
+
+# 엑셀 파일 처리 (이미 설치됨)
+openpyxl>=3.1.0
+
+# HTTP 요청 (이미 설치됨)
+requests>=2.31.0
+
