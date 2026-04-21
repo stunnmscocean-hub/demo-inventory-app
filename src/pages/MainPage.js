@@ -171,12 +171,22 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return itemSerial === serial;
     });
 
+    // 1.5 열 순번에 따른 키 이름 식별 (I열=8, O열=14)
+    let columnIKey = '파트너명';
+    let columnOKey = '비고';
+    if (allEquipmentFromSheet.length > 0) {
+      const firstRow = allEquipmentFromSheet[0];
+      const keys = Object.keys(firstRow);
+      if (keys.length > 8) columnIKey = keys[8];
+      if (keys.length > 14) columnOKey = keys[14];
+    }
+
     // 2. 그룹화 (대여담당자, 시작일, 비고 기준) - 한 대여건에 여러 행이 쌓이는 경우 처리
     const groups = {};
     historyRows.forEach(item => {
       const assignee = (item['대여담당자'] || item.assignee || '').toString().trim();
       const startDate = (item['시작일'] || item.startDate || '').toString().trim();
-      const memo = (item['비고'] || item.memo || '').toString().trim();
+      const memo = (item[columnOKey] || item['비고'] || item.memo || '').toString().trim();
       const status = (item['대여가능여부'] || item.status || '').toString().trim();
       
       const key = `${assignee}_${startDate}_${memo}`;
@@ -516,10 +526,15 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                             }
                           }
 
-                          const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
-                          const partnerName = (historyItem['파트너명'] || historyItem.partnerName || historyItem['파트너사명'] || '').toString().trim();
+                          // 열 순번(I=8, O=14) 기반 키 식별 (함수 외부 스코프에서 이미 정의됨)
+                          const keys = Object.keys(historyItem);
+                          const autoColumnIKey = keys[8] || '파트너명';
+                          const autoColumnOKey = keys[14] || '비고';
+
+                          const memo = (historyItem[autoColumnOKey] || historyItem['비고'] || historyItem.memo || '').toString().trim();
+                          const partnerInfo = (historyItem[autoColumnIKey] || historyItem['파트너명'] || historyItem.partnerName || '').toString().trim();
                           const userName = (historyItem['사용자명'] || historyItem.userName || historyItem['사용처명'] || historyItem['고객사'] || '').toString().trim();
-                          const columnI = [partnerName, userName].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
+                          const columnI = [partnerInfo, userName].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
 
                           // 디버깅: 데이터 확인
                           if (idx === 0) {
