@@ -165,28 +165,52 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     const serial = equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '';
     if (!serial) return [];
 
-    // 시리얼넘버로 필터링 (전체 이력 포함)
-    const history = allEquipmentFromSheet.filter(item => {
+    // 1. 시리얼넘버로 필터링 (전체 이력 포함)
+    const historyRows = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-      
-      // 시리얼넘버가 일치하는 것만
       return itemSerial === serial;
     });
 
-    // 날짜 기준 정렬 (진행건 우선 > 최신순 내림차순)
-    const sortedHistory = history.sort((a, b) => {
-      const statusA = (a['대여가능여부'] || a.status || '').toString().trim();
-      const statusB = (b['대여가능여부'] || b.status || '').toString().trim();
+    // 2. 그룹화 (대여담당자, 시작일, 비고 기준) - 한 대여건에 여러 행이 쌓이는 경우 처리
+    const groups = {};
+    historyRows.forEach(item => {
+      const assignee = (item['대여담당자'] || item.assignee || '').toString().trim();
+      const startDate = (item['시작일'] || item.startDate || '').toString().trim();
+      const memo = (item['비고'] || item.memo || '').toString().trim();
+      const status = (item['대여가능여부'] || item.status || '').toString().trim();
       
-      const isCompletedA = statusA === '반납완료';
-      const isCompletedB = statusB === '반납완료';
+      const key = `${assignee}_${startDate}_${memo}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          ...item,
+          allStatuses: [status]
+        };
+      } else {
+        groups[key].allStatuses.push(status);
+      }
+    });
 
-      // 1. 진행 중인 건(반납완료가 아닌 것)을 우선적으로 위로 배치
+    // 3. 그룹별 최종 상태 결정 및 변환
+    const groupedHistory = Object.values(groups).map(group => {
+      const isCompleted = group.allStatuses.includes('반납완료');
+      return {
+        ...group,
+        finalStatus: isCompleted ? '반납완료' : '대여중/신청'
+      };
+    });
+
+    // 4. 날짜 기준 정렬 (진행건 우선 > 최신순 내림차순)
+    const sortedHistory = groupedHistory.sort((a, b) => {
+      const isCompletedA = a.finalStatus === '반납완료';
+      const isCompletedB = b.finalStatus === '반납완료';
+
+      // 진행 중인 건을 우선 순위로 위로 배치
       if (isCompletedA !== isCompletedB) {
         return isCompletedA ? 1 : -1;
       }
 
-      // 2. 상태가 같다면 시작일 기준으로 최신순 정렬
+      // 같은 그룹 내에서는 시작일 기준으로 최신순 정렬
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
 
@@ -194,10 +218,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       if (!dateA) return 1;
       if (!dateB) return -1;
 
-      return dateB.getTime() - dateA.getTime(); // 최신순 (내림차순)
+      return dateB.getTime() - dateA.getTime();
     });
 
-    // 최근 3개만 반환
+    // 최근 3개 '건'만 반환
     return sortedHistory.slice(0, 3);
   }, [allEquipmentFromSheet]);
 
@@ -529,6 +553,13 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                       )}
                                       {(assignee || formattedStartDate) && (
                                         <div className={styles.historyBoxRow}>
+                                          <span style={{ 
+                                            fontWeight: 'bold', 
+                                            color: historyItem.finalStatus === '반납완료' ? '#999' : '#2ecc71',
+                                            marginRight: '8px'
+                                          }}>
+                                            [{historyItem.finalStatus}]
+                                          </span>
                                           <span>{assignee || '-'}</span>
                                           {formattedStartDate && (
                                             <span> ({formattedStartDate}{formattedEndDate ? ` - ${formattedEndDate}` : ''})</span>
