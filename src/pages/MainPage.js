@@ -226,8 +226,8 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return (a.maxIndex || 0) - (b.maxIndex || 0);
     });
 
-    // 최근 3개 '건'만 반환
-    return sortedHistory.slice(0, 3);
+    // 최근 3개 '건'만 반환 (오름차순이므로 맨 뒤에서부터 3개 가져오기)
+    return sortedHistory.slice(-3);
   }, [allEquipmentFromSheet]);
 
   // 같은 시작일과 비고를 가진 다른 장비 찾기
