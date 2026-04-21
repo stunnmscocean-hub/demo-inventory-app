@@ -171,13 +171,11 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return itemSerial === serial;
     });
 
-    // 1.5 열 순번에 따른 키 이름 식별 (I열=8, O열=14)
-    let columnIKey = '파트너명';
+    // 1.5 열 순번에 따른 키 이름 식별 (O열=14)
     let columnOKey = '비고';
     if (allEquipmentFromSheet.length > 0) {
       const firstRow = allEquipmentFromSheet[0];
       const keys = Object.keys(firstRow);
-      if (keys.length > 8) columnIKey = keys[8];
       if (keys.length > 14) columnOKey = keys[14];
     }
 
