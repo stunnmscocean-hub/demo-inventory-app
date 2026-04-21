@@ -517,6 +517,9 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                           }
 
                           const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
+                          const userName = (historyItem['사용자명'] || historyItem.userName || '').toString().trim();
+                          const partnerName = (historyItem['파트너명'] || historyItem.partnerName || '').toString().trim();
+                          const columnI = [userName, partnerName].filter(Boolean).join(' / ');
 
                           // 디버깅: 데이터 확인
                           if (idx === 0) {
@@ -533,7 +536,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                           }
 
                           // 내용이 있는지 확인
-                          const hasAnyContent = equipmentPairs.length > 0 || assignee || formattedStartDate || memo;
+                          const hasAnyContent = equipmentPairs.length > 0 || assignee || formattedStartDate || memo || columnI;
 
                           return (
                             <tr key={`${eq.id}-history-${idx}`} className={styles.historyRow}>
@@ -566,9 +569,12 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                           )}
                                         </div>
                                       )}
-                                      {memo && (
+                                      {(columnI || memo) && (
                                         <div className={styles.historyBoxRow}>
-                                          <div className={styles.historyBoxMemo}>{memo}</div>
+                                          <div className={styles.historyBoxMemo}>
+                                            {columnI && <span style={{ fontWeight: 'bold', color: '#444' }}>[{columnI}] </span>}
+                                            {memo}
+                                          </div>
                                         </div>
                                       )}
                                     </>
