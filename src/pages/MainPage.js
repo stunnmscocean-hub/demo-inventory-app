@@ -192,9 +192,17 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       if (!groups[key]) {
         groups[key] = {
           ...item,
+          maxIndex: item.originalIndex || 0,
           allStatuses: [status]
         };
       } else {
+        // 데이터 병합: 그룹 내 다른 행에 정보가 있다면 채워넣음 (예: 파트너명 누락 방지)
+        Object.keys(item).forEach(k => {
+          if (!groups[key][k] && item[k]) {
+            groups[key][k] = item[k];
+          }
+        });
+        groups[key].maxIndex = Math.max(groups[key].maxIndex || 0, item.originalIndex || 0);
         groups[key].allStatuses.push(status);
       }
     });
@@ -226,7 +234,11 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       if (!dateA) return 1;
       if (!dateB) return -1;
 
-      return dateB.getTime() - dateA.getTime();
+      const dateDiff = dateB.getTime() - dateA.getTime();
+      if (dateDiff !== 0) return dateDiff;
+
+      // 날짜가 같으면 줄 번호(Index)가 더 큰 것(최신)을 위로 배치
+      return (b.maxIndex || 0) - (a.maxIndex || 0);
     });
 
     // 최근 3개 '건'만 반환
@@ -956,7 +968,10 @@ const MainPage = ({ user, onLogout }) => {
         try {
           // console.log('📦 장비 데이터 로딩 시작 (시트)...');
           const equipmentData = await getEquipmentData();
-          allEquipmentFromSheet = equipmentData.data || [];
+          allEquipmentFromSheet = (equipmentData.data || []).map((item, index) => ({
+            ...item,
+            originalIndex: index
+          }));
           // console.log(`✅ 장비 데이터 로드 완료: ${allEquipmentFromSheet.length}건`);
 
           // // 🔍 상태값 분석 (Mini 검색 문제 디버깅)
