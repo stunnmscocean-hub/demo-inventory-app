@@ -162,7 +162,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return [];
     }
 
-    const serial = equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '';
+    const serial = (equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '').toString().trim();
     if (!serial) return [];
 
     // 1. 시리얼넘버로 필터링 (전체 이력 포함)
@@ -517,9 +517,9 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                           }
 
                           const memo = (historyItem['비고'] || historyItem.memo || '').toString().trim();
-                          const userName = (historyItem['사용자명'] || historyItem.userName || '').toString().trim();
-                          const partnerName = (historyItem['파트너명'] || historyItem.partnerName || '').toString().trim();
-                          const columnI = [userName, partnerName].filter(Boolean).join(' / ');
+                          const partnerName = (historyItem['파트너명'] || historyItem.partnerName || historyItem['파트너사명'] || '').toString().trim();
+                          const userName = (historyItem['사용자명'] || historyItem.userName || historyItem['사용처명'] || historyItem['고객사'] || '').toString().trim();
+                          const columnI = [partnerName, userName].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
 
                           // 디버깅: 데이터 확인
                           if (idx === 0) {
@@ -556,8 +556,8 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                       )}
                                       {(assignee || formattedStartDate) && (
                                         <div className={styles.historyBoxRow}>
-                                          <span style={{ 
-                                            fontWeight: 'bold', 
+                                          <span style={{
+                                            fontWeight: 'bold',
                                             color: historyItem.finalStatus === '반납완료' ? '#999' : '#2ecc71',
                                             marginRight: '8px'
                                           }}>
