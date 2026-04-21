@@ -171,20 +171,14 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return itemSerial === serial;
     });
 
-    // 1.5 열 순번에 따른 키 이름 식별 (O열=14)
-    let columnOKey = '비고';
-    if (allEquipmentFromSheet.length > 0) {
-      const firstRow = allEquipmentFromSheet[0];
-      const keys = Object.keys(firstRow);
-      if (keys.length > 14) columnOKey = keys[14];
-    }
-
     // 2. 그룹화 (대여담당자, 시작일, 비고 기준) - 한 대여건에 여러 행이 쌓이는 경우 처리
     const groups = {};
     historyRows.forEach(item => {
       const assignee = (item['대여담당자'] || item.assignee || '').toString().trim();
       const startDate = (item['시작일'] || item.startDate || '').toString().trim();
-      const memo = (item[columnOKey] || item['비고'] || item.memo || '').toString().trim();
+      
+      const memoKey = ['비고', 'memo'].find(k => item[k]) || '비고';
+      const memo = (item[memoKey] || '').toString().trim();
       const status = (item['대여가능여부'] || item.status || '').toString().trim();
       
       const key = `${assignee}_${startDate}_${memo}`;
@@ -216,29 +210,20 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       };
     });
 
-    // 4. 날짜 기준 정렬 (진행건 우선 > 최신순 내림차순)
+    // 4. 날짜 기준 정렬 (시간이 지날수록 아래에 쌓이도록 -> 오름차순)
     const sortedHistory = groupedHistory.sort((a, b) => {
-      const isCompletedA = a.finalStatus === '반납완료';
-      const isCompletedB = b.finalStatus === '반납완료';
-
-      // 진행 중인 건을 우선 순위로 위로 배치
-      if (isCompletedA !== isCompletedB) {
-        return isCompletedA ? 1 : -1;
-      }
-
-      // 같은 그룹 내에서는 시작일 기준으로 최신순 정렬
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
 
       if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
+      if (!dateA) return -1;
+      if (!dateB) return 1;
 
-      const dateDiff = dateB.getTime() - dateA.getTime();
+      const dateDiff = dateA.getTime() - dateB.getTime();
       if (dateDiff !== 0) return dateDiff;
 
-      // 날짜가 같으면 줄 번호(Index)가 더 큰 것(최신)을 위로 배치
-      return (b.maxIndex || 0) - (a.maxIndex || 0);
+      // 날짜가 같으면 줄 번호(Index)가 큰 것(최신)을 아래로 배치 (오름차순)
+      return (a.maxIndex || 0) - (b.maxIndex || 0);
     });
 
     // 최근 3개 '건'만 반환
@@ -536,15 +521,21 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                             }
                           }
 
-                          // 열 순번(I=8, O=14) 기반 키 식별 (함수 외부 스코프에서 이미 정의됨)
-                          const keys = Object.keys(historyItem);
-                          const autoColumnIKey = keys[8] || '파트너명';
-                          const autoColumnOKey = keys[14] || '비고';
-
-                          const memo = (historyItem[autoColumnOKey] || historyItem['비고'] || historyItem.memo || '').toString().trim();
-                          const partnerInfo = (historyItem[autoColumnIKey] || historyItem['파트너명'] || historyItem.partnerName || '').toString().trim();
-                          const userName = (historyItem['사용자명'] || historyItem.userName || historyItem['사용처명'] || historyItem['고객사'] || '').toString().trim();
-                          const columnI = [partnerInfo, userName].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(' / ');
+                          // 파트너 관련 컬럼 찾기 (타임스탬프 등 오매핑 방지를 위해 명시적 키 확인)
+                          const partnerKeys = ['파트너명', '파트너사명', 'partnerName', '사용자명', 'userName', '사용처명', '사용처', '고객사'];
+                          const foundPartners = [];
+                          for (const k of partnerKeys) {
+                            if (historyItem[k] && typeof historyItem[k] === 'string' && !historyItem[k].match(/^\d{4}-\d{2}-\d{2}/)) {
+                              const val = historyItem[k].toString().trim();
+                              if (val && !foundPartners.includes(val)) {
+                                foundPartners.push(val);
+                              }
+                            }
+                          }
+                          const columnI = foundPartners.join(' / ');
+                          
+                          const memoKey = ['비고', 'memo', '메모'].find(k => historyItem[k]) || '비고';
+                          const memo = (historyItem[memoKey] || '').toString().trim();
 
                           // 디버깅: 데이터 확인
                           if (idx === 0) {
