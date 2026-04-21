@@ -156,7 +156,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     });
   };
 
-  // 특정 장비의 대여 히스토리 가져오기 (최근 3개 - 최신순)
+  // 특정 장비의 대여 히스토리 가져오기 (최근 3개 - 진행건 우선 > 최신순)
   const getEquipmentHistory = React.useCallback((equipment) => {
     if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
       return [];
@@ -173,8 +173,20 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       return itemSerial === serial;
     });
 
-    // 날짜 기준 정렬 (최신순 - 내림차순)
+    // 날짜 기준 정렬 (진행건 우선 > 최신순 내림차순)
     const sortedHistory = history.sort((a, b) => {
+      const statusA = (a['대여가능여부'] || a.status || '').toString().trim();
+      const statusB = (b['대여가능여부'] || b.status || '').toString().trim();
+      
+      const isCompletedA = statusA === '반납완료';
+      const isCompletedB = statusB === '반납완료';
+
+      // 1. 진행 중인 건(반납완료가 아닌 것)을 우선적으로 위로 배치
+      if (isCompletedA !== isCompletedB) {
+        return isCompletedA ? 1 : -1;
+      }
+
+      // 2. 상태가 같다면 시작일 기준으로 최신순 정렬
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
 
