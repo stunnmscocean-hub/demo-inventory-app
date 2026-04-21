@@ -17,7 +17,6 @@ import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvP
 import { getEquipmentData, getPartnerData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
 import { setCacheData, getForceCacheData, findDataChanges, CACHE_KEYS } from '../utils/dataCache';
 import JpgViewer from '../components/JpgViewer';
-import PdfViewer from '../components/PdfViewer';
 import styles from './MainPage.module.css';
 
 // SearchBar 컴포넌트를 메인 컴포넌트 외부로 이동
@@ -157,7 +156,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     });
   };
 
-  // 특정 장비의 대여 히스토리 가져오기 (최근 3개)
+  // 특정 장비의 대여 히스토리 가져오기 (최근 3개 - 최신순)
   const getEquipmentHistory = React.useCallback((equipment) => {
     if (!allEquipmentFromSheet || allEquipmentFromSheet.length === 0) {
       return [];
@@ -166,19 +165,15 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     const serial = equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '';
     if (!serial) return [];
 
-    // 시리얼넘버로 필터링하고 "반납완료" 상태 제외
+    // 시리얼넘버로 필터링 (전체 이력 포함)
     const history = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-      const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
-
-      // 시리얼넘버가 일치하고 "반납완료" 상태가 아닌 것만
-      if (itemSerial !== serial) return false;
-      if (itemStatus === '반납완료') return false;
-
-      return true;
+      
+      // 시리얼넘버가 일치하는 것만
+      return itemSerial === serial;
     });
 
-    // 날짜 기준 정렬 (오래된 것부터 - 오름차순)
+    // 날짜 기준 정렬 (최신순 - 내림차순)
     const sortedHistory = history.sort((a, b) => {
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
@@ -187,10 +182,10 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       if (!dateA) return 1;
       if (!dateB) return -1;
 
-      return dateA.getTime() - dateB.getTime(); // 오래된 것부터 (오름차순)
+      return dateB.getTime() - dateA.getTime(); // 최신순 (내림차순)
     });
 
-    // 최근 3개만 반환 (오래된 것부터)
+    // 최근 3개만 반환
     return sortedHistory.slice(0, 3);
   }, [allEquipmentFromSheet]);
 
@@ -3811,13 +3806,7 @@ const MainPage = ({ user, onLogout }) => {
               </div>
             )}
 
-            {/* PDF 뷰어 (JPG 이미지가 없을 때만) */}
-            {!pdfPreviewImages && (pdfBase64 || pdfUrl) && (
-              <PdfViewer
-                pdfUrl={pdfBase64 ? `data:application/pdf;base64,${pdfBase64}` : pdfUrl}
-                onImagesGenerated={handleJpgImagesGenerated}
-              />
-            )}
+            {/* PDF 뷰어 (JPG 이미지가 없을 때만) - 제거됨 (GAS 방식 사용) */}
           </div>
         )}
       </div>
