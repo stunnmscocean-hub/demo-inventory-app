@@ -55,14 +55,18 @@ const parseDateString = (dateString) => {
 };
 
 // SearchBar 컴포넌트 (검색 로그 디바운싱 & 엔터/블러 이벤트 감지)
+// SearchBar 컴포넌트 (검색 로그 디바운싱 & 중복 방지)
 const SearchBar = React.memo(({ onSearch, user }) => {
   const [term, setTerm] = useState('');
   const logTimerRef = useRef(null);
+  const lastLoggedQueryRef = useRef('');
 
   const triggerLog = useCallback((queryText) => {
     const trimmed = (queryText || '').trim();
-    if (trimmed.length >= 1) {
-      console.log('🔍 [SearchBar] 웹 검색 로그 전송 시도:', trimmed);
+    // 💡 중복 기록 방지: 동일한 검색어는 단 1회만 시트에 기록
+    if (trimmed.length >= 1 && trimmed !== lastLoggedQueryRef.current) {
+      lastLoggedQueryRef.current = trimmed;
+      console.log('🔍 [SearchBar] 웹 검색 로그 전송 (중복방지 적용):', trimmed);
       logSearchHistory({
         email: user?.email || '미인증/확인중',
         userName: user?.name || '사용자',
@@ -84,7 +88,7 @@ const SearchBar = React.memo(({ onSearch, user }) => {
     if (newTerm.trim().length >= 1) {
       logTimerRef.current = setTimeout(() => {
         triggerLog(newTerm);
-      }, 500);
+      }, 600);
     }
   };
 
@@ -925,7 +929,7 @@ const MainPage = ({ user, onLogout }) => {
   const isProcessingRef = useRef(false); // 상태 변경 처리 중 플래그
   const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
   const myDemoSectionRef = useRef(null); // 스와이프를 위한 ref
-  const searchLogTimerRef = useRef(null); // 검색로그 디바운싱 타이머 ref
+  const hasLoggedQrScanRef = useRef(false); // QR 스캔 중복 기록 방지 ref
 
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
@@ -1045,7 +1049,8 @@ const MainPage = ({ user, onLogout }) => {
     const action = params.get('action') || params.get('scan_action');
     const scannedSerial = params.get('serial') || params.get('scan') || params.get('sn');
 
-    if (scannedSerial) {
+    if (scannedSerial && !hasLoggedQrScanRef.current) {
+      hasLoggedQrScanRef.current = true; // 최초 1회만 스캔 로그 기록
       const targetEq = allEquipments.find(item => {
         const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim().toLowerCase();
         return s === scannedSerial.trim().toLowerCase();
@@ -1584,27 +1589,7 @@ const MainPage = ({ user, onLogout }) => {
       eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredEquipments(filtered);
-
-    // 📊 디바운싱 적용 (800ms 동안 추가 입력이 없으면 완성된 최종 검색어만 시트에 1번 전송)
-    if (searchLogTimerRef.current) {
-      clearTimeout(searchLogTimerRef.current);
-    }
-
-    const trimmed = searchTerm.trim();
-    if (trimmed.length >= 1) {
-      searchLogTimerRef.current = setTimeout(() => {
-        const matchedName = filtered.length > 0 ? filtered[0].name : '-';
-        logSearchHistory({
-          email: user?.email || '미인증/확인중',
-          userName: user?.name || '사용자',
-          accessType: '웹 검색',
-          query: trimmed,
-          equipmentName: matchedName,
-          applied: false
-        });
-      }, 800); // 800ms 딜레이
-    }
-  }, [availableEquipments, user?.email, user?.name]);
+  }, [availableEquipments]);
 
   // 데모 선택/해제 핸들러
   const handleDemoToggle = (demo) => {
