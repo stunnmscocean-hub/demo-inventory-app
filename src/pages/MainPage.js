@@ -3102,7 +3102,30 @@ const MainPage = ({ user, onLogout }) => {
           <h4>선택된 장비 목록:</h4>
           <ul>
             {selectedEquipments.map(equipment => (
-              <li key={equipment.id}>{equipment.name} ({equipment.serial})</li>
+              <li key={equipment.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                <span>{equipment.name} ({equipment.serial})</span>
+                <button
+                  onClick={() => {
+                    setSelectedEquipments(prev => {
+                      const updated = prev.filter(eq => (eq.serial || eq.id) !== (equipment.serial || equipment.id));
+                      // localStorage 장바구니 동기화
+                      const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
+                      if (serials.length > 0) {
+                        localStorage.setItem('qr_cart_serials', JSON.stringify(serials));
+                      } else {
+                        localStorage.removeItem('qr_cart_serials');
+                      }
+                      return updated;
+                    });
+                  }}
+                  style={{
+                    background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer',
+                    fontSize: '16px', fontWeight: '700', padding: '2px 6px', borderRadius: '4px',
+                    lineHeight: '1'
+                  }}
+                  title="장비 제거"
+                >✕</button>
+              </li>
             ))}
           </ul>
         </div>
