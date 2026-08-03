@@ -982,7 +982,7 @@ const MainPage = ({ user, onLogout }) => {
 
     // 1️⃣ 먼저 sessionStorage에 저장된 기존 장바구니 복원
     try {
-      const savedSerials = JSON.parse(sessionStorage.getItem('qr_cart_serials') || '[]');
+      const savedSerials = JSON.parse(localStorage.getItem('qr_cart_serials') || '[]');
       if (savedSerials.length > 0) {
         const restoredItems = savedSerials
           .map(serial => allEquipments.find(item => {
@@ -1031,7 +1031,7 @@ const MainPage = ({ user, onLogout }) => {
             const updated = [...prev, targetEq];
             // sessionStorage에 시리얼 목록 저장 (페이지 리로드 시 복원용)
             const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
-            sessionStorage.setItem('qr_cart_serials', JSON.stringify(serials));
+            localStorage.setItem('qr_cart_serials', JSON.stringify(serials));
             console.log('📱 [QR 장바구니] 장비 추가, 현재 카트:', serials);
             return updated;
           });
@@ -2029,7 +2029,7 @@ const MainPage = ({ user, onLogout }) => {
 
     // Clear selections and hide form
     setSelectedEquipments([]);
-    sessionStorage.removeItem('qr_cart_serials'); // QR 장바구니 초기화
+    localStorage.removeItem('qr_cart_serials'); // QR 장바구니 초기화
     setShowApplicationForm(false);
   };
 
