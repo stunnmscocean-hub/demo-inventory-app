@@ -1,7 +1,7 @@
 // axios import removed - using fetch instead
 
 // Google Apps Script 배포 URL (.env.local에서 읽어옴)
-const GAS_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbyX8DtKe0BGugzw-Ycs6jsEP733UmidYWAi2DK0tftJbYwTYC1mMyMiIyfh_LsPeis3/exec';
+const GAS_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbxMBYAV9wZXg4I0pYVG_HC5Tw5oxhLwjPA0Jb2e1tJx-1DopQJCMPiSlf_aZzb1K8VV/exec';
 
 // ===== Step 1: 기본 연결 테스트 =====
 export const pingGAS = async () => {

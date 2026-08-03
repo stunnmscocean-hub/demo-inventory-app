@@ -2,14 +2,14 @@
 // src/utils/googleSheetPdfExporter.js - Google Apps Script 방식
 
 // Google Apps Script Web App URL (.env.local에서 읽어옴)
-export const APPS_SCRIPT_WEB_APP_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbyX8DtKe0BGugzw-Ycs6jsEP733UmidYWAi2DK0tftJbYwTYC1mMyMiIyfh_LsPeis3/exec';
+export const APPS_SCRIPT_WEB_APP_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbxMBYAV9wZXg4I0pYVG_HC5Tw5oxhLwjPA0Jb2e1tJx-1DopQJCMPiSlf_aZzb1K8VV/exec';
 
 // 디버깅을 위한 URL 로그
 console.log('Apps Script URL:', APPS_SCRIPT_WEB_APP_URL);
 console.log('URL 접근 테스트를 위해 브라우저에서 직접 접속해보세요:', APPS_SCRIPT_WEB_APP_URL);
 
 // Template Spreadsheet ID and GID from the provided URL
-export const TEMPLATE_SPREADSHEET_ID = '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0lht0';
+export const TEMPLATE_SPREADSHEET_ID = '12j0z4D7H-C7HmYmfzHRyUSwHHVBdXov0dQpkNVrWqBSCrVmcMw-AJJFO';
 export const TEMPLATE_SHEET_GID = '1326732411'; // This is the gid for the specific sheet/tab
 
 // Google Drive folder ID for saving PDFs
