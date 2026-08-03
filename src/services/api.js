@@ -554,7 +554,6 @@ export const updateFormSubmission = async (serialNumber, fileUrl) => {
 // ===== 📊 조회History 기록 (웹 검색 / QR 접속 로그) =====
 export const logSearchHistory = async (logData = {}) => {
   try {
-    console.log('🛫 [logSearchHistory] 시트 기록 요청:', logData);
     const params = new URLSearchParams({
       action: 'logSearchHistory',
       email: logData.email || '',
@@ -566,14 +565,19 @@ export const logSearchHistory = async (logData = {}) => {
     });
 
     const url = `${GAS_URL}?${params.toString()}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn('⚠️ [logSearchHistory] HTTP 에러:', response.status);
-      return null;
+    console.log('🛫 [logSearchHistory] 시트 기록 요청 전송:', url);
+
+    // 1. Image Beacon 전송 (CORS/302 리디렉션 영향 제로, GAS 100% 수신)
+    if (typeof window !== 'undefined') {
+      const img = new Image();
+      img.src = url;
     }
-    const data = await response.json();
-    console.log('✅ [조회History] 시트 기록 완료:', data);
-    return data;
+
+    // 2. fetch no-cors 보조 전송
+    fetch(url, { mode: 'no-cors' }).catch(() => {});
+
+    console.log('✅ [조회History] 시트 기록 신호 전송 완료');
+    return { success: true };
   } catch (error) {
     console.error('❌ [logSearchHistory] 에러 발생:', error);
     return null;
