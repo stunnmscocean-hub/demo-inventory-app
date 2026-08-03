@@ -14,7 +14,7 @@ import {
   clearAuthData
 } from '../utils/googleSheetPdfExporter'; // Import Google Sheet PDF exporter, updater, and readiness checker
 import { parseEquipmentCsv, parseUsageCsv, parsePartnerCsv } from '../utils/csvParser';
-import { getEquipmentData, getPartnerData, returnEquipment, uploadFile, updateFormSubmission } from '../services/api';
+import { getEquipmentData, getPartnerData, returnEquipment, uploadFile, updateFormSubmission, logSearchHistory } from '../services/api';
 import { setCacheData, getForceCacheData, findDataChanges, CACHE_KEYS } from '../utils/dataCache';
 import JpgViewer from '../components/JpgViewer';
 import styles from './MainPage.module.css';
@@ -1017,6 +1017,16 @@ const MainPage = ({ user, onLogout }) => {
       });
 
       if (targetEq) {
+        // 📊 조회History 시트에 QR 스캔 로깅 (비동기 처리)
+        logSearchHistory({
+          email: user?.email,
+          userName: user?.name,
+          accessType: action === 'apply' ? 'QR_대여신청' : 'QR_반납',
+          query: scannedSerial,
+          equipmentName: targetEq.name,
+          applied: false
+        });
+
         const cleanStatus = (targetEq.status || '').toString().trim().replace(/\s+/g, '');
 
         if (action === 'apply') {
@@ -2027,6 +2037,18 @@ const MainPage = ({ user, onLogout }) => {
     setFilteredEquipments(newAvailable.filter(eq =>
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) || eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     ));
+
+    // 📊 조회History 시트에 신청완료 상태 기록
+    selectedEquipments.forEach(eq => {
+      logSearchHistory({
+        email: user?.email,
+        userName: user?.name,
+        accessType: '데모신청완료',
+        query: eq.serial,
+        equipmentName: eq.name,
+        applied: true
+      });
+    });
 
     // Clear selections and hide form
     setSelectedEquipments([]);

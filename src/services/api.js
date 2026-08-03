@@ -550,3 +550,27 @@ export const updateFormSubmission = async (serialNumber, fileUrl) => {
     throw new Error(`Failed to update form submission: ${error.message}`);
   }
 };
+
+// ===== 📊 조회History 기록 (웹 검색 / QR 접속 로그) =====
+export const logSearchHistory = async (logData = {}) => {
+  try {
+    const params = new URLSearchParams({
+      action: 'logSearchHistory',
+      email: logData.email || '',
+      userName: logData.userName || '',
+      accessType: logData.accessType || '웹 검색',
+      query: logData.query || logData.serial || '',
+      equipmentName: logData.equipmentName || '',
+      applied: logData.applied ? 'true' : 'false'
+    });
+
+    const response = await fetch(`${GAS_URL}?${params.toString()}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    console.log('📊 [조회History] 로그 기록 완료:', data);
+    return data;
+  } catch (error) {
+    console.warn('logSearchHistory fail silently:', error);
+    return null;
+  }
+};
