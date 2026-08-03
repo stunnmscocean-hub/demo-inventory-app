@@ -1672,6 +1672,9 @@ const MainPage = ({ user, onLogout }) => {
         console.log(`   ✅ 최신 대여 정보 찾음:`, fullEquipmentData);
 
         // 반납할 장비 데이터 준비
+        const now = new Date();
+        const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
         const equipmentDataToReturn = {
           serial: fullEquipmentData.serial || fullEquipmentData.serialNumber || demo.serial,
           serialNumber: fullEquipmentData.serial || fullEquipmentData.serialNumber || demo.serial,
@@ -1680,8 +1683,11 @@ const MainPage = ({ user, onLogout }) => {
           location: fullEquipmentData.location || fullEquipmentData['보관위치'] || '본사',
           assignee: fullEquipmentData.assignee || fullEquipmentData['대여담당자'] || user.name,
           startDate: fullEquipmentData.startDate || fullEquipmentData['시작일'] || demo.startDate,
-          returnDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || demo.returnDate,
-          endDate: fullEquipmentData.endDate || fullEquipmentData.returnDate || fullEquipmentData['종료일'] || demo.returnDate,
+          returnDate: timestampStr,
+          endDate: timestampStr,
+          processedAt: timestampStr,
+          timestamp: timestampStr,
+          '처리시간스탬프': timestampStr,
           partnerName: fullEquipmentData.partnerName || fullEquipmentData['파트너명'] || '',
           partnerContact: fullEquipmentData.partnerContact || fullEquipmentData['파트너담당자명'] || '',
           partnerPhone: fullEquipmentData.partnerPhone || fullEquipmentData['휴대폰 번호'] || '',
@@ -2885,6 +2891,18 @@ const MainPage = ({ user, onLogout }) => {
       const memoData = memoItems.filter(memo => memo.trim() !== '');
       if (memoData.length > 0) {
         formData.memoItems = memoData;
+      }
+
+      const now = new Date();
+      const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+      const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${timeStr}`;
+
+      formData.processedAt = timestampStr;
+      formData.timestamp = timestampStr;
+      formData['처리시간스탬프'] = timestampStr;
+
+      if (formData.checkoutDate && !formData.checkoutDate.includes(':')) {
+        formData.checkoutDate = `${formData.checkoutDate} ${timeStr}`;
       }
 
       // Set loading state for PNG export
