@@ -891,6 +891,7 @@ const MainPage = ({ user, onLogout }) => {
   const isProcessingRef = useRef(false); // 상태 변경 처리 중 플래그
   const stateChangedRef = useRef(false); // 터치 이벤트 내 상태 변경 플래그
   const myDemoSectionRef = useRef(null); // 스와이프를 위한 ref
+  const searchLogTimerRef = useRef(null); // 검색로그 디바운싱 타이머 ref
 
   // 섹션별 로딩 상태
   const [loadingMyDemos, setLoadingMyDemos] = useState(true);
@@ -1549,17 +1550,24 @@ const MainPage = ({ user, onLogout }) => {
     );
     setFilteredEquipments(filtered);
 
-    // 📊 조회History 시트에 웹 검색 로깅
-    if (searchTerm.trim().length >= 1) {
-      const matchedName = filtered.length > 0 ? filtered[0].name : '-';
-      logSearchHistory({
-        email: user?.email || '미인증/확인중',
-        userName: user?.name || '사용자',
-        accessType: '웹 검색',
-        query: searchTerm.trim(),
-        equipmentName: matchedName,
-        applied: false
-      });
+    // 📊 디바운싱 적용 (800ms 동안 추가 입력이 없으면 완성된 최종 검색어만 시트에 1번 전송)
+    if (searchLogTimerRef.current) {
+      clearTimeout(searchLogTimerRef.current);
+    }
+
+    const trimmed = searchTerm.trim();
+    if (trimmed.length >= 1) {
+      searchLogTimerRef.current = setTimeout(() => {
+        const matchedName = filtered.length > 0 ? filtered[0].name : '-';
+        logSearchHistory({
+          email: user?.email || '미인증/확인중',
+          userName: user?.name || '사용자',
+          accessType: '웹 검색',
+          query: trimmed,
+          equipmentName: matchedName,
+          applied: false
+        });
+      }, 800); // 800ms 딜레이
     }
   }, [availableEquipments, user?.email, user?.name]);
 
