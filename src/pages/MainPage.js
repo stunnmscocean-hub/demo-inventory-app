@@ -1179,7 +1179,8 @@ const MainPage = ({ user, onLogout }) => {
               formSubmitted: item.formSubmitted || false, // 시트에서 받아온 제출 여부
               fileUrl: item.fileUrl || item['신청양식제출'] || '', // 제출된 파일 URL
               location: item.location || item['보관위치'] || '본사',
-              status: item.status || item['대여가능여부'] || ''
+              status: item.status || item['대여가능여부'] || '',
+              processedAt: item.processedAt || item['처리시간스탬프'] || '' // 처리시간스탬프 (17번째 칼럼)
             };
 
             // 디버깅: 파트너 정보 확인
