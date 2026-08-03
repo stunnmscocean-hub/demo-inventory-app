@@ -304,15 +304,24 @@ export const getMyDemoData = async (userName) => {
 // ===== 장비 반납 (히스토리 추가) =====
 export const returnEquipment = async (equipmentData) => {
   try {
-    console.log('returnEquipment 호출:', equipmentData);
-    
     if (!equipmentData) {
       throw new Error('장비 데이터가 필요합니다.');
     }
-    
+
+    const now = new Date();
+    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const dataWithTimestamp = {
+      ...equipmentData,
+      processedAt: equipmentData.processedAt || timestampStr,
+      timestamp: equipmentData.timestamp || timestampStr
+    };
+
+    console.log('returnEquipment 호출:', dataWithTimestamp);
+
     // 장비 데이터를 JSON 문자열로 변환
-    const equipmentDataJson = JSON.stringify(equipmentData);
-    
+    const equipmentDataJson = JSON.stringify(dataWithTimestamp);
+
     const response = await fetch(`${GAS_URL}?action=returnEquipment&equipmentData=${encodeURIComponent(equipmentDataJson)}`);
     
     if (!response.ok) {

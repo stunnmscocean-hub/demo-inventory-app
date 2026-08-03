@@ -57,7 +57,16 @@ export const pingSheetInputService = async () => {
 export const addDataToSheet = async (accessToken, spreadsheetId, formData, selectedEquipments) => {
   return await retryWithBackoff(async () => {
     console.log('addDataToSheet POST 요청 시작:', { spreadsheetId, equipmentCount: selectedEquipments.length });
-    
+
+    const now = new Date();
+    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const updatedFormData = {
+      ...formData,
+      processedAt: formData?.processedAt || timestampStr,
+      timestamp: formData?.timestamp || timestampStr
+    };
+
     const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
       method: 'POST',
       headers: {
@@ -66,7 +75,7 @@ export const addDataToSheet = async (accessToken, spreadsheetId, formData, selec
       body: JSON.stringify({
         action: 'addDataToSheet',
         spreadsheetId: spreadsheetId,
-        formData: formData,
+        formData: updatedFormData,
         selectedEquipments: selectedEquipments,
         accessToken: accessToken || 'apps-script-mode'
       })
@@ -240,7 +249,16 @@ export const duplicateSpreadsheet = async (accessToken, templateId, newTitle) =>
 export const updateGoogleSheetWithData = async (accessToken, spreadsheetId, formData, selectedEquipments) => {
   return await retryWithBackoff(async () => {
     console.log('updateGoogleSheetWithData POST 요청 시작:', { spreadsheetId, equipmentCount: selectedEquipments.length });
-    
+
+    const now = new Date();
+    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const updatedFormData = {
+      ...formData,
+      processedAt: formData?.processedAt || timestampStr,
+      timestamp: formData?.timestamp || timestampStr
+    };
+
     const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
       method: 'POST',
       headers: {
@@ -249,7 +267,7 @@ export const updateGoogleSheetWithData = async (accessToken, spreadsheetId, form
       body: JSON.stringify({
         action: 'updateSpreadsheet',
         spreadsheetId: spreadsheetId,
-        formData: formData,
+        formData: updatedFormData,
         selectedEquipments: selectedEquipments,
         accessToken: accessToken || 'apps-script-mode'
       })
