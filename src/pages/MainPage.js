@@ -983,8 +983,8 @@ const MainPage = ({ user, onLogout }) => {
 
     if (scannedSerial) {
       const targetEq = allEquipments.find(item => {
-        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-        return s === scannedSerial.trim();
+        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim().toLowerCase();
+        return s === scannedSerial.trim().toLowerCase();
       });
 
       if (targetEq) {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { getEquipmentData } from '../services/api';
-import styles from './MainPage.module.css';
 
 const QrPrintPage = () => {
   const [domain, setDomain] = useState(window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr');

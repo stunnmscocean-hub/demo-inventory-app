@@ -22,14 +22,13 @@ const ProtectedRoute = ({ isAuthenticated, children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // 로그인 성공 시 보존된 QR 쿼리 파라미터 복원
+  // 로그인 성공 시 보존된 QR 쿼리 파라미터 복원 리디렉션
   const pendingParams = sessionStorage.getItem('pending_qr_params');
   if (pendingParams) {
     console.log('📱 [ProtectedRoute] 로그인 성공 - QR 쿼리 복원:', pendingParams);
     sessionStorage.removeItem('pending_qr_params');
-    if (!window.location.search || !window.location.search.includes('action=')) {
-      window.history.replaceState(null, '', `/${pendingParams}`);
-    }
+    const targetUrl = pendingParams.startsWith('/') ? pendingParams : `/${pendingParams}`;
+    return <Navigate to={targetUrl} replace />;
   }
 
   return children;
@@ -92,7 +91,13 @@ function App() {
         <Routes>
           <Route 
             path="/login" 
-            element={isAuthenticated ? <Navigate to="/" /> : <LoginPage />} 
+            element={
+              isAuthenticated ? (
+                <Navigate to={sessionStorage.getItem('pending_qr_params') ? (sessionStorage.getItem('pending_qr_params').startsWith('/') ? sessionStorage.getItem('pending_qr_params') : `/${sessionStorage.getItem('pending_qr_params')}`) : "/"} replace />
+              ) : (
+                <LoginPage />
+              )
+            } 
           />
           <Route 
             path="/oauth/callback" 
