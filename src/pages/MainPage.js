@@ -897,6 +897,8 @@ const MainPage = ({ user, onLogout }) => {
   const [loadingEquipments, setLoadingEquipments] = useState(true);
   const [, setLoadingPartners] = useState(true); // loadingPartners는 사용하지 않지만 setLoadingPartners는 사용
 
+  // 📱 QR 연속 스캔 시 장바구니 유지를 위해 sessionStorage에서 복원
+  // eslint-disable-next-line no-unused-vars
   const [selectedEquipments, setSelectedEquipments] = useState([]); // State for selected equipments
   const [selectedDemos, setSelectedDemos] = useState([]); // State for selected demos to return
   const [isReturning, setIsReturning] = useState(false); // 반납 진행 중 상태
@@ -974,9 +976,36 @@ const MainPage = ({ user, onLogout }) => {
   }, [showInUseEquipment]);
 
   // 📱 듀얼 QR 스캔 URL 파라미터 감지 (action=apply / action=return)
+  // sessionStorage로 장바구니 유지 → QR 연속 스캔 시 기존 장비 + 신규 장비 누적
   useEffect(() => {
     if (!allEquipments || allEquipments.length === 0) return;
 
+    // 1️⃣ 먼저 sessionStorage에 저장된 기존 장바구니 복원
+    try {
+      const savedSerials = JSON.parse(sessionStorage.getItem('qr_cart_serials') || '[]');
+      if (savedSerials.length > 0) {
+        const restoredItems = savedSerials
+          .map(serial => allEquipments.find(item => {
+            const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim().toLowerCase();
+            return s === serial.toLowerCase();
+          }))
+          .filter(Boolean);
+
+        if (restoredItems.length > 0) {
+          setSelectedEquipments(prev => {
+            const merged = [...prev];
+            restoredItems.forEach(item => {
+              const exists = merged.some(eq => (eq.serial || eq.id) === (item.serial || item.id));
+              if (!exists) merged.push(item);
+            });
+            return merged;
+          });
+          console.log('📱 [QR 장바구니] 기존 장바구니 복원:', savedSerials);
+        }
+      }
+    } catch (e) { console.warn('장바구니 복원 실패:', e); }
+
+    // 2️⃣ 현재 URL의 QR 파라미터 처리
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action') || params.get('scan_action');
     const scannedSerial = params.get('serial') || params.get('scan') || params.get('sn');
@@ -995,14 +1024,22 @@ const MainPage = ({ user, onLogout }) => {
           if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
             alert(`⚠️ [실물 현황 불일치 감지]\n\n구글 시트 상에는 '대여중'으로 등록되어 있으나, 실물 QR 스캔이 확인되었습니다.\n\n해당 장비를 신청 목록에 추가합니다.`);
           }
-          // 장바구니 카트에 누적 추가
+          // 장바구니 카트에 누적 추가 + sessionStorage 저장
           setSelectedEquipments(prev => {
             const exists = prev.some(eq => (eq.serial || eq.id) === (targetEq.serial || targetEq.id));
             if (exists) return prev;
-            return [...prev, targetEq];
+            const updated = [...prev, targetEq];
+            // sessionStorage에 시리얼 목록 저장 (페이지 리로드 시 복원용)
+            const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
+            sessionStorage.setItem('qr_cart_serials', JSON.stringify(serials));
+            console.log('📱 [QR 장바구니] 장비 추가, 현재 카트:', serials);
+            return updated;
           });
           setShowApplicationForm(true);
           setApplicationFormState('expanded');
+
+          // URL에서 QR 파라미터 제거 (주소창 깔끔하게)
+          window.history.replaceState(null, '', window.location.pathname);
         } else if (action === 'return') {
           // 🔴 반납용 QR
           if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
@@ -1010,7 +1047,7 @@ const MainPage = ({ user, onLogout }) => {
             if (confirmReturn) {
               returnEquipment(targetEq).then(() => {
                 alert(`✅ ${targetEq.name} (${targetEq.serial}) 반납 처리가 완료되었습니다.`);
-                window.location.href = window.location.pathname; // URL 쿼리 초기화
+                window.location.href = window.location.pathname;
               }).catch(err => alert(`반납 실패: ${err.message}`));
             }
           } else {
@@ -1992,6 +2029,7 @@ const MainPage = ({ user, onLogout }) => {
 
     // Clear selections and hide form
     setSelectedEquipments([]);
+    sessionStorage.removeItem('qr_cart_serials'); // QR 장바구니 초기화
     setShowApplicationForm(false);
   };
 
