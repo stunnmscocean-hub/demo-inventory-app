@@ -64,8 +64,16 @@ export const addDataToSheet = async (accessToken, spreadsheetId, formData, selec
     const updatedFormData = {
       ...formData,
       processedAt: formData?.processedAt || timestampStr,
-      timestamp: formData?.timestamp || timestampStr
+      timestamp: formData?.timestamp || timestampStr,
+      '처리시간스탬프': formData?.['처리시간스탬프'] || timestampStr
     };
+
+    const updatedEquipments = (selectedEquipments || []).map(eq => ({
+      ...eq,
+      processedAt: eq.processedAt || timestampStr,
+      timestamp: eq.timestamp || timestampStr,
+      '처리시간스탬프': eq['처리시간스탬프'] || timestampStr
+    }));
 
     const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
       method: 'POST',
@@ -76,7 +84,7 @@ export const addDataToSheet = async (accessToken, spreadsheetId, formData, selec
         action: 'addDataToSheet',
         spreadsheetId: spreadsheetId,
         formData: updatedFormData,
-        selectedEquipments: selectedEquipments,
+        selectedEquipments: updatedEquipments,
         accessToken: accessToken || 'apps-script-mode'
       })
     });
@@ -255,8 +263,16 @@ export const updateGoogleSheetWithData = async (accessToken, spreadsheetId, form
     const updatedFormData = {
       ...formData,
       processedAt: formData?.processedAt || timestampStr,
-      timestamp: formData?.timestamp || timestampStr
+      timestamp: formData?.timestamp || timestampStr,
+      '처리시간스탬프': formData?.['처리시간스탬프'] || timestampStr
     };
+
+    const updatedEquipments = (selectedEquipments || []).map(eq => ({
+      ...eq,
+      processedAt: eq.processedAt || timestampStr,
+      timestamp: eq.timestamp || timestampStr,
+      '처리시간스탬프': eq['처리시간스탬프'] || timestampStr
+    }));
 
     const response = await fetch(APPS_SCRIPT_WEB_APP_URL, {
       method: 'POST',
@@ -267,7 +283,7 @@ export const updateGoogleSheetWithData = async (accessToken, spreadsheetId, form
         action: 'updateSpreadsheet',
         spreadsheetId: spreadsheetId,
         formData: updatedFormData,
-        selectedEquipments: selectedEquipments,
+        selectedEquipments: updatedEquipments,
         accessToken: accessToken || 'apps-script-mode'
       })
     });
