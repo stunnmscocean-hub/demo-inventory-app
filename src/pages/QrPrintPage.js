@@ -81,19 +81,22 @@ const QrPrintPage = () => {
       <style>{`
         @media print {
           @page {
-            size: A4;
-            margin: 0;
+            size: A4 portrait;
+            margin: 0 !important;
           }
           html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
+            width: 210mm !important;
+            height: 297mm !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
           .no-print { display: none !important; }
           .label-sheet {
             width: 210mm !important;
+            margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
           }
@@ -102,12 +105,14 @@ const QrPrintPage = () => {
             height: 297mm !important;
             padding-top: 17mm !important;
             padding-left: 16.1mm !important;
+            padding-right: 16.1mm !important;
             page-break-after: always !important;
             box-sizing: border-box !important;
             display: grid !important;
             grid-template-columns: 88.9mm 88.9mm !important;
             grid-template-rows: repeat(5, 52mm) !important;
-            gap: 0 !important;
+            column-gap: 0 !important;
+            row-gap: 0 !important;
           }
           .label-page:last-child {
             page-break-after: avoid !important;
@@ -119,7 +124,7 @@ const QrPrintPage = () => {
             border-radius: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 3mm 4mm !important;
+            padding: 3.5mm 4.5mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             background: #fff !important;
@@ -163,11 +168,11 @@ const QrPrintPage = () => {
         gap: '12px'
       }}>
         <div>
-          <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', margin: '0 0 2px 0' }}>
+          <h1 style={{ fontSize: '18px', fontWeight: '700', color: '#1e293b', margin: '0 0 4px 0' }}>
             🏷️ 장비 QR 라벨 출력 (Formtec LS-3510)
           </h1>
           <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-            88.9×52mm 라벨지 · 2열×5행 · A4 인쇄 최적화
+            88.9×52mm 라벨지 · 2열×5행 · ⚠️ <strong>인쇄 설정: 여백 [없음(None)], 비율 [100%]</strong>
           </p>
         </div>
 
@@ -219,9 +224,14 @@ const QrPrintPage = () => {
 
       {!loading && !error && (
         <>
-          {/* 장비 수 */}
-          <div className="no-print" style={{ maxWidth: '900px', margin: '16px auto 8px', padding: '0 24px', fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-            📦 총 {filtered.length}개 장비 · {Math.ceil(filtered.length / 10)}페이지
+          {/* 장비 수 및 팁 */}
+          <div className="no-print" style={{ maxWidth: '900px', margin: '16px auto 8px', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
+              📦 총 {filtered.length}개 장비 · {Math.ceil(filtered.length / 10)}페이지
+            </span>
+            <span style={{ fontSize: '12px', color: '#0284c7', background: '#e0f2fe', padding: '4px 10px', borderRadius: '4px', fontWeight: '500' }}>
+              💡 크롬 인쇄 팁: 설정 → [여백: 없음] 설정 필수
+            </span>
           </div>
 
           {/* ===== 라벨 시트 렌더링 (10개씩 한 페이지) ===== */}
@@ -235,39 +245,49 @@ const QrPrintPage = () => {
                     const serial = (eq.serial || '').toString().trim();
                     const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
                     const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
-                    const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(applyUrl)}`;
-                    const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(returnUrl)}`;
+                    const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
+                    const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
 
                     return (
-                      <div key={idx} className="label-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', overflow: 'hidden' }}>
-                        {/* 상단: 장비명 + 시리얼 */}
+                      <div key={idx} className="label-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box' }}>
+                        {/* 0. 헤더: 회사명 & 연락처 */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '8px', fontWeight: '700', color: '#334155' }}>
+                            오우션테크놀러지 Demo Device
+                          </span>
+                          <span style={{ fontSize: '7.5px', color: '#64748b' }}>
+                            02-2188-7737
+                          </span>
+                        </div>
+
+                        {/* 1. 상단: 장비명 + 시리얼 */}
                         <div style={{ marginBottom: '4px' }}>
-                          <div style={{ fontSize: '11px', fontWeight: '700', color: '#0f172a', lineHeight: '1.3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: '1.25', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                             {eq.name}
                           </div>
-                          <div style={{ fontSize: '9px', color: '#475569', fontWeight: '600', fontFamily: "'Inter', monospace" }}>
+                          <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', fontFamily: "'Inter', monospace", marginTop: '2px' }}>
                             S/N: {formatSerial(serial)}
                           </div>
                         </div>
 
-                        {/* 하단: 듀얼 QR */}
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-end', flex: 1 }}>
+                        {/* 2. 하단: 듀얼 QR (크기 확대하여 52mm 칸 내부 여백 가득 채움) */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-around', flex: 1 }}>
                           {/* 대여 신청 QR */}
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{
-                              fontSize: '7px', fontWeight: '700', color: '#fff', background: '#2563eb',
-                              padding: '1px 4px', borderRadius: '2px', marginBottom: '2px'
-                            }}>대여 신청</span>
-                            <img src={applyQr} alt="신청" style={{ width: '70px', height: '70px', border: '1px solid #cbd5e1', borderRadius: '3px' }} />
+                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#2563eb',
+                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                            }}>🔵 대여 신청</span>
+                            <img src={applyQr} alt="신청" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
                           </div>
 
                           {/* 반납 QR */}
-                          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                             <span style={{
-                              fontSize: '7px', fontWeight: '700', color: '#fff', background: '#dc2626',
-                              padding: '1px 4px', borderRadius: '2px', marginBottom: '2px'
-                            }}>반납</span>
-                            <img src={returnQr} alt="반납" style={{ width: '70px', height: '70px', border: '1px solid #cbd5e1', borderRadius: '3px' }} />
+                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#dc2626',
+                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                            }}>🔴 반납 처리</span>
+                            <img src={returnQr} alt="반납" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
                           </div>
                         </div>
                       </div>
