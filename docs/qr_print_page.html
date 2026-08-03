@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📦 장비 듀얼 QR 코드 라벨 인쇄 페이지</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700&display=swap');
+
+    :root {
+      --bg-page: #f8fafc;
+      --border-color: #cbd5e1;
+      --primary-color: #2563eb;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Noto Sans KR', 'Inter', sans-serif;
+      background-color: var(--bg-page);
+      color: #0f172a;
+      padding: 24px;
+    }
+
+    /* 상단 컨트롤 바 (인쇄 시 숨김) */
+    .control-bar {
+      background: #ffffff;
+      padding: 16px 24px;
+      border-radius: 12px;
+      border: 1px solid var(--border-color);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+      margin-bottom: 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .title-group h1 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .title-group p {
+      font-size: 13px;
+      color: #64748b;
+    }
+
+    .action-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .domain-select, .search-input {
+      padding: 8px 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .btn-print {
+      background-color: var(--primary-color);
+      color: #ffffff;
+      font-weight: 700;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-print:hover {
+      background-color: #1d4ed8;
+    }
+
+    /* QR 라벨 그리드 레이아웃 */
+    .label-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+      gap: 16px;
+    }
+
+    /* 개별 장비 QR 카드 */
+    .label-card {
+      background: #ffffff;
+      border: 2px dashed #94a3b8;
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .card-header {
+      border-bottom: 1px solid #e2e8f0;
+      padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+
+    .device-name {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+
+    .serial-text {
+      font-family: 'Inter', monospace;
+      font-size: 13px;
+      color: #475569;
+      font-weight: 600;
+    }
+
+    .serial-letter {
+      background-color: #e2e8f0;
+    }
+
+    /* 듀얼 QR 영역 */
+    .qr-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .qr-box {
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+    }
+
+    .qr-box.apply {
+      border-color: #93c5fd;
+      background: #eff6ff;
+    }
+
+    .qr-box.return {
+      border-color: #fca5a5;
+      background: #fef2f2;
+    }
+
+    .qr-badge {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      display: inline-block;
+    }
+
+    .qr-badge.apply {
+      background: #2563eb;
+      color: #ffffff;
+    }
+
+    .qr-badge.return {
+      background: #dc2626;
+      color: #ffffff;
+    }
+
+    .qr-img {
+      width: 120px;
+      height: 120px;
+      background: #ffffff;
+      padding: 6px;
+      border-radius: 6px;
+      border: 1px solid #cbd5e1;
+      margin-bottom: 6px;
+    }
+
+    .qr-subtext {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 500;
+    }
+
+    /* 🖨️ 인쇄 전용 스타일 (@media print) */
+    @media print {
+      body {
+        background: #ffffff;
+        padding: 0;
+      }
+
+      .control-bar {
+        display: none !important;
+      }
+
+      .label-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+
+      .label-card {
+        border: 1px solid #64748b;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 상단 조작바 -->
+  <div class="control-bar">
+    <div class="title-group">
+      <h1>📦 장비 듀얼 QR 코드 라벨 출력</h1>
+      <p>실물 장비에 부착할 [🔵 대여 신청용 QR] 및 [🔴 반납용 QR] 라벨 페이지입니다.</p>
+    </div>
+    <div class="action-group">
+      <label style="font-size:13px; font-weight:600;">서버 도메인:</label>
+      <select id="domainSelect" class="domain-select" onchange="renderAllQrs()">
+        <option value="https://demodevice.kr">https://demodevice.kr (운영)</option>
+        <option value="http://localhost:3000" selected>http://localhost:3000 (로컬 테스트)</option>
+      </select>
+
+      <input type="text" id="searchInput" class="search-input" placeholder="장비명/시리얼 검색..." oninput="filterEquipments()" />
+
+      <button class="btn-print" onclick="window.print()">
+        <span>🖨️ A4 라벨 인쇄</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- QR 라벨 그리드 -->
+  <div class="label-grid" id="labelGrid">
+    <!-- 동적 생성됨 -->
+  </div>
+
+  <script>
+    // 샘플 데모 장비 목록 (실제 인스턴스 데이터 연동)
+    const equipmentData = [
+      { name: "Rally Bar Huddle", serial: "2326FDMAP449" },
+      { name: "MeetUp", serial: "2129LZ50NR98" },
+      { name: "Meetup 2", serial: "2421FDDDCMA9" },
+      { name: "Rally Camera", serial: "1832LZ0P31D9" },
+      { name: "Rally System", serial: "1923LZ52HEG9" },
+      { name: "Rally Speaker", serial: "1847GG01JAB8" },
+      { name: "Rally Mic Pod", serial: "1903LZ0JXS78" },
+      { name: "Lenovo Thinksmart MTR", serial: "PF5VRGVW" },
+      { name: "Lenovo Thinksmart MTR", serial: "PF4CK6FH" },
+      { name: "Lenovo Thinksmart Zoom", serial: "PF5N342E" },
+      { name: "NUC PC (Zoom)", serial: "G6BE95100ECP" },
+      { name: "NUC PC (Zoom)", serial: "G6BE929009AB" },
+      { name: "Google Chromebox (CTL GQE15C)", serial: "0WDCTFQI22308186" },
+      { name: "Active Cable", serial: "2429WD047A39" }
+    ];
+
+    // 시리얼 영문자 회색 하이라이트 포맷터
+    function formatSerial(serialText) {
+      if (!serialText) return '';
+      const parts = serialText.split(/([a-zA-Z가-힣_#-]+)/g);
+      return parts.map(part => {
+        if (!part) return '';
+        if (/[a-zA-Z가-힣_#-]/.test(part)) {
+          return `<span class="serial-letter">${part}</span>`;
+        }
+        return part;
+      }).join('');
+    }
+
+    // QR 코드 생성 및 라벨 그리드 렌더링
+    function renderAllQrs() {
+      const grid = document.getElementById('labelGrid');
+      const domain = document.getElementById('domainSelect').value;
+      const query = document.getElementById('searchInput').value.toLowerCase().trim();
+
+      const filtered = equipmentData.filter(eq => 
+        eq.name.toLowerCase().includes(query) || eq.serial.toLowerCase().includes(query)
+      );
+
+      grid.innerHTML = filtered.map(eq => {
+        const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(eq.serial)}`;
+        const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(eq.serial)}`;
+
+        const applyQrImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
+        const returnQrImg = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
+
+        return `
+          <div class="label-card">
+            <div class="card-header">
+              <div class="device-name">${eq.name}</div>
+              <div class="serial-text">S/N: ${formatSerial(eq.serial)}</div>
+            </div>
+            <div class="qr-container">
+              <div class="qr-box apply">
+                <span class="qr-badge apply">🔵 대여 신청용</span>
+                <img class="qr-img" src="${applyQrImg}" alt="신청 QR" />
+                <span class="qr-subtext">스캔 시 대여 신청 카트 담기</span>
+              </div>
+              <div class="qr-box return">
+                <span class="qr-badge return">🔴 반납용</span>
+                <img class="qr-img" src="${returnQrImg}" alt="반납 QR" />
+                <span class="qr-subtext">스캔 시 원클릭 반납 처리</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterEquipments() {
+      renderAllQrs();
+    }
+
+    // 페이지 로드 시 즉시 실행
+    window.onload = renderAllQrs;
+  </script>
+</body>
+</html>

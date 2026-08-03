@@ -19,6 +19,41 @@ import { setCacheData, getForceCacheData, findDataChanges, CACHE_KEYS } from '..
 import JpgViewer from '../components/JpgViewer';
 import styles from './MainPage.module.css';
 
+// 날짜 문자열 파싱 헬퍼 함수 (YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD, 한국어 및 YYYYMMDD 호환)
+const parseDateString = (dateString) => {
+  if (!dateString) return null;
+  const str = dateString.toString().trim();
+  if (!str) return null;
+
+  if (str.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    return new Date(str);
+  }
+
+  const parts = str.split(/[/.]/);
+  if (parts.length === 3) {
+    const [year, month, day] = parts;
+    return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+  }
+
+  const koreanMatch = str.match(/(\d+)월\s*(\d+)일/);
+  if (koreanMatch) {
+    const month = koreanMatch[1].padStart(2, '0');
+    const day = koreanMatch[2].padStart(2, '0');
+    const currentYear = new Date().getFullYear();
+    return new Date(`${currentYear}-${month}-${day}`);
+  }
+
+  if (/^\d{8}$/.test(str)) {
+    const y = parseInt(str.substring(0, 4), 10);
+    const m = parseInt(str.substring(4, 6), 10) - 1;
+    const day = parseInt(str.substring(6, 8), 10);
+    return new Date(y, m, day);
+  }
+
+  const fallback = new Date(str);
+  return isNaN(fallback.getTime()) ? null : fallback;
+};
+
 // SearchBar 컴포넌트를 메인 컴포넌트 외부로 이동
 const SearchBar = React.memo(({ onSearch }) => {
   const [term, setTerm] = useState('');
@@ -128,6 +163,60 @@ const SkeletonMyDemoTable = ({ rows = 3 }) => {
   );
 };
 
+// 시리얼 넘버 포맷터 (숫자를 제외한 영문자 부분에만 순수 회색 배경 지정)
+const renderFormattedSerial = (serialText) => {
+  if (!serialText) return '';
+  const str = serialText.toString();
+  const parts = str.split(/([a-zA-Z가-힣_#-]+)/g);
+  return (
+    <span className={styles.serialText}>
+      {parts.map((part, index) => {
+        if (!part) return null;
+        if (/[a-zA-Z가-힣_#-]/.test(part)) {
+          return <span key={index} className={styles.serialLetter}>{part}</span>;
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </span>
+  );
+};
+
+// 상태 점 및 텍스트 렌더러 (마스터 목록에서는 '반납완료'도 '대여 가능'으로 통일 표기)
+const renderStatusCell = (status, isHistoryLog = false) => {
+  if (!status) return null;
+  const clean = status.toString().trim().replace(/\s+/g, '');
+  let dotClass = styles.dotGreen;
+  let textClass = styles.statusAvailableText;
+  let label = '대여 가능';
+
+  if (['대여중', '대여신청', '사용중'].includes(clean)) {
+    dotClass = styles.dotYellow;
+    textClass = styles.statusInUseText;
+    label = clean === '대여신청' ? '대여신청' : '대여중 (신청됨)';
+  } else if (['대여가능', '사용가능', '반납완료', '반납완료됨'].includes(clean)) {
+    if (isHistoryLog) {
+      dotClass = styles.dotBlue;
+      textClass = styles.statusReturnedText;
+      label = '반납완료';
+    } else {
+      dotClass = styles.dotGreen;
+      textClass = styles.statusAvailableText;
+      label = '대여 가능';
+    }
+  } else if (clean.includes('사용불가') || clean.includes('대여불가') || clean.includes('고장') || clean.includes('폐기')) {
+    dotClass = styles.dotRed;
+    textClass = styles.statusDisabledText;
+    label = '사용불가';
+  }
+
+  return (
+    <div className={styles.statusCell}>
+      <span className={`${styles.statusDot} ${dotClass}`} />
+      <span className={textClass}>{label}</span>
+    </div>
+  );
+};
+
 // EquipmentList 컴포넌트를 메인 컴포넌트 외부로 이동
 const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentToggle, allEquipmentFromSheet }) => {
   // 확장된 장비 ID를 추적하는 state
@@ -165,10 +254,12 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     const serial = (equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '').toString().trim();
     if (!serial) return [];
 
-    // 1. 시리얼넘버로 필터링 (전체 이력 포함)
+    // 1. 시리얼넘버로 필터링 (초기 입고/신규등록 마스터 행은 대여담당자 및 시작일이 없으므로 제외)
     const historyRows = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-      return itemSerial === serial;
+      const assignee = (item['대여담당자'] || item.assignee || '').toString().trim();
+      const startDate = (item['시작일'] || item.startDate || '').toString().trim();
+      return itemSerial === serial && (assignee !== '' || startDate !== '');
     });
 
     // 2. 그룹화 (대여담당자, 시작일, 비고 기준) - 한 대여건에 여러 행이 쌓이는 경우 처리
@@ -210,24 +301,24 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
       };
     });
 
-    // 4. 날짜 기준 정렬 (시간이 지날수록 아래에 쌓이도록 -> 오름차순)
+    // 4. 날짜 기준 정렬 (최신건이 맨 위에 오도록 -> 내림차순 정렬)
     const sortedHistory = groupedHistory.sort((a, b) => {
       const dateA = parseDateString(a['시작일'] || a.startDate || '');
       const dateB = parseDateString(b['시작일'] || b.startDate || '');
 
       if (!dateA && !dateB) return 0;
-      if (!dateA) return -1;
-      if (!dateB) return 1;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
 
-      const dateDiff = dateA.getTime() - dateB.getTime();
+      const dateDiff = dateB.getTime() - dateA.getTime();
       if (dateDiff !== 0) return dateDiff;
 
-      // 날짜가 같으면 줄 번호(Index)가 큰 것(최신)을 아래로 배치 (오름차순)
-      return (a.maxIndex || 0) - (b.maxIndex || 0);
+      // 날짜가 같으면 줄 번호(Index)가 큰 것(최신)을 위로 배치 (내림차순)
+      return (b.maxIndex || 0) - (a.maxIndex || 0);
     });
 
-    // 최근 3개 '건'만 반환 (오름차순이므로 맨 뒤에서부터 3개 가져오기)
-    return sortedHistory.slice(-3);
+    // 대여 히스토리 전체 반환 (제한 없이 모든 이력 포함)
+    return sortedHistory;
   }, [allEquipmentFromSheet]);
 
   // 같은 시작일과 비고를 가진 다른 장비 찾기
@@ -283,6 +374,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
   }, []);
 
   // 상태 텍스트 변환 (모바일에서 짧게)
+  // eslint-disable-next-line no-unused-vars
   const getStatusText = (status) => {
     if (!isMobile) return status;
 
@@ -459,152 +551,141 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                       <td>
                         {eq.name}
                       </td>
-                      <td>{eq.serial}</td>
+                      <td>{renderFormattedSerial(eq.serial)}</td>
                       <td>{eq.location}</td>
-                      <td>{getStatusText(eq.status)}</td>
+                      <td>{renderStatusCell(eq.status)}</td>
                     </tr>
                     {isExpanded && history.length > 0 && (
-                      <>
-                        {history.map((historyItem, idx) => {
-                          // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
-                          const related = getRelatedEquipments(historyItem, currentSerial);
+                      <tr className={styles.historyRow}>
+                        <td colSpan="5" className={styles.expandedCell}>
+                          <div className={styles.expandedContainer}>
+                            <div className={styles.historyTitle}>
+                              <span>대여 히스토리</span>
+                              <span style={{ fontSize: '12px', fontWeight: 'normal', color: '#94a3b8' }}>
+                                (총 {history.length}건)
+                              </span>
+                            </div>
+                            <div className={styles.timeline}>
+                              {history.map((historyItem, idx) => {
+                                // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
+                                const related = getRelatedEquipments(historyItem, currentSerial);
 
-                          // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
-                          const equipmentPairs = [];
+                                // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
+                                const equipmentPairs = [];
 
-                          // 현재 장비 추가
-                          if (eq.name || eq.serial) {
-                            equipmentPairs.push({
-                              name: (eq.name || '').toString().trim(),
-                              serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
-                            });
-                          }
+                                // 현재 장비 추가
+                                if (eq.name || eq.serial) {
+                                  equipmentPairs.push({
+                                    name: (eq.name || '').toString().trim(),
+                                    serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
+                                  });
+                                }
 
-                          // 관련 장비 추가
-                          related.forEach(item => {
-                            const name = (item['제품명'] || item.name || '').toString().trim();
-                            const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+                                // 관련 장비 추가
+                                related.forEach(item => {
+                                  const name = (item['제품명'] || item.name || '').toString().trim();
+                                  const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
 
-                            // 현재 장비와 중복되지 않고, 이름이나 시리얼이 있는 경우만 추가
-                            const isDuplicate = equipmentPairs.some(pair =>
-                              (pair.name && pair.name === name) || (pair.serial && pair.serial === serial)
-                            );
+                                  // 현재 장비와 중복되지 않고, 이름이나 시리얼이 있는 경우만 추가
+                                  const isDuplicate = equipmentPairs.some(pair =>
+                                    (pair.name && pair.name === name) || (pair.serial && pair.serial === serial)
+                                  );
 
-                            if (!isDuplicate && (name || serial)) {
-                              equipmentPairs.push({ name, serial });
-                            }
-                          });
+                                  if (!isDuplicate && (name || serial)) {
+                                    equipmentPairs.push({ name, serial });
+                                  }
+                                });
 
-                          // 날짜 포맷팅
-                          const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
-                          const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
-                          const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
+                                // 날짜 포맷팅
+                                const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
+                                const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
+                                const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
 
-                          let formattedStartDate = '';
-                          if (startDate) {
-                            const date = parseDateString(startDate);
-                            if (date && !isNaN(date.getTime())) {
-                              const year = String(date.getFullYear()).slice(-2);
-                              const month = String(date.getMonth() + 1).padStart(2, '0');
-                              const day = String(date.getDate()).padStart(2, '0');
-                              formattedStartDate = `${year}/${month}/${day}`;
-                            }
-                          }
+                                let formattedStartDate = '';
+                                if (startDate) {
+                                  const date = parseDateString(startDate);
+                                  if (date && !isNaN(date.getTime())) {
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    formattedStartDate = `${year}.${month}.${day}`;
+                                  }
+                                }
 
-                          let formattedEndDate = '';
-                          if (endDate) {
-                            const date = parseDateString(endDate);
-                            if (date && !isNaN(date.getTime())) {
-                              const month = String(date.getMonth() + 1).padStart(2, '0');
-                              const day = String(date.getDate()).padStart(2, '0');
-                              formattedEndDate = `${month}/${day}`;
-                            }
-                          }
+                                let formattedEndDate = '';
+                                if (endDate) {
+                                  const date = parseDateString(endDate);
+                                  if (date && !isNaN(date.getTime())) {
+                                    const year = date.getFullYear();
+                                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                                    const day = String(date.getDate()).padStart(2, '0');
+                                    formattedEndDate = `${year}.${month}.${day}`;
+                                  }
+                                }
 
-                          // 파트너 관련 컬럼 찾기 (타임스탬프 등 오매핑 방지를 위해 명시적 키 확인)
-                          const partnerKeys = ['파트너명', '파트너사명', 'partnerName', '사용자명', 'userName', '사용처명', '사용처', '고객사'];
-                          const foundPartners = [];
-                          for (const k of partnerKeys) {
-                            if (historyItem[k] && typeof historyItem[k] === 'string' && !historyItem[k].match(/^\d{4}-\d{2}-\d{2}/)) {
-                              const val = historyItem[k].toString().trim();
-                              if (val && !foundPartners.includes(val)) {
-                                foundPartners.push(val);
-                              }
-                            }
-                          }
-                          const columnI = foundPartners.join(' / ');
-                          
-                          const memoKey = ['비고', 'memo', '메모'].find(k => historyItem[k]) || '비고';
-                          const memo = (historyItem[memoKey] || '').toString().trim();
+                                // 파트너 관련 컬럼 찾기 (타임스탬프 등 오매핑 방지를 위해 명시적 키 확인)
+                                const partnerKeys = ['파트너명', '파트너사명', 'partnerName', '사용자명', 'userName', '사용처명', '사용처', '고객사'];
+                                const foundPartners = [];
+                                for (const k of partnerKeys) {
+                                  if (historyItem[k] && typeof historyItem[k] === 'string' && !historyItem[k].match(/^\d{4}-\d{2}-\d{2}/)) {
+                                    const val = historyItem[k].toString().trim();
+                                    if (val && !foundPartners.includes(val)) {
+                                      foundPartners.push(val);
+                                    }
+                                  }
+                                }
+                                const columnI = foundPartners.join(' / ');
+                                const memoKey = ['비고', 'memo', '메모'].find(k => historyItem[k]) || '비고';
+                                const memo = (historyItem[memoKey] || '').toString().trim();
 
-                          // 디버깅: 데이터 확인
-                          if (idx === 0) {
-                            console.log('First History Item Debug:', {
-                              historyItem,
-                              equipmentPairs,
-                              assignee,
-                              formattedStartDate,
-                              memo,
-                              eqName: eq.name,
-                              eqSerial: eq.serial,
-                              currentSerial
-                            });
-                          }
+                                const isCurrentActive = ['대여중', '대여신청', '사용중'].includes((historyItem.finalStatus || '').toString().trim().replace(/\s+/g, ''));
 
-                          // 내용이 있는지 확인
-                          const hasAnyContent = equipmentPairs.length > 0 || assignee || formattedStartDate || memo || columnI;
+                                return (
+                                  <div key={`${eq.id}-history-${idx}`} className={styles.timelineItem}>
+                                    <div className={`${styles.timelineNode} ${isCurrentActive ? styles.timelineNodeInUse : ''}`} />
+                                    <div
+                                      className={styles.timelineContent}
+                                      style={isCurrentActive ? { borderColor: '#fde68a', background: '#fffbeb' } : {}}
+                                    >
+                                      <div className={styles.timelineHeader}>
+                                        {renderStatusCell(historyItem.finalStatus, true)}
+                                        <span style={{ color: '#cbd5e1' }}>|</span>
+                                        <span className={styles.userName}>{assignee || '-'}</span>
+                                        {formattedStartDate && (
+                                          <>
+                                            <span style={{ color: '#cbd5e1' }}>|</span>
+                                            <span className={styles.dateRange}>
+                                              {formattedStartDate}{formattedEndDate ? ` ~ ${formattedEndDate}` : ''}
+                                            </span>
+                                          </>
+                                        )}
+                                      </div>
 
-                          return (
-                            <tr key={`${eq.id}-history-${idx}`} className={styles.historyRow}>
-                              <td className={styles.historyBox} colSpan="5">
-                                <div className={styles.historyBoxContent}>
-                                  {hasAnyContent ? (
-                                    <>
-                                      {equipmentPairs.length > 0 && (
-                                        <div className={styles.historyBoxGrid}>
-                                          {equipmentPairs.map((pair, pairIdx) => (
-                                            <div key={pairIdx} className={styles.historyBoxItem}>
-                                              <div className={styles.historyBoxItemName}>{pair.name}</div>
-                                              <div className={styles.historyBoxItemSerial}>{pair.serial}</div>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                      {(assignee || formattedStartDate) && (
-                                        <div className={styles.historyBoxRow}>
-                                          <span style={{
-                                            fontWeight: 'bold',
-                                            color: historyItem.finalStatus === '반납완료' ? '#999' : '#2ecc71',
-                                            marginRight: '8px'
-                                          }}>
-                                            [{historyItem.finalStatus}]
-                                          </span>
-                                          <span>{assignee || '-'}</span>
-                                          {formattedStartDate && (
-                                            <span> ({formattedStartDate}{formattedEndDate ? ` - ${formattedEndDate}` : ''})</span>
-                                          )}
-                                        </div>
-                                      )}
-                                      {(columnI || memo) && (
-                                        <div className={styles.historyBoxRow}>
-                                          <div className={styles.historyBoxMemo}>
-                                            {columnI && <span style={{ fontWeight: 'bold', color: '#444' }}>[{columnI}] </span>}
-                                            {memo}
+                                      {columnI && <div className={styles.partnerBox}>파트너사: {columnI}</div>}
+                                      {memo && <div className={styles.memoBox}>비고: {memo}</div>}
+
+                                      {/* 동시 대여 묶음 장비 (대여 박스 하단에 위치) */}
+                                      {equipmentPairs.length > 1 && (
+                                        <div className={styles.bundleSection} style={{ marginTop: '8px', marginBottom: '0' }}>
+                                          <div className={styles.bundleHeader}>동시 대여 묶음 장비 세트 ({equipmentPairs.length}종)</div>
+                                          <div className={styles.bundleTags}>
+                                            {equipmentPairs.map((pair, pairIdx) => (
+                                              <span key={pairIdx} className={`${styles.bundleChip} ${pairIdx === 0 ? styles.bundleChipMain : ''}`}>
+                                                <span>{pair.name}</span>
+                                                <span className={styles.chipSerial}>{renderFormattedSerial(pair.serial)}</span>
+                                              </span>
+                                            ))}
                                           </div>
                                         </div>
                                       )}
-                                    </>
-                                  ) : (
-                                    <div className={styles.historyBoxRow}>
-                                      <span>대여 정보 없음</span>
                                     </div>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
                     )}
                   </React.Fragment>
                 );
@@ -622,35 +703,6 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
 const getUserDisplayName = (user) => {
   // OAuth 로그인 시 GAS에서 ACL 시트의 name을 user.name에 설정
   return user?.name || user?.email || '게스트';
-};
-
-// Helper function to parse yyyy/mm/dd or yyyy-mm-dd into a Date object
-const parseDateString = (dateString) => {
-  if (!dateString) return null;
-
-  // yyyy-mm-dd format (from input type="date")
-  if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-    return new Date(dateString);
-  }
-
-  // yyyy/mm/dd format (from CSV)
-  const parts = dateString.split('/');
-  if (parts.length === 3) {
-    const [year, month, day] = parts;
-    return new Date(`${year}-${month}-${day}`); // Convert to yyyy-mm-dd for reliable Date parsing
-  }
-
-  // Korean date format (e.g., "12월 12일")
-  const koreanMatch = dateString.match(/(\d+)월\s*(\d+)일/);
-  if (koreanMatch) {
-    const month = koreanMatch[1].padStart(2, '0');
-    const day = koreanMatch[2].padStart(2, '0');
-    const currentYear = new Date().getFullYear();
-    return new Date(`${currentYear}-${month}-${day}`);
-  }
-
-  // Fallback for other formats
-  return new Date(dateString);
 };
 
 // Helper function to format a Date object or date string to yyyy/mm/dd
@@ -920,6 +972,54 @@ const MainPage = ({ user, onLogout }) => {
     setAvailableEquipments(initialFiltered);
     setFilteredEquipments(initialFiltered);
   }, [showInUseEquipment]);
+
+  // 📱 듀얼 QR 스캔 URL 파라미터 감지 (action=apply / action=return)
+  useEffect(() => {
+    if (!allEquipments || allEquipments.length === 0) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action') || params.get('scan_action');
+    const scannedSerial = params.get('serial') || params.get('scan') || params.get('sn');
+
+    if (scannedSerial) {
+      const targetEq = allEquipments.find(item => {
+        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+        return s === scannedSerial.trim();
+      });
+
+      if (targetEq) {
+        const cleanStatus = (targetEq.status || '').toString().trim().replace(/\s+/g, '');
+
+        if (action === 'apply') {
+          // 🔵 데모 신청용 QR
+          if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
+            alert(`⚠️ [실물 현황 불일치 감지]\n\n구글 시트 상에는 '대여중'으로 등록되어 있으나, 실물 QR 스캔이 확인되었습니다.\n\n해당 장비를 신청 목록에 추가합니다.`);
+          }
+          // 장바구니 카트에 누적 추가
+          setSelectedEquipments(prev => {
+            const exists = prev.some(eq => (eq.serial || eq.id) === (targetEq.serial || targetEq.id));
+            if (exists) return prev;
+            return [...prev, targetEq];
+          });
+          setShowApplicationForm(true);
+          setApplicationFormState('expanded');
+        } else if (action === 'return') {
+          // 🔴 반납용 QR
+          if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
+            const confirmReturn = window.confirm(`📦 [장비 반납 확인]\n\n장비명: ${targetEq.name}\n시리얼: ${targetEq.serial}\n\n이 장비를 반납 완료 처리하시겠습니까?`);
+            if (confirmReturn) {
+              returnEquipment(targetEq).then(() => {
+                alert(`✅ ${targetEq.name} (${targetEq.serial}) 반납 처리가 완료되었습니다.`);
+                window.location.href = window.location.pathname; // URL 쿼리 초기화
+              }).catch(err => alert(`반납 실패: ${err.message}`));
+            }
+          } else {
+            alert(`ℹ️ 이미 반납 완료되어 보관 중인 장비입니다.`);
+          }
+        }
+      }
+    }
+  }, [allEquipments]);
 
   useEffect(() => {
     const fetchAllCsvData = async () => {
@@ -3730,6 +3830,23 @@ const MainPage = ({ user, onLogout }) => {
               />
               <span>사용중인 장비</span>
             </label>
+            <button
+              onClick={() => window.open('/qr-print', '_blank')}
+              style={{
+                backgroundColor: '#2563eb',
+                color: '#ffffff',
+                border: 'none',
+                borderRadius: '6px',
+                padding: '6px 12px',
+                fontSize: '13px',
+                fontWeight: '700',
+                cursor: 'pointer',
+                marginLeft: '8px',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              🖨️ QR 라벨 출력
+            </button>
           </div>
         </div>
 

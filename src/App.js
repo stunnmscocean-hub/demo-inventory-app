@@ -1,13 +1,40 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, Navigate, useLocation } from 'react-router-dom';
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import useAuthStore from './stores/authStore';
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage';
+import QrPrintPage from './pages/QrPrintPage';
 import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
-// This is a temporary change to trigger Vercel redeploy (2)
+// 🔒 QR 쿼리 파라미터 동기적 보존 및 로그인 전용 라우터
+const ProtectedRoute = ({ isAuthenticated, children }) => {
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    // 렌더링 시점에 동기적으로 QR 파라미터(?action=apply...) 보존
+    const search = location.search || window.location.search;
+    if (search && (search.includes('action=') || search.includes('serial='))) {
+      console.log('📱 [ProtectedRoute] 미로그인 상태 QR 쿼리 보존:', search);
+      sessionStorage.setItem('pending_qr_params', search);
+    }
+    return <Navigate to="/login" replace />;
+  }
+
+  // 로그인 성공 시 보존된 QR 쿼리 파라미터 복원
+  const pendingParams = sessionStorage.getItem('pending_qr_params');
+  if (pendingParams) {
+    console.log('📱 [ProtectedRoute] 로그인 성공 - QR 쿼리 복원:', pendingParams);
+    sessionStorage.removeItem('pending_qr_params');
+    if (!window.location.search || !window.location.search.includes('action=')) {
+      window.history.replaceState(null, '', `/${pendingParams}`);
+    }
+  }
+
+  return children;
+};
+
 function App() {
   const { isAuthenticated, user, logout, checkTokenExpiry, initializeFromStorage } = useAuthStore();
 
@@ -46,7 +73,7 @@ function App() {
     }, 100);
     return () => clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkTokenExpiry, initializeFromStorage]); // isAuthenticated와 user는 초기화 시에만 실행되도록 의도적으로 제외
+  }, [checkTokenExpiry, initializeFromStorage]);
 
   // 주기적 토큰 만료 검증 (5분마다)
   useEffect(() => {
@@ -58,8 +85,6 @@ function App() {
       return () => clearInterval(interval);
     }
   }, [isAuthenticated, checkTokenExpiry]);
-
-  // 로딩 상태는 제거 (Zustand persist가 자동으로 처리)
 
   return (
     <GoogleOAuthProvider clientId={process.env.REACT_APP_GOOGLE_CLIENT_ID}>
@@ -74,8 +99,16 @@ function App() {
             element={<OAuthCallback />} 
           />
           <Route 
+            path="/qr-print" 
+            element={<QrPrintPage />} 
+          />
+          <Route 
             path="/" 
-            element={isAuthenticated ? <MainPage user={user} onLogout={logout} /> : <Navigate to="/login" />} 
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <MainPage user={user} onLogout={logout} />
+              </ProtectedRoute>
+            } 
           />
         </Routes>
       </Router>

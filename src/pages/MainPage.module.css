@@ -771,8 +771,7 @@
 }
 
 /* 자식 행의 선택 칼럼 숨기기 (부모의 선택 칼럼 위치 차지) */
-.relatedRow > td:first-child,
-.historyRow > td:first-child {
+.relatedRow > td:first-child {
   width: 40px !important;
   min-width: 40px !important;
   max-width: 40px !important;
@@ -3287,4 +3286,269 @@ input[name="returnDate"]::placeholder {
   .tooltipValue {
     font-size: 10px;
   }
+}
+
+/* 시리얼 넘버 및 상태 점 스타일 */
+.serialText {
+  font-family: 'Inter', monospace;
+  font-size: 13px;
+  color: #334155;
+}
+
+/* 시리얼 넘버의 영문자 부분: 순수 회색 배경색만 지정 */
+.serialLetter {
+  background-color: #e2e8f0;
+}
+
+.statusCell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dotGreen { background-color: #10b981; }
+.dotYellow { background-color: #eab308; }
+.dotBlue { background-color: #3b82f6; }
+.dotRed { background-color: #ef4444; }
+
+.statusAvailableText { color: #059669; }
+.statusInUseText { color: #d97706; }
+.statusReturnedText { color: #4b5563; }
+.statusDisabledText { color: #dc2626; }
+
+/* 묶음 장비 태그 스타일 */
+.bundleSection {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+
+.bundleHeader {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 6px;
+}
+
+.bundleTags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.bundleChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #334155;
+}
+
+.bundleChipMain {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.categoryTable {
+  width: 100%;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  background-color: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+}
+
+/* 타임라인 히스토리 카드 스타일 */
+.historyRow {
+  background-color: #f8fafc !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.expandedCell {
+  padding: 0 !important;
+  background-color: #f8fafc !important;
+  color: #1e293b !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.expandedContainer {
+  padding: 18px 24px;
+  background-color: #f8fafc !important;
+  border-bottom: 1px solid #e2e8f0;
+  position: relative;
+  z-index: 1;
+  color: #1e293b !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.historyTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #475569 !important;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 2;
+}
+
+.timeline {
+  position: relative;
+  padding-left: 20px;
+  z-index: 1;
+}
+
+.timeline::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  background: #cbd5e1;
+  z-index: 1;
+}
+
+.timelineItem {
+  position: relative;
+  margin-bottom: 14px;
+  z-index: 2;
+}
+
+.timelineItem:last-child {
+  margin-bottom: 0;
+}
+
+.timelineNode {
+  position: absolute;
+  left: -20px;
+  top: 16px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #94a3b8;
+  border: 2px solid #f8fafc;
+  box-sizing: content-box;
+  z-index: 3;
+}
+
+.timelineNodeInUse {
+  background: #eab308;
+}
+
+.timelineContent {
+  position: relative;
+  z-index: 2;
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 8px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
+  color: #1e293b !important;
+  user-select: text !important;
+  -webkit-user-select: text !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.timelineHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  position: relative;
+  z-index: 3;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a !important;
+}
+
+.dateRange {
+  font-size: 13px;
+  color: #64748b !important;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+
+.partnerBox {
+  font-size: 13px;
+  color: #334155 !important;
+  margin-bottom: 4px;
+  position: relative;
+  z-index: 3;
+}
+
+.memoBox {
+  font-size: 13px;
+  color: #475569 !important;
+  background: transparent !important;
+  border-left: 3px solid #94a3b8;
+  padding: 4px 10px;
+  margin-top: 6px;
+  position: relative;
+  z-index: 3;
+}
+
+.timelineHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.userName {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.dateRange {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+}
+
+.partnerBox {
+  font-size: 13px;
+  color: #334155;
+  margin-bottom: 4px;
+}
+
+.memoBox {
+  font-size: 13px;
+  color: #64748b;
+  background: #fafafa;
+  border-left: 2px solid #cbd5e1;
+  padding: 6px 10px;
+  border-radius: 0 4px 4px 0;
 }
