@@ -554,6 +554,7 @@ export const updateFormSubmission = async (serialNumber, fileUrl) => {
 // ===== 📊 조회History 기록 (웹 검색 / QR 접속 로그) =====
 export const logSearchHistory = async (logData = {}) => {
   try {
+    console.log('🛫 [logSearchHistory] 시트 기록 요청:', logData);
     const params = new URLSearchParams({
       action: 'logSearchHistory',
       email: logData.email || '',
@@ -564,13 +565,17 @@ export const logSearchHistory = async (logData = {}) => {
       applied: logData.applied ? 'true' : 'false'
     });
 
-    const response = await fetch(`${GAS_URL}?${params.toString()}`);
-    if (!response.ok) return null;
+    const url = `${GAS_URL}?${params.toString()}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      console.warn('⚠️ [logSearchHistory] HTTP 에러:', response.status);
+      return null;
+    }
     const data = await response.json();
-    console.log('📊 [조회History] 로그 기록 완료:', data);
+    console.log('✅ [조회History] 시트 기록 완료:', data);
     return data;
   } catch (error) {
-    console.warn('logSearchHistory fail silently:', error);
+    console.error('❌ [logSearchHistory] 에러 발생:', error);
     return null;
   }
 };

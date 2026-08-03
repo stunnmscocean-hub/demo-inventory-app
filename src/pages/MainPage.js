@@ -54,29 +54,63 @@ const parseDateString = (dateString) => {
   return isNaN(fallback.getTime()) ? null : fallback;
 };
 
-// SearchBar 컴포넌트를 메인 컴포넌트 외부로 이동
-const SearchBar = React.memo(({ onSearch }) => {
+// SearchBar 컴포넌트 (검색 로그 디바운싱 & 엔터/블러 이벤트 감지)
+const SearchBar = React.memo(({ onSearch, user }) => {
   const [term, setTerm] = useState('');
+  const logTimerRef = useRef(null);
+
+  const triggerLog = useCallback((queryText) => {
+    const trimmed = (queryText || '').trim();
+    if (trimmed.length >= 1) {
+      console.log('🔍 [SearchBar] 웹 검색 로그 전송 시도:', trimmed);
+      logSearchHistory({
+        email: user?.email || '미인증/확인중',
+        userName: user?.name || '사용자',
+        accessType: '웹 검색',
+        query: trimmed,
+        equipmentName: '-',
+        applied: false
+      });
+    }
+  }, [user?.email, user?.name]);
 
   const handleChange = (e) => {
-    e.stopPropagation(); // Prevent event bubbling
+    e.stopPropagation();
     const newTerm = e.target.value;
     setTerm(newTerm);
-    onSearch(newTerm); // Trigger search on each change
+    onSearch(newTerm);
+
+    if (logTimerRef.current) clearTimeout(logTimerRef.current);
+    if (newTerm.trim().length >= 1) {
+      logTimerRef.current = setTimeout(() => {
+        triggerLog(newTerm);
+      }, 500);
+    }
   };
 
-  const handleClick = (e) => {
-    e.stopPropagation(); // Prevent event bubbling
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      if (logTimerRef.current) clearTimeout(logTimerRef.current);
+      triggerLog(term);
+    }
+  };
+
+  const handleBlur = () => {
+    if (term.trim().length >= 1) {
+      if (logTimerRef.current) clearTimeout(logTimerRef.current);
+      triggerLog(term);
+    }
   };
 
   return (
-    <div className={styles.searchForm} onClick={handleClick}>
+    <div className={styles.searchForm} onClick={(e) => e.stopPropagation()}>
       <input
         type="text"
         placeholder="장비 이름, 시리얼"
         value={term}
         onChange={handleChange}
-        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onBlur={handleBlur}
         className={styles.searchInput}
       />
     </div>
@@ -3920,7 +3954,7 @@ const MainPage = ({ user, onLogout }) => {
           <div className={styles.compactSearchHeader}>
             <h2 className={styles.compactTitle}>신청</h2>
             <div className={styles.searchBarCompact}>
-              <SearchBar onSearch={handleSearch} />
+              <SearchBar onSearch={handleSearch} user={user} />
             </div>
             <label className={styles.filterLabelCompact}>
               <input
