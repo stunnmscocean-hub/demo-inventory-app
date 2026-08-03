@@ -1016,17 +1016,17 @@ const MainPage = ({ user, onLogout }) => {
         return s === scannedSerial.trim().toLowerCase();
       });
 
-      if (targetEq) {
-        // 📊 조회History 시트에 QR 스캔 로깅 (비동기 처리)
-        logSearchHistory({
-          email: user?.email,
-          userName: user?.name,
-          accessType: action === 'apply' ? 'QR_대여신청' : 'QR_반납',
-          query: scannedSerial,
-          equipmentName: targetEq.name,
-          applied: false
-        });
+      // 📊 조회History 시트에 QR 스캔 로깅 (targetEq 매칭 여부와 상관없이 무조건 기록)
+      logSearchHistory({
+        email: user?.email || '미인증/확인중',
+        userName: user?.name || '사용자',
+        accessType: action === 'apply' ? 'QR_대여신청' : (action === 'return' ? 'QR_반납' : 'QR_스캔'),
+        query: scannedSerial,
+        equipmentName: targetEq ? targetEq.name : `미등록장비(S/N: ${scannedSerial})`,
+        applied: false
+      });
 
+      if (targetEq) {
         const cleanStatus = (targetEq.status || '').toString().trim().replace(/\s+/g, '');
 
         if (action === 'apply') {
@@ -1550,11 +1550,11 @@ const MainPage = ({ user, onLogout }) => {
     setFilteredEquipments(filtered);
 
     // 📊 조회History 시트에 웹 검색 로깅
-    if (searchTerm.trim().length >= 2) {
+    if (searchTerm.trim().length >= 1) {
       const matchedName = filtered.length > 0 ? filtered[0].name : '-';
       logSearchHistory({
-        email: user?.email,
-        userName: user?.name,
+        email: user?.email || '미인증/확인중',
+        userName: user?.name || '사용자',
         accessType: '웹 검색',
         query: searchTerm.trim(),
         equipmentName: matchedName,
