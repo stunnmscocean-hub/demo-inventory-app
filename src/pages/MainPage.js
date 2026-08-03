@@ -1101,6 +1101,7 @@ const MainPage = ({ user, onLogout }) => {
         }
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allEquipments]);
 
   useEffect(() => {
