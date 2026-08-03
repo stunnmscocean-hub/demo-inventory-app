@@ -1538,22 +1538,30 @@ const MainPage = ({ user, onLogout }) => {
   }, [showInUseEquipment, allEquipments]);
 
   const handleSearch = useCallback((searchTerm) => {
-    // console.log('Search term:', searchTerm);
-    // console.log('Available equipments:', availableEquipments.length);
-    // Use availableEquipments instead of allEquipments to avoid dependency issues
     const equipmentToFilter = availableEquipments;
     if (!searchTerm || searchTerm.trim() === '') {
       setFilteredEquipments(equipmentToFilter);
-      // console.log('No search term, showing all available:', equipmentToFilter.length);
       return;
     }
     const filtered = equipmentToFilter.filter(eq =>
       eq.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       eq.serial.toLowerCase().includes(searchTerm.toLowerCase())
     );
-    // console.log('Filtered results:', filtered.length);
     setFilteredEquipments(filtered);
-  }, [availableEquipments]);
+
+    // 📊 조회History 시트에 웹 검색 로깅
+    if (searchTerm.trim().length >= 2) {
+      const matchedName = filtered.length > 0 ? filtered[0].name : '-';
+      logSearchHistory({
+        email: user?.email,
+        userName: user?.name,
+        accessType: '웹 검색',
+        query: searchTerm.trim(),
+        equipmentName: matchedName,
+        applied: false
+      });
+    }
+  }, [availableEquipments, user?.email, user?.name]);
 
   // 데모 선택/해제 핸들러
   const handleDemoToggle = (demo) => {
