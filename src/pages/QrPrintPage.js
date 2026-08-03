@@ -7,6 +7,7 @@ const QrPrintPage = () => {
   const [allEquipments, setAllEquipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
 
   // 구글 시트에서 전체 장비 데이터 가져오기
   useEffect(() => {
@@ -111,7 +112,7 @@ const QrPrintPage = () => {
             display: grid !important;
             grid-template-columns: 88.9mm 88.9mm !important;
             grid-template-rows: repeat(5, 52mm) !important;
-            column-gap: 0 !important;
+            column-gap: ${col2Gap}mm !important;
             row-gap: 0 !important;
           }
           .label-page:last-child {
@@ -193,6 +194,23 @@ const QrPrintPage = () => {
             onChange={(e) => setSearch(e.target.value)}
             style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '160px' }}
           />
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 우측 이동:</span>
+            <select
+              value={col2Gap}
+              onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
+              style={{ padding: '6px 8px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', fontWeight: '600' }}
+            >
+              <option value={0}>0 mm (기본)</option>
+              <option value={1.5}>+1.5 mm</option>
+              <option value={2.0}>+2.0 mm</option>
+              <option value={2.5}>+2.5 mm (추천)</option>
+              <option value={3.0}>+3.0 mm</option>
+              <option value={3.5}>+3.5 mm</option>
+              <option value={4.0}>+4.0 mm</option>
+            </select>
+          </div>
 
           <button
             onClick={() => window.print()}
