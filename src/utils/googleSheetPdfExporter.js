@@ -9,7 +9,7 @@ console.log('Apps Script URL:', APPS_SCRIPT_WEB_APP_URL);
 console.log('URL 접근 테스트를 위해 브라우저에서 직접 접속해보세요:', APPS_SCRIPT_WEB_APP_URL);
 
 // Template Spreadsheet ID and GID from the provided URL
-export const TEMPLATE_SPREADSHEET_ID = '12j0z4D7H-C7HmYmfzHRyUSwHHVBdXov0dQpkNVrWqBSCrVmcMw-AJJFO';
+export const TEMPLATE_SPREADSHEET_ID = '13yJAh59CYIKYMV1LPlZR2m1Rqef3sHZFOvFHhx0lht0';
 export const TEMPLATE_SHEET_GID = '1326732411'; // This is the gid for the specific sheet/tab
 
 // Google Drive folder ID for saving PDFs
@@ -212,7 +212,6 @@ export const duplicateSpreadsheet = async (accessToken, templateId, newTitle) =>
         action: 'duplicateSpreadsheet',
         templateId: templateId,
         newTitle: newTitle,
-        targetFolderId: SHEET_FOLDER_ID, // 복제된 시트 저장 폴더
         accessToken: accessToken || 'apps-script-mode'
       })
     });
