@@ -370,18 +370,14 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
 
     if (!startDate || !memo) return [];
 
-    // 같은 시작일과 비고를 가진 다른 장비 찾기 (현재 장비 제외, "반납완료" 상태 제외)
+    // 같은 시작일과 비고를 가진 다른 장비 찾기 (현재 장비 제외)
     const related = allEquipmentFromSheet.filter(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
       const itemStartDate = (item['시작일'] || item.startDate || '').toString().trim();
       const itemMemo = (item['비고'] || item.memo || '').toString().trim();
-      const itemStatus = (item['대여가능여부'] || item.status || '').toString().trim();
 
       // 현재 장비는 제외
       if (itemSerial === currentSerial) return false;
-
-      // "반납완료" 상태는 제외
-      if (itemStatus === '반납완료') return false;
 
       // 시작일과 비고가 모두 일치하는지 확인
       return itemStartDate === startDate && itemMemo === memo;
@@ -393,8 +389,9 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
 
     related.forEach(item => {
       const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-      if (!seenSerials.has(itemSerial)) {
-        seenSerials.add(itemSerial);
+      const key = itemSerial || (item['제품명'] || item.name || '');
+      if (!seenSerials.has(key)) {
+        seenSerials.add(key);
         uniqueRelated.push(item);
       }
     });
@@ -624,9 +621,9 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                   const name = (item['제품명'] || item.name || '').toString().trim();
                                   const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
 
-                                  // 현재 장비와 중복되지 않고, 이름이나 시리얼이 있는 경우만 추가
+                                  // 시리얼 번호 기준 중복 제거 (시리얼 번호가 다르면 개별 장비로 모두 표시)
                                   const isDuplicate = equipmentPairs.some(pair =>
-                                    (pair.name && pair.name === name) || (pair.serial && pair.serial === serial)
+                                    (pair.serial && serial) ? pair.serial === serial : (pair.name === name && pair.serial === serial)
                                   );
 
                                   if (!isDuplicate && (name || serial)) {
@@ -705,7 +702,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                       {/* 동시 대여 묶음 장비 (대여 박스 하단에 위치) */}
                                       {equipmentPairs.length > 1 && (
                                         <div className={styles.bundleSection} style={{ marginTop: '8px', marginBottom: '0' }}>
-                                          <div className={styles.bundleHeader}>동시 대여 묶음 장비 세트 ({equipmentPairs.length}종)</div>
+                                          <div className={styles.bundleHeader}>동시 대여 묶음 장비 세트 ({equipmentPairs.length}개)</div>
                                           <div className={styles.bundleTags}>
                                             {equipmentPairs.map((pair, pairIdx) => (
                                               <span key={pairIdx} className={`${styles.bundleChip} ${pairIdx === 0 ? styles.bundleChipMain : ''}`}>

@@ -314,7 +314,8 @@ export const returnEquipment = async (equipmentData) => {
     const dataWithTimestamp = {
       ...equipmentData,
       processedAt: equipmentData.processedAt || timestampStr,
-      timestamp: equipmentData.timestamp || timestampStr
+      timestamp: equipmentData.timestamp || timestampStr,
+      '처리시간스탬프': equipmentData['처리시간스탬프'] || timestampStr
     };
 
     console.log('returnEquipment 호출:', dataWithTimestamp);

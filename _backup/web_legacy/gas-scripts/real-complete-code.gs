@@ -52,7 +52,9 @@ function doGet(e) {
     const action = e.parameter.action;
     
     switch (action) {
-      // 기본 인증 기능
+      // 기본 인증 및 로그 기능
+      case 'logSearchHistory':
+        return handleLogSearchHistory(e.parameter);
       case 'ping':
         return handlePing();
       case 'testACL':
@@ -173,6 +175,10 @@ function doPost(e) {
       case 'updateFormSubmission':
         console.log('doPost: Calling updateFormSubmission function.');
         return handleUpdateFormSubmission(params.serialNumber, params.fileUrl);
+      
+      case 'logSearchHistory':
+        console.log('doPost: Calling logSearchHistory function.');
+        return handleLogSearchHistory(params);
       
       default:
         return createErrorResponse('invalid_action', 'No valid action specified.');
@@ -1526,6 +1532,10 @@ function handleReturnEquipment(equipmentDataJson) {
     const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     console.log('시트 헤더:', headers);
     
+    const now = new Date();
+    const defaultTimestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const returnTimestamp = equipmentData.processedAt || equipmentData.timestamp || equipmentData['처리시간스탬프'] || defaultTimestampStr;
+
     // 새 행 데이터 생성 (기존 데이터 복사 + 상태 변경)
     let phoneNumberCount = 0; // 휴대폰 번호 카운터
     
@@ -1535,6 +1545,11 @@ function handleReturnEquipment(equipmentDataJson) {
       // 대여가능여부만 "반납완료"로 변경
       if (trimmedHeader === '대여가능여부') {
         return '반납완료';
+      }
+
+      // 타임스탬프 / 처리시간 필드 처리
+      if (trimmedHeader === '타임스탬프' || trimmedHeader === '처리시간스탬프' || trimmedHeader === '처리일시' || trimmedHeader === '처리시간' || trimmedHeader === '등록일시' || trimmedHeader === '생성일시' || trimmedHeader === '일시' || trimmedHeader.toLowerCase() === 'timestamp' || trimmedHeader.toLowerCase() === 'processedat') {
+        return returnTimestamp;
       }
       
       // 휴대폰 번호 처리 (2개를 구분)
@@ -1594,7 +1609,14 @@ function handleReturnEquipment(equipmentDataJson) {
         '파트너담당자명': equipmentData.partnerContact || '',
         '사용자명': equipmentData.userName || '',
         '사용자담당자명': equipmentData.userContact || '',
-        '비고': equipmentData.memo || ''
+        '비고': equipmentData.memo || '',
+        '타임스탬프': returnTimestamp,
+        '처리시간스탬프': returnTimestamp,
+        '처리일시': returnTimestamp,
+        '처리시간': returnTimestamp,
+        '등록일시': returnTimestamp,
+        '생성일시': returnTimestamp,
+        '일시': returnTimestamp
       };
       
       const value = fieldMapping[trimmedHeader] || '';
@@ -1690,8 +1712,8 @@ function handleGetInitialDataWithSheetsAPI() {
     
     // 범위 설정 (충분히 큰 범위로 설정)
     const ranges = [
-      `${equipmentSheetName}!A:O`,  // 장비 데이터 (A부터 O열까지)
-      `${partnerSheetName}!A:K`     // 파트너 데이터 (A부터 K열까지)
+      `${equipmentSheetName}!A:Z`,  // 장비 데이터 (A부터 Z열까지 넓게 지정)
+      `${partnerSheetName}!A:Z`     // 파트너 데이터 (A부터 Z열까지 넓게 지정)
     ];
     
     console.log('조회할 범위들:', ranges);
@@ -2630,12 +2652,23 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
       const headers = equipmentSheet.getRange(1, 1, 1, equipmentSheet.getLastColumn()).getValues()[0];
       console.log('Equipment sheet headers:', headers);
       
+      const now = new Date();
+      const defaultTimestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
       // 각 장비에 대해 새 행 추가
       selectedEquipments.forEach(equipment => {
         // 휴대폰 번호가 2개 나오므로 인덱스로 구분
         let phoneNumberIndex = 0;
         
+        const rowTimestamp = equipment.processedAt || equipment.timestamp || equipment['처리시간스탬프'] || (formData && (formData.processedAt || formData.timestamp || formData['처리시간스탬프'])) || defaultTimestampStr;
+
         const newRow = headers.map((header, index) => {
+          const trimmedHeader = (header || '').toString().trim();
+
+          if (trimmedHeader === '타임스탬프' || trimmedHeader === '처리시간스탬프' || trimmedHeader === '처리일시' || trimmedHeader === '처리시간' || trimmedHeader === '등록일시' || trimmedHeader === '생성일시' || trimmedHeader === '일시' || trimmedHeader.toLowerCase() === 'timestamp' || trimmedHeader.toLowerCase() === 'processedat') {
+            return rowTimestamp;
+          }
+
           const keyMapping = {
             '시리얼넘버': equipment.serialNumber || equipment.serial || '',
             '제품명': equipment.name || '',
@@ -2649,11 +2682,17 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
             '파트너담당자명': formData.partnerContactPerson || '',
             '사용자명': formData.usageCompanyName || '',
             '사용자담당자명': formData.usageContactPerson || '',
-            '비고': formData.checkoutReason || ''
+            '비고': formData.checkoutReason || '',
+            '타임스탬프': rowTimestamp,
+            '처리시간스탬프': rowTimestamp,
+            '처리일시': rowTimestamp,
+            '처리시간': rowTimestamp,
+            '등록일시': rowTimestamp,
+            '생성일시': rowTimestamp,
+            '일시': rowTimestamp
           };
           
           // 휴대폰 번호는 2개가 있음 (11번째: 파트너, 14번째: 사용자)
-          const trimmedHeader = (header || '').toString().trim();
           if (trimmedHeader === '휴대폰 번호') {
             phoneNumberIndex++;
             if (phoneNumberIndex === 1) {
@@ -2663,7 +2702,7 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
             }
           }
           
-          return keyMapping[header] || '';
+          return keyMapping[trimmedHeader] || keyMapping[header] || '';
         });
         
         equipmentSheet.appendRow(newRow);
@@ -3064,5 +3103,49 @@ function handleUpdateFormSubmission(serialNumber, fileUrl) {
   } catch (error) {
     console.error('Error in handleUpdateFormSubmission:', error);
     return createErrorResponse('update_error', error.toString());
+  }
+}
+
+/**
+ * 📊 검색 및 QR 스캔 조회History 시트에 기록 핸들러
+ */
+function handleLogSearchHistory(params) {
+  try {
+    params = params || {};
+    console.log('=== handleLogSearchHistory 시작 ===', params);
+
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    let sheet = spreadsheet.getSheetByName('조회History');
+    
+    // 조회History 시트가 없으면 생성 후 헤더 기록
+    if (!sheet) {
+      console.log('조회History 시트 생성 중...');
+      sheet = spreadsheet.insertSheet('조회History');
+      sheet.appendRow(['일시', '이메일', '사용자명', '접속유형', '검색어/시리얼', '장비명', '신청여부']);
+    }
+
+    const now = new Date();
+    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const email = params.email || '';
+    const userName = params.userName || '';
+    const accessType = params.accessType || '웹 검색';
+    const query = params.query || params.serial || '';
+    const equipmentName = params.equipmentName || '';
+    let applied = '미신청';
+    if (params.applied === 'true' || params.applied === true) {
+      applied = '신청';
+    } else if (params.applied && params.applied !== 'false' && params.applied !== false) {
+      applied = params.applied;
+    }
+
+    sheet.appendRow([timestampStr, email, userName, accessType, query, equipmentName, applied]);
+    console.log('✅ 조회History 기록 완료:', { timestampStr, email, userName, accessType, query, equipmentName, applied });
+
+    return createSuccessResponse({ message: 'Search history logged successfully' });
+
+  } catch (error) {
+    console.error('Error in handleLogSearchHistory:', error);
+    return createErrorResponse('log_search_error', error.toString());
   }
 }
