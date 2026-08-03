@@ -42,6 +42,26 @@ const CONFIG = {
   USER_INFO_URL: 'https://www.googleapis.com/oauth2/v2/userinfo'
 };
 
+// ===== RESPONSE HELPERS =====
+function createErrorResponse(error, message) {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: false,
+    error: error,
+    message: message,
+    timestamp: new Date().toISOString()
+  }))
+  .setMimeType(ContentService.MimeType.JSON);
+}
+
+function createSuccessResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    data: data,
+    timestamp: new Date().toISOString()
+  }))
+  .setMimeType(ContentService.MimeType.JSON);
+}
+
 // ===== MAIN ROUTER =====
 function doGet(e) {
   try {
