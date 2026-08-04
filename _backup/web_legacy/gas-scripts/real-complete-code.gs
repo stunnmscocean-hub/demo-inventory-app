@@ -2675,8 +2675,42 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
       const now = new Date();
       const defaultTimestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
+      // 기존 행 데이터 가져오기 (중복 추가 방지 검사용 - 최근 50행)
+      const lastRowIndex = equipmentSheet.getLastRow();
+      let existingRows = [];
+      let serialColIdx = -1;
+      let assigneeColIdx = -1;
+      let startDateColIdx = -1;
+
+      if (lastRowIndex > 1) {
+        const checkCount = Math.min(50, lastRowIndex - 1);
+        existingRows = equipmentSheet.getRange(lastRowIndex - checkCount + 1, 1, checkCount, headers.length).getValues();
+        serialColIdx = headers.findIndex(h => (h || '').toString().trim() === '시리얼넘버');
+        assigneeColIdx = headers.findIndex(h => (h || '').toString().trim() === '대여담당자');
+        startDateColIdx = headers.findIndex(h => (h || '').toString().trim() === '시작일');
+      }
+
       // 각 장비에 대해 새 행 추가
       selectedEquipments.forEach(equipment => {
+        const targetSerial = (equipment.serialNumber || equipment.serial || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        const targetAssignee = (formData.requester || '').toString().trim();
+        const targetStartDate = (formData.checkoutDate || '').toString().trim();
+
+        // 중복 검사: 동일한 시리얼넘버 + 대여담당자 + 시작일 행이 이미 존재하는지 확인
+        if (targetSerial && serialColIdx !== -1 && assigneeColIdx !== -1 && startDateColIdx !== -1) {
+          const isDuplicate = existingRows.some(row => {
+            const rowSerial = (row[serialColIdx] || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            const rowAssignee = (row[assigneeColIdx] || '').toString().trim();
+            const rowStartDate = (row[startDateColIdx] || '').toString().trim();
+            return rowSerial === targetSerial && rowAssignee === targetAssignee && rowStartDate === targetStartDate;
+          });
+
+          if (isDuplicate) {
+            console.warn(`⚠️ [중복 등록 방지] 이미 동일한 대여 건이 시트에 존재하여 추가를 건너끕니다: S/N ${targetSerial}`);
+            return; // 중복행 추가 스킵
+          }
+        }
+
         // 휴대폰 번호가 2개 나오므로 인덱스로 구분
         let phoneNumberIndex = 0;
         
