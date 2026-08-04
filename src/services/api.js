@@ -561,17 +561,55 @@ export const updateFormSubmission = async (serialNumber, fileUrl) => {
   }
 };
 
+// ===== 📱 기기 / 브라우저 정보 추출 헬퍼 함수 =====
+export const getBrowserDeviceInfo = () => {
+  if (typeof window === 'undefined' || !navigator || !navigator.userAgent) {
+    return '알 수 없음';
+  }
+
+  const ua = navigator.userAgent;
+
+  // OS 판별
+  let os = '기타 OS';
+  if (/iPhone/i.test(ua)) os = 'iPhone';
+  else if (/iPad/i.test(ua)) os = 'iPad';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/Windows NT/i.test(ua)) os = 'Windows';
+  else if (/Macintosh|Mac OS X/i.test(ua)) os = 'Mac';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+
+  // 브라우저 / 앱 판별
+  let browser = '기타 브라우저';
+  if (/KAKAOTALK/i.test(ua)) browser = '카카오톡';
+  else if (/NAVER/i.test(ua)) browser = '네이버 App';
+  else if (/SamsungBrowser/i.test(ua)) browser = '삼성 인터넷';
+  else if (/Edg/i.test(ua)) browser = 'Edge';
+  else if (/Chrome|CriOS/i.test(ua)) browser = 'Chrome';
+  else if (/Safari/i.test(ua) && !/Chrome|CriOS/i.test(ua)) browser = 'Safari';
+  else if (/Firefox|FxiOS/i.test(ua)) browser = 'Firefox';
+
+  // 기기 분류
+  const deviceCategory = /Mobi|Android|iPhone|iPad/i.test(ua) ? '모바일' : 'PC';
+
+  return `${deviceCategory} (${os} / ${browser})`;
+};
+
 // ===== 📊 조회History 기록 (웹 검색 / QR 접속 로그) =====
 export const logSearchHistory = async (logData = {}) => {
   try {
+    const deviceInfo = logData.deviceInfo || getBrowserDeviceInfo();
+    const email = logData.email && logData.email !== '미인증/확인중' ? logData.email : '-';
+    const userName = logData.userName && logData.userName !== '사용자' ? logData.userName : (email !== '-' ? email : '비로그인 사용자');
+
     const params = new URLSearchParams({
       action: 'logSearchHistory',
-      email: logData.email || '',
-      userName: logData.userName || '',
+      email: email,
+      userName: userName,
       accessType: logData.accessType || '웹 검색',
       query: logData.query || logData.serial || '',
       equipmentName: logData.equipmentName || '',
-      applied: logData.applied ? 'true' : 'false'
+      applied: logData.applied ? 'true' : 'false',
+      deviceInfo: deviceInfo
     });
 
     const url = `${GAS_URL}?${params.toString()}`;
@@ -586,7 +624,7 @@ export const logSearchHistory = async (logData = {}) => {
     // 2. fetch no-cors 보조 전송
     fetch(url, { mode: 'no-cors' }).catch(() => {});
 
-    console.log('✅ [조회History] 시트 기록 신호 전송 완료');
+    console.log('✅ [조회History] 시트 기록 신호 전송 완료:', { userName, deviceInfo });
     return { success: true };
   } catch (error) {
     console.error('❌ [logSearchHistory] 에러 발생:', error);

@@ -3141,14 +3141,21 @@ function handleLogSearchHistory(params) {
     if (!sheet) {
       console.log('조회History 시트 생성 중...');
       sheet = spreadsheet.insertSheet('조회History');
-      sheet.appendRow(['일시', '이메일', '사용자명', '접속유형', '검색어/시리얼', '장비명', '신청여부']);
+      sheet.appendRow(['일시', '이메일', '사용자명', '접속유형', '검색어/시리얼', '장비명', '신청여부', '기기/브라우저 정보']);
+    } else {
+      // 기존 시트 1행 헤더에 '기기/브라우저 정보' 컬럼 없으면 8번째 열에 추가
+      const lastCol = Math.max(sheet.getLastColumn(), 1);
+      const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+      if (!headers.includes('기기/브라우저 정보')) {
+        sheet.getRange(1, headers.length + 1).setValue('기기/브라우저 정보');
+      }
     }
 
     const now = new Date();
     const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
-    const email = params.email || '';
-    const userName = params.userName || '';
+    const email = params.email && params.email !== '미인증/확인중' ? params.email : '-';
+    const userName = params.userName && params.userName !== '사용자' ? params.userName : (email !== '-' ? email : '비로그인 사용자');
     const accessType = params.accessType || '웹 검색';
     const query = params.query || params.serial || '';
     const equipmentName = params.equipmentName || '';
@@ -3158,9 +3165,10 @@ function handleLogSearchHistory(params) {
     } else if (params.applied && params.applied !== 'false' && params.applied !== false) {
       applied = params.applied;
     }
+    const deviceInfo = params.deviceInfo || params.userAgent || '-';
 
-    sheet.appendRow([timestampStr, email, userName, accessType, query, equipmentName, applied]);
-    console.log('✅ 조회History 기록 완료:', { timestampStr, email, userName, accessType, query, equipmentName, applied });
+    sheet.appendRow([timestampStr, email, userName, accessType, query, equipmentName, applied, deviceInfo]);
+    console.log('✅ 조회History 기록 완료:', { timestampStr, email, userName, accessType, query, equipmentName, applied, deviceInfo });
 
     return createSuccessResponse({ message: 'Search history logged successfully' });
 
