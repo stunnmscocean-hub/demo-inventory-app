@@ -292,12 +292,19 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
     const serial = (equipment.serial || equipment.serialNumber || equipment['시리얼넘버'] || '').toString().trim();
     if (!serial) return [];
 
-    // 1. 시리얼넘버로 필터링 (초기 입고/신규등록 마스터 행은 대여담당자 및 시작일이 없으므로 제외)
+    const cleanSerial = serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
+    // 1. 시리얼넘버로 필터링 (정규화 비교로 대소문자/공백/특수문자 차이 흡수)
     const historyRows = allEquipmentFromSheet.filter(item => {
-      const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+      const itemSerial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
+      const cleanItemSerial = itemSerial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       const assignee = (item['대여담당자'] || item.assignee || '').toString().trim();
       const startDate = (item['시작일'] || item.startDate || '').toString().trim();
-      return itemSerial === serial && (assignee !== '' || startDate !== '');
+      const partner = (item['파트너명'] || item.partnerName || '').toString().trim();
+      const user = (item['사용자명'] || item.userName || '').toString().trim();
+
+      const hasInfo = assignee !== '' || startDate !== '' || partner !== '' || user !== '';
+      return cleanItemSerial === cleanSerial && hasInfo;
     });
 
     // 2. 그룹화 (대여담당자, 시작일, 비고 기준) - 한 대여건에 여러 행이 쌓이는 경우 처리
@@ -590,7 +597,7 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                       <td>{eq.location}</td>
                       <td>{renderStatusCell(eq.status)}</td>
                     </tr>
-                    {isExpanded && history.length > 0 && (
+                    {isExpanded && (
                       <tr className={styles.historyRow}>
                         <td colSpan="5" className={styles.expandedCell}>
                           <div className={styles.expandedContainer}>
@@ -600,124 +607,130 @@ const EquipmentList = React.memo(({ equipments, selectedEquipments, onEquipmentT
                                 (총 {history.length}건)
                               </span>
                             </div>
-                            <div className={styles.timeline}>
-                              {history.map((historyItem, idx) => {
-                                // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
-                                const related = getRelatedEquipments(historyItem, currentSerial);
+                            {history.length === 0 ? (
+                              <div style={{ padding: '12px 16px', color: '#94a3b8', fontSize: '13px', fontStyle: 'italic' }}>
+                                대여 히스토리 기록이 없습니다.
+                              </div>
+                            ) : (
+                              <div className={styles.timeline}>
+                                {history.map((historyItem, idx) => {
+                                  // 현재 히스토리 항목과 같은 비고를 가진 관련 장비 찾기
+                                  const related = getRelatedEquipments(historyItem, currentSerial);
 
-                                // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
-                                const equipmentPairs = [];
+                                  // 장비 정보를 쌍으로 수집 (제품명 + 시리얼번호)
+                                  const equipmentPairs = [];
 
-                                // 현재 장비 추가
-                                if (eq.name || eq.serial) {
-                                  equipmentPairs.push({
-                                    name: (eq.name || '').toString().trim(),
-                                    serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
+                                  // 현재 장비 추가
+                                  if (eq.name || eq.serial) {
+                                    equipmentPairs.push({
+                                      name: (eq.name || '').toString().trim(),
+                                      serial: (eq.serial || eq.serialNumber || eq['시리얼넘버'] || '').toString().trim()
+                                    });
+                                  }
+
+                                  // 관련 장비 추가
+                                  related.forEach(item => {
+                                    const name = (item['제품명'] || item.name || '').toString().trim();
+                                    const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+
+                                    // 시리얼 번호 기준 중복 제거 (시리얼 번호가 다르면 개별 장비로 모두 표시)
+                                    const isDuplicate = equipmentPairs.some(pair =>
+                                      (pair.serial && serial) ? pair.serial === serial : (pair.name === name && pair.serial === serial)
+                                    );
+
+                                    if (!isDuplicate && (name || serial)) {
+                                      equipmentPairs.push({ name, serial });
+                                    }
                                   });
-                                }
 
-                                // 관련 장비 추가
-                                related.forEach(item => {
-                                  const name = (item['제품명'] || item.name || '').toString().trim();
-                                  const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
+                                  // 날짜 포맷팅
+                                  const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
+                                  const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
+                                  const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
 
-                                  // 시리얼 번호 기준 중복 제거 (시리얼 번호가 다르면 개별 장비로 모두 표시)
-                                  const isDuplicate = equipmentPairs.some(pair =>
-                                    (pair.serial && serial) ? pair.serial === serial : (pair.name === name && pair.serial === serial)
-                                  );
-
-                                  if (!isDuplicate && (name || serial)) {
-                                    equipmentPairs.push({ name, serial });
-                                  }
-                                });
-
-                                // 날짜 포맷팅
-                                const assignee = (historyItem['대여담당자'] || historyItem.assignee || '').toString().trim();
-                                const startDate = (historyItem['시작일'] || historyItem.startDate || '').toString().trim();
-                                const endDate = (historyItem['종료일'] || historyItem.endDate || historyItem.returnDate || '').toString().trim();
-
-                                let formattedStartDate = '';
-                                if (startDate) {
-                                  const date = parseDateString(startDate);
-                                  if (date && !isNaN(date.getTime())) {
-                                    const year = date.getFullYear();
-                                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                                    const day = String(date.getDate()).padStart(2, '0');
-                                    formattedStartDate = `${year}.${month}.${day}`;
-                                  }
-                                }
-
-                                let formattedEndDate = '';
-                                if (endDate) {
-                                  const date = parseDateString(endDate);
-                                  if (date && !isNaN(date.getTime())) {
-                                    const year = date.getFullYear();
-                                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                                    const day = String(date.getDate()).padStart(2, '0');
-                                    formattedEndDate = `${year}.${month}.${day}`;
-                                  }
-                                }
-
-                                // 파트너 관련 컬럼 찾기 (타임스탬프 등 오매핑 방지를 위해 명시적 키 확인)
-                                const partnerKeys = ['파트너명', '파트너사명', 'partnerName', '사용자명', 'userName', '사용처명', '사용처', '고객사'];
-                                const foundPartners = [];
-                                for (const k of partnerKeys) {
-                                  if (historyItem[k] && typeof historyItem[k] === 'string' && !historyItem[k].match(/^\d{4}-\d{2}-\d{2}/)) {
-                                    const val = historyItem[k].toString().trim();
-                                    if (val && !foundPartners.includes(val)) {
-                                      foundPartners.push(val);
+                                  let formattedStartDate = '';
+                                  if (startDate) {
+                                    const date = parseDateString(startDate);
+                                    if (date && !isNaN(date.getTime())) {
+                                      const year = date.getFullYear();
+                                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                                      const day = String(date.getDate()).padStart(2, '0');
+                                      formattedStartDate = `${year}.${month}.${day}`;
                                     }
                                   }
-                                }
-                                const columnI = foundPartners.join(' / ');
-                                const memoKey = ['비고', 'memo', '메모'].find(k => historyItem[k]) || '비고';
-                                const memo = (historyItem[memoKey] || '').toString().trim();
 
-                                const isCurrentActive = ['대여중', '대여신청', '사용중'].includes((historyItem.finalStatus || '').toString().trim().replace(/\s+/g, ''));
+                                  let formattedEndDate = '';
+                                  if (endDate) {
+                                    const date = parseDateString(endDate);
+                                    if (date && !isNaN(date.getTime())) {
+                                      const year = date.getFullYear();
+                                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                                      const day = String(date.getDate()).padStart(2, '0');
+                                      formattedEndDate = `${year}.${month}.${day}`;
+                                    }
+                                  }
 
-                                return (
-                                  <div key={`${eq.id}-history-${idx}`} className={styles.timelineItem}>
-                                    <div className={`${styles.timelineNode} ${isCurrentActive ? styles.timelineNodeInUse : ''}`} />
-                                    <div
-                                      className={styles.timelineContent}
-                                      style={isCurrentActive ? { borderColor: '#fde68a', background: '#fffbeb' } : {}}
-                                    >
-                                      <div className={styles.timelineHeader}>
-                                        {renderStatusCell(historyItem.finalStatus, true)}
-                                        <span style={{ color: '#cbd5e1' }}>|</span>
-                                        <span className={styles.userName}>{assignee || '-'}</span>
-                                        {formattedStartDate && (
-                                          <>
-                                            <span style={{ color: '#cbd5e1' }}>|</span>
-                                            <span className={styles.dateRange}>
-                                              {formattedStartDate}{formattedEndDate ? ` ~ ${formattedEndDate}` : ''}
-                                            </span>
-                                          </>
+                                  // 파트너 관련 컬럼 찾기 (타임스탬프 등 오매핑 방지를 위해 명시적 키 확인)
+                                  const partnerKeys = ['파트너명', '파트너사명', 'partnerName', '사용자명', 'userName', '사용처명', '사용처', '고객사'];
+                                  const foundPartners = [];
+                                  for (const k of partnerKeys) {
+                                    if (historyItem[k] && typeof historyItem[k] === 'string' && !historyItem[k].match(/^\d{4}-\d{2}-\d{2}/)) {
+                                      const val = historyItem[k].toString().trim();
+                                      if (val && !foundPartners.includes(val)) {
+                                        foundPartners.push(val);
+                                      }
+                                    }
+                                  }
+                                  const columnI = foundPartners.join(' / ');
+                                  const memoKey = ['비고', 'memo', '메모'].find(k => historyItem[k]) || '비고';
+                                  const memo = (historyItem[memoKey] || '').toString().trim();
+
+                                  const isCurrentActive = ['대여중', '대여신청', '사용중'].includes((historyItem.finalStatus || '').toString().trim().replace(/\s+/g, ''));
+
+                                  return (
+                                    <div key={`${eq.id}-history-${idx}`} className={styles.timelineItem}>
+                                      <div className={`${styles.timelineNode} ${isCurrentActive ? styles.timelineNodeInUse : ''}`} />
+                                      <div
+                                        className={styles.timelineContent}
+                                        style={isCurrentActive ? { borderColor: '#fde68a', background: '#fffbeb' } : {}}
+                                      >
+                                        <div className={styles.timelineHeader}>
+                                          {renderStatusCell(historyItem.finalStatus, true)}
+                                          <span style={{ color: '#cbd5e1' }}>|</span>
+                                          <span className={styles.userName}>{assignee || '-'}</span>
+                                          {formattedStartDate && (
+                                            <>
+                                              <span style={{ color: '#cbd5e1' }}>|</span>
+                                              <span className={styles.dateRange}>
+                                                {formattedStartDate}{formattedEndDate ? ` ~ ${formattedEndDate}` : ''}
+                                              </span>
+                                            </>
+                                          )}
+                                        </div>
+
+                                        {columnI && <div className={styles.partnerBox}>파트너사: {columnI}</div>}
+                                        {memo && <div className={styles.memoBox}>비고: {memo}</div>}
+
+                                        {/* 동시 대여 묶음 장비 (대여 박스 하단에 위치) */}
+                                        {equipmentPairs.length > 1 && (
+                                          <div className={styles.bundleSection} style={{ marginTop: '8px', marginBottom: '0' }}>
+                                            <div className={styles.bundleHeader}>동시 대여 묶음 장비 세트 ({equipmentPairs.length}개)</div>
+                                            <div className={styles.bundleTags}>
+                                              {equipmentPairs.map((pair, pairIdx) => (
+                                                <span key={pairIdx} className={`${styles.bundleChip} ${pairIdx === 0 ? styles.bundleChipMain : ''}`}>
+                                                  <span>{pair.name}</span>
+                                                  <span className={styles.chipSerial}>{renderFormattedSerial(pair.serial)}</span>
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
                                         )}
                                       </div>
-
-                                      {columnI && <div className={styles.partnerBox}>파트너사: {columnI}</div>}
-                                      {memo && <div className={styles.memoBox}>비고: {memo}</div>}
-
-                                      {/* 동시 대여 묶음 장비 (대여 박스 하단에 위치) */}
-                                      {equipmentPairs.length > 1 && (
-                                        <div className={styles.bundleSection} style={{ marginTop: '8px', marginBottom: '0' }}>
-                                          <div className={styles.bundleHeader}>동시 대여 묶음 장비 세트 ({equipmentPairs.length}개)</div>
-                                          <div className={styles.bundleTags}>
-                                            {equipmentPairs.map((pair, pairIdx) => (
-                                              <span key={pairIdx} className={`${styles.bundleChip} ${pairIdx === 0 ? styles.bundleChipMain : ''}`}>
-                                                <span>{pair.name}</span>
-                                                <span className={styles.chipSerial}>{renderFormattedSerial(pair.serial)}</span>
-                                              </span>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      )}
                                     </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </td>
                       </tr>
