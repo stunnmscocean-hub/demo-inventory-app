@@ -1025,13 +1025,43 @@ const MainPage = ({ user, onLogout }) => {
   }, [showInUseEquipment]);
 
   // 📱 듀얼 QR 스캔 URL 파라미터 감지 (action=apply / action=return)
-  // sessionStorage로 장바구니 유지 → QR 연속 스캔 시 기존 장비 + 신규 장비 누적
+  // localStorage + Cookie 듀얼 저장으로 iOS 사파리 다중 탭 개설 시 장바구니 실시간 동기화
   useEffect(() => {
     if (!allEquipments || allEquipments.length === 0) return;
 
-    // 1️⃣ 먼저 localStorage에 저장된 기존 장바구니 복원 (사파리 새 탭 개설 대응)
+    const getStoredCartSerials = () => {
+      try {
+        const fromLocal = localStorage.getItem('qr_cart_serials');
+        if (fromLocal) {
+          const parsed = JSON.parse(fromLocal);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+
+      try {
+        const match = document.cookie.match(/(?:^|; )qr_cart_serials=([^;]*)/);
+        if (match && match[1]) {
+          const parsed = JSON.parse(decodeURIComponent(match[1]));
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch (e) {}
+
+      return [];
+    };
+
+    const setStoredCartSerials = (serials) => {
+      try {
+        localStorage.setItem('qr_cart_serials', JSON.stringify(serials));
+      } catch (e) {}
+
+      try {
+        document.cookie = `qr_cart_serials=${encodeURIComponent(JSON.stringify(serials))}; path=/; max-age=86400; SameSite=Lax`;
+      } catch (e) {}
+    };
+
+    // 1️⃣ 먼저 localStorage + Cookie에 저장된 기존 장바구니 복원 (아이폰 사파리 새 탭 대응)
     try {
-      const savedSerials = JSON.parse(localStorage.getItem('qr_cart_serials') || '[]');
+      const savedSerials = getStoredCartSerials();
       if (savedSerials.length > 0) {
         const restoredItems = savedSerials
           .map(serial => {
@@ -1055,6 +1085,9 @@ const MainPage = ({ user, onLogout }) => {
               });
               if (!exists) merged.push(item);
             });
+
+            const mergedSerials = merged.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
+            setStoredCartSerials(mergedSerials);
             return merged;
           });
           console.log('📱 [QR 장바구니] 기존 장바구니 복원 완료:', savedSerials);
@@ -1101,14 +1134,13 @@ const MainPage = ({ user, onLogout }) => {
           if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
             alert(`⚠️ [실물 현황 불일치 감지]\n\n구글 시트 상에는 '대여중'으로 등록되어 있으나, 실물 QR 스캔이 확인되었습니다.\n\n해당 장비를 신청 목록에 추가합니다.`);
           }
-          // 장바구니 카트에 누적 추가 + sessionStorage 저장
+          // 장바구니 카트에 누적 추가 + localStorage & Cookie 듀얼 저장
           setSelectedEquipments(prev => {
             const exists = prev.some(eq => (eq.serial || eq.id) === (targetEq.serial || targetEq.id));
             if (exists) return prev;
             const updated = [...prev, targetEq];
-            // sessionStorage에 시리얼 목록 저장 (페이지 리로드 시 복원용)
             const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
-            localStorage.setItem('qr_cart_serials', JSON.stringify(serials));
+            setStoredCartSerials(serials);
             console.log('📱 [QR 장바구니] 장비 추가, 현재 카트:', serials);
             return updated;
           });
