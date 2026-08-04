@@ -122,7 +122,7 @@ class GoogleApiError extends Error {
 /**
  * Retry utility with exponential backoff
  */
-const retryWithBackoff = async (fn, maxAttempts = MAX_RETRY_ATTEMPTS) => {
+async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
   let attempt = 0;
   
   while (attempt < maxAttempts) {
@@ -145,7 +145,7 @@ const retryWithBackoff = async (fn, maxAttempts = MAX_RETRY_ATTEMPTS) => {
       await new Promise(resolve => setTimeout(resolve, backoffDelay));
     }
   }
-};
+}
 
 /**
  * Initialize Google APIs (simplified for Apps Script)
