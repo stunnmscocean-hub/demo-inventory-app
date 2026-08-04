@@ -1043,14 +1043,23 @@ const MainPage = ({ user, onLogout }) => {
 
     // 2️⃣ 현재 URL의 QR 파라미터 처리
     const params = new URLSearchParams(window.location.search);
-    const action = params.get('action') || params.get('scan_action');
+    const action = params.get('action') || params.get('scan_action') || 'apply';
     const scannedSerial = params.get('serial') || params.get('scan') || params.get('sn');
 
     if (scannedSerial && !hasLoggedQrScanRef.current) {
+      // 💡 장비 목록 데이터가 아직 로드되지 않았으면 로드가 완료될 때까지 대기
+      if (!allEquipments || allEquipments.length === 0) {
+        return;
+      }
+
       hasLoggedQrScanRef.current = true; // 최초 1회만 스캔 로그 기록
+
+      // 시리얼 번호 정규화 (공백/특수문자 제거 후 소문자 비교)
+      const cleanScanned = scannedSerial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       const targetEq = allEquipments.find(item => {
-        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim().toLowerCase();
-        return s === scannedSerial.trim().toLowerCase();
+        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
+        const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        return cleanItemSerial === cleanScanned;
       });
 
       // 📊 조회History 시트에 QR 스캔 로깅 (targetEq 매칭 여부와 상관없이 무조건 기록)
