@@ -1029,27 +1029,35 @@ const MainPage = ({ user, onLogout }) => {
   useEffect(() => {
     if (!allEquipments || allEquipments.length === 0) return;
 
-    // 1️⃣ 먼저 sessionStorage에 저장된 기존 장바구니 복원
+    // 1️⃣ 먼저 localStorage에 저장된 기존 장바구니 복원 (사파리 새 탭 개설 대응)
     try {
       const savedSerials = JSON.parse(localStorage.getItem('qr_cart_serials') || '[]');
       if (savedSerials.length > 0) {
         const restoredItems = savedSerials
-          .map(serial => allEquipments.find(item => {
-            const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim().toLowerCase();
-            return s === serial.toLowerCase();
-          }))
+          .map(serial => {
+            const cleanSaved = (serial || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            return allEquipments.find(item => {
+              const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
+              const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              return cleanItemSerial === cleanSaved;
+            });
+          })
           .filter(Boolean);
 
         if (restoredItems.length > 0) {
           setSelectedEquipments(prev => {
             const merged = [...prev];
             restoredItems.forEach(item => {
-              const exists = merged.some(eq => (eq.serial || eq.id) === (item.serial || item.id));
+              const itemCleanSerial = (item.serial || item.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              const exists = merged.some(eq => {
+                const eqCleanSerial = (eq.serial || eq.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                return (eqCleanSerial && itemCleanSerial) ? eqCleanSerial === itemCleanSerial : eq.id === item.id;
+              });
               if (!exists) merged.push(item);
             });
             return merged;
           });
-          console.log('📱 [QR 장바구니] 기존 장바구니 복원:', savedSerials);
+          console.log('📱 [QR 장바구니] 기존 장바구니 복원 완료:', savedSerials);
         }
       }
     } catch (e) { console.warn('장바구니 복원 실패:', e); }
