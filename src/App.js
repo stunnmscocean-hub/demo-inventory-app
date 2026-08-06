@@ -10,8 +10,12 @@ import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
 // 🔒 QR 쿼리 파라미터 동기적 보존 및 로그인 전용 라우터
-const ProtectedRoute = ({ isAuthenticated, children }) => {
+const ProtectedRoute = ({ isAuthenticated, isInitializing, children }) => {
   const location = useLocation();
+
+  if (isInitializing) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#f8fafc', color: '#64748b' }}>⏳ 로그인 상태 확인 중...</div>;
+  }
 
   if (!isAuthenticated) {
     // 렌더링 시점에 동기적으로 QR 파라미터(?action=apply...) 보존
@@ -28,43 +32,17 @@ const ProtectedRoute = ({ isAuthenticated, children }) => {
 
 function App() {
   const { isAuthenticated, user, logout, checkTokenExpiry, initializeFromStorage } = useAuthStore();
+  const [isInitializing, setIsInitializing] = useState(true);
 
   // 앱 초기화 시 인증 상태 확인
   useEffect(() => {
-    const initializeAuth = () => {
-      console.log('App initialized, checking auth state...');
-      console.log('Current isAuthenticated:', isAuthenticated);
-      console.log('Current user:', user);
-      
-      // localStorage에서 인증 상태 복원 확인
-      const authData = localStorage.getItem('auth-storage');
-      console.log('Raw localStorage data:', authData);
-      
-      if (authData) {
-        try {
-          const parsed = JSON.parse(authData);
-          console.log('Parsed localStorage data:', parsed);
-          
-          // 토큰 만료 검증 (인증된 상태일 때만)
-          if (parsed.state && parsed.state.isAuthenticated && parsed.state.accessToken) {
-            console.log('Checking token expiry...');
-            checkTokenExpiry();
-          }
-        } catch (error) {
-          console.error('Failed to parse auth data from localStorage:', error);
-        }
-      }
-    };
+    initializeFromStorage();
+    setIsInitializing(false);
 
-    // 약간의 지연을 두고 초기화 (Zustand persist가 완료된 후)
-    const timer = setTimeout(() => {
-      initializeAuth();
-      // 수동 초기화도 시도
-      initializeFromStorage();
-    }, 100);
-    return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [checkTokenExpiry, initializeFromStorage]);
+    if (isAuthenticated) {
+      checkTokenExpiry();
+    }
+  }, [initializeFromStorage, checkTokenExpiry, isAuthenticated]);
 
   // 주기적 토큰 만료 검증 (5분마다)
   useEffect(() => {
@@ -102,7 +80,7 @@ function App() {
           <Route 
             path="/audit" 
             element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <ProtectedRoute isAuthenticated={isAuthenticated} isInitializing={isInitializing}>
                 <InventoryAuditPage />
               </ProtectedRoute>
             } 
@@ -110,7 +88,7 @@ function App() {
           <Route 
             path="/" 
             element={
-              <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <ProtectedRoute isAuthenticated={isAuthenticated} isInitializing={isInitializing}>
                 <MainPage user={user} onLogout={logout} />
               </ProtectedRoute>
             } 
