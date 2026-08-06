@@ -7,7 +7,8 @@ const QrPrintPage = () => {
   const [allEquipments, setAllEquipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
+  const [startPageRange, setStartPageRange] = useState('8'); // 기본값: 8페이지부터 출력 (71번째~)
+  const [sortPage8ByProduct, setSortPage8ByProduct] = useState(true); // 8페이지 이후 제품명 정렬 여부
 
   // 구글 시트에서 전체 장비 데이터 가져오기
   useEffect(() => {
@@ -59,6 +60,23 @@ const QrPrintPage = () => {
     const q = search.toLowerCase().trim();
     return name.includes(q) || serial.includes(q);
   });
+
+  // 1. 1~7페이지(1~70번째 장비)와 8페이지 이후(71번째 장비~) 분리
+  const page1To7Items = filtered.slice(0, 70);
+  const page8PlusItems = filtered.slice(70);
+
+  // 2. 8페이지 이후 장비 제품명(가나다/ABC) 순 정렬
+  const sortedPage8Plus = sortPage8ByProduct ? [...page8PlusItems].sort((a, b) => {
+    const nameA = (a.name || '').toString().trim();
+    const nameB = (b.name || '').toString().trim();
+    return nameA.localeCompare(nameB, 'ko', { numeric: true, sensitivity: 'base' });
+  }) : page8PlusItems;
+
+  // 3. 출력 대상 데이터 및 페이지 범위 계산
+  // - startPageRange가 '8'인 경우: 8페이지부터 출력 대상 (71번째~끝)
+  // - startPageRange가 '1'인 경우: 전체 장비 (1~7페이지 + 정렬된 8페이지~)
+  const targetEquipments = startPageRange === '8' ? sortedPage8Plus : [...page1To7Items, ...sortedPage8Plus];
+  const startPageNum = startPageRange === '8' ? 8 : 1;
 
   const formatSerial = (serialText) => {
     if (!serialText) return '';
@@ -178,6 +196,30 @@ const QrPrintPage = () => {
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* 출력 범위 선택 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>출력 범위:</span>
+            <select
+              value={startPageRange}
+              onChange={(e) => setStartPageRange(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #2563eb', backgroundColor: '#eff6ff', fontSize: '13px', fontWeight: '700', color: '#1e40af' }}
+            >
+              <option value="8">8페이지부터 출력 (71번째~)</option>
+              <option value="1">1페이지부터 전체 출력 (1번째~)</option>
+            </select>
+          </div>
+
+          {/* 8페이지 이후 제품명 정렬 옵션 */}
+          <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '13px', fontWeight: '600', color: '#334155', cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={sortPage8ByProduct}
+              onChange={(e) => setSortPage8ByProduct(e.target.checked)}
+              style={{ cursor: 'pointer' }}
+            />
+            🏷️ 8페이지~ 제품명 정렬
+          </label>
+
           <select
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
@@ -192,11 +234,11 @@ const QrPrintPage = () => {
             placeholder="장비/시리얼 검색..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '160px' }}
+            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px', width: '140px' }}
           />
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 우측 이동:</span>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 이동:</span>
             <select
               value={col2Gap}
               onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
@@ -244,8 +286,8 @@ const QrPrintPage = () => {
         <>
           {/* 장비 수 및 팁 */}
           <div className="no-print" style={{ maxWidth: '900px', margin: '16px auto 8px', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '13px', color: '#64748b', fontWeight: '600' }}>
-              📦 총 {filtered.length}개 장비 · {Math.ceil(filtered.length / 10)}페이지
+            <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: '700', background: '#dbeafe', padding: '4px 10px', borderRadius: '6px' }}>
+              📦 {startPageRange === '8' ? '8페이지부터 출력 중' : '전체 출력 중'} · 총 {targetEquipments.length}개 장비 (전체 {filtered.length}개 중) · {Math.ceil(targetEquipments.length / 10)}페이지 {sortPage8ByProduct ? '(8페이지~ 제품명 가나다순 정렬 적용)' : ''}
             </span>
             <span style={{ fontSize: '12px', color: '#0284c7', background: '#e0f2fe', padding: '4px 10px', borderRadius: '4px', fontWeight: '500' }}>
               💡 크롬 인쇄 팁: 설정 → [여백: 없음] 설정 필수
@@ -254,8 +296,9 @@ const QrPrintPage = () => {
 
           {/* ===== 라벨 시트 렌더링 (10개씩 한 페이지) ===== */}
           <div className="label-sheet">
-            {Array.from({ length: Math.ceil(filtered.length / 10) }, (_, pageIdx) => {
-              const pageItems = filtered.slice(pageIdx * 10, (pageIdx + 1) * 10);
+            {Array.from({ length: Math.ceil(targetEquipments.length / 10) }, (_, pageIdx) => {
+              const pageItems = targetEquipments.slice(pageIdx * 10, (pageIdx + 1) * 10);
+              const actualPageNum = pageIdx + startPageNum;
 
               return (
                 <div key={pageIdx} className="label-page">
