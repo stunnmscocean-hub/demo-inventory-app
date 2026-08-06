@@ -9,6 +9,7 @@ const QrPrintPage = () => {
   const [error, setError] = useState(null);
   const [startPageRange, setStartPageRange] = useState('8'); // 기본값: 8페이지부터 출력 (71번째~)
   const [sortPage8ByProduct, setSortPage8ByProduct] = useState(true); // 8페이지 이후 제품명 정렬 여부
+  const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
 
   // 구글 시트에서 전체 장비 데이터 가져오기
   useEffect(() => {
@@ -301,7 +302,14 @@ const QrPrintPage = () => {
               const actualPageNum = pageIdx + startPageNum;
 
               return (
-                <div key={pageIdx} className="label-page">
+                <React.Fragment key={pageIdx}>
+                  <div className="no-print" style={{ fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span>📄 {actualPageNum}페이지</span>
+                    <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>
+                      (장비 {pageIdx * 10 + 1 + (startPageRange === '8' ? 70 : 0)} ~ {Math.min((pageIdx + 1) * 10 + (startPageRange === '8' ? 70 : 0), filtered.length)}번째)
+                    </span>
+                  </div>
+                  <div className="label-page">
                   {pageItems.map((eq, idx) => {
                     const serial = (eq.serial || '').toString().trim();
                     const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
@@ -355,7 +363,8 @@ const QrPrintPage = () => {
                     );
                   })}
                 </div>
-              );
+              </React.Fragment>
+            );
             })}
           </div>
         </>
