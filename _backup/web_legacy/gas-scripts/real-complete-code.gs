@@ -3273,9 +3273,9 @@ function handleLogInventoryAudit(params) {
 
     // 오늘 날짜 해당 위치의 실사 회차 계산
     let todayCount = 0;
-    const lastRow = sheet.getLastRow();
-    if (lastRow > 1) {
-      const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+    const currentLastRow = sheet.getLastRow();
+    if (currentLastRow > 1) {
+      const data = sheet.getRange(2, 1, currentLastRow - 1, 3).getValues();
       todayCount = data.filter(row => {
         const rowTime = (row[0] || '').toString();
         const rowLoc = (row[2] || '').toString();
