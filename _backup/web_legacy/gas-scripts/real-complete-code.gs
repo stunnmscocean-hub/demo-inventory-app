@@ -3282,24 +3282,57 @@ function handleLogInventoryAudit(params) {
     }
 
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const targetYear = now.getFullYear();
+    const targetMonth = now.getMonth() + 1;
+    const targetDate = now.getDate();
+
+    const dateStr = `${targetYear}-${String(targetMonth).padStart(2, '0')}-${String(targetDate).padStart(2, '0')}`;
     const timestampStr = `${dateStr} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     const location = params.location || '기타';
     const auditor = params.auditor || params.userName || '담당자';
 
-    // 오늘 날짜 해당 위치의 실사 회차 계산
-    let todayCount = 0;
+    // 오늘 날짜 해당 위치의 최고 실사 회차 구하기 (1회차 -> 2회차 -> 3회차)
+    let maxRound = 0;
     const currentLastRow = sheet.getLastRow();
     if (currentLastRow > 1) {
-      const data = sheet.getRange(2, 1, currentLastRow - 1, 3).getValues();
-      todayCount = data.filter(row => {
-        const rowTime = (row[0] || '').toString();
-        const rowLoc = (row[2] || '').toString();
-        return rowTime.startsWith(dateStr) && rowLoc === location;
-      }).length;
+      const values = sheet.getRange(2, 1, currentLastRow - 1, 3).getValues();
+      values.forEach(row => {
+        const rawDate = row[0];
+        const rawRound = (row[1] || '').toString();
+        const rawLoc = (row[2] || '').toString();
+
+        // 날짜 일치 여부 확인 (Date 객체 및 다양한 포맷 지원)
+        let isToday = false;
+        if (rawDate instanceof Date) {
+          isToday = (rawDate.getFullYear() === targetYear && (rawDate.getMonth() + 1) === targetMonth && rawDate.getDate() === targetDate);
+        } else if (rawDate) {
+          const str = rawDate.toString();
+          isToday = str.includes(dateStr) || 
+                    str.includes(`${targetYear}.${targetMonth}.${targetDate}`) || 
+                    str.includes(`${targetYear}/${targetMonth}/${targetDate}`) ||
+                    str.includes(`${targetYear}. ${targetMonth}. ${targetDate}`);
+        }
+
+        // 위치 일치 여부 확인
+        const isSameLoc = (rawLoc.trim().toLowerCase() === location.trim().toLowerCase());
+
+        if (isToday && isSameLoc) {
+          // 회차 숫자 추출 (예: '1회차' -> 1, '2회차' -> 2)
+          const match = rawRound.match(/(\d+)/);
+          if (match) {
+            const num = parseInt(match[1], 10);
+            if (!isNaN(num) && num > maxRound) {
+              maxRound = num;
+            }
+          } else if (maxRound === 0) {
+            maxRound = 1;
+          }
+        }
+      });
     }
-    const sessionRound = `${todayCount + 1}회차`;
+
+    const sessionRound = `${maxRound + 1}회차`;
 
     // 시리얼넘버별 개별 이슈 행 추가
     let missingList = [];
