@@ -341,13 +341,26 @@ const InventoryAuditPage = () => {
     document.body.removeChild(link);
   };
 
-  // 구글 시트에 실사 결과 기록
+  // 구글 시트에 실사 결과 기록 (이슈 장비 한 줄씩 개별 저장)
   const handleSaveToSheet = async () => {
     try {
       setIsSaving(true);
 
-      const missingDetails = auditAnalysis.missingList.map(item => `${item.name}(${item.serial})`).join(', ') || '없음';
-      const unexpectedDetails = auditAnalysis.unexpectedList.map(item => `${item.name}(${item.serial}) - ${item.reason || '초과스캔'}`).join(', ') || '없음';
+      const missingItems = auditAnalysis.missingList.map(item => ({
+        name: item.name || '미발견 장비',
+        serial: item.serial || '-',
+        location: item.location || selectedLocation,
+        status: item.status || '보관중',
+        reason: '실사 시 현장에서 발견되지 않음 (분실 의심)'
+      }));
+
+      const unexpectedItems = auditAnalysis.unexpectedList.map(item => ({
+        name: item.name || '초과 스캔 장비',
+        serial: item.serial || '-',
+        location: item.location || '미등록',
+        status: item.status || '-',
+        reason: item.reason || '목록에 없는데 스캔됨 (위치 이탈)'
+      }));
 
       const auditSummary = {
         location: selectedLocation,
@@ -357,13 +370,13 @@ const InventoryAuditPage = () => {
         missingCount: auditAnalysis.missingList.length,
         unexpectedCount: auditAnalysis.unexpectedList.length,
         scannedCount: scannedSerialsSet.size,
-        missingDetails: missingDetails,
-        unexpectedDetails: unexpectedDetails,
+        missingItems: missingItems,
+        unexpectedItems: unexpectedItems,
         timestamp: new Date().toLocaleString()
       };
 
       await logInventoryAudit(auditSummary);
-      alert(`✅ [실사 이력 구글 시트 저장 완료]\n\n📍 위치: ${selectedLocation}\n✅ 정상 일치: ${auditSummary.matchedCount}개\n❌ 미발견: ${auditSummary.missingCount}개\n⚠️ 위치 불일치/초과: ${auditSummary.unexpectedCount}개\n\n'실사History' 시트에 미발견 및 초과 찍힌 장비 정보가 함께 저장되었습니다.`);
+      alert(`✅ [실사 이력 구글 시트 저장 완료]\n\n📍 위치: ${selectedLocation}\n❌ 미발견: ${auditSummary.missingCount}개\n⚠️ 위치 불일치/초과: ${auditSummary.unexpectedCount}개\n\n이슈 장비들이 구글 시트에 한 줄씩 깔끔하게 기록되었습니다.`);
     } catch (err) {
       alert(`저장 실패: ${err.message}`);
     } finally {

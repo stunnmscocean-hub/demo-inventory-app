@@ -645,8 +645,8 @@ export const logInventoryAudit = async (auditData = {}) => {
       missingCount: auditData.missingCount || 0,
       unexpectedCount: auditData.unexpectedCount || 0,
       scannedCount: auditData.scannedCount || 0,
-      missingDetails: auditData.missingDetails || '-',
-      unexpectedDetails: auditData.unexpectedDetails || '-',
+      missingItemsJson: JSON.stringify(auditData.missingItems || []),
+      unexpectedItemsJson: JSON.stringify(auditData.unexpectedItems || []),
       timestamp: auditData.timestamp || new Date().toLocaleString()
     };
 

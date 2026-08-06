@@ -3254,8 +3254,7 @@ function handleLogInventoryAudit(params) {
     
     const headersList = [
       '일시', '실사회차', '실사위치', '실사담당자', 
-      '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수', 
-      '미발견 장비 세부목록', '초과/이탈 장비 세부목록'
+      '구분(상태)', '제품명', '시리얼넘버', '등록위치/상태', '이슈 상세사유'
     ];
 
     // 헤더 확인 및 업그레이드
@@ -3265,7 +3264,7 @@ function handleLogInventoryAudit(params) {
     } else {
       const lastCol = Math.max(sheet.getLastColumn(), 1);
       const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-      if (!currentHeaders.includes('실사회차')) {
+      if (!currentHeaders.includes('구분(상태)')) {
         sheet.getRange(1, 1, 1, headersList.length).setValues([headersList]);
       }
     }
@@ -3276,14 +3275,6 @@ function handleLogInventoryAudit(params) {
 
     const location = params.location || '기타';
     const auditor = params.auditor || params.userName || '담당자';
-    const totalExpected = params.totalExpected || 0;
-    const matchedCount = params.matchedCount || 0;
-    const missingCount = params.missingCount || 0;
-    const unexpectedCount = params.unexpectedCount || 0;
-    const scannedCount = params.scannedCount || 0;
-
-    const missingDetails = params.missingDetails || '-';
-    const unexpectedDetails = params.unexpectedDetails || '-';
 
     // 오늘 날짜 해당 위치의 실사 회차 계산
     let todayCount = 0;
@@ -3298,26 +3289,88 @@ function handleLogInventoryAudit(params) {
     }
     const sessionRound = `${todayCount + 1}회차`;
 
-    sheet.appendRow([
-      timestampStr,
-      sessionRound,
-      location,
-      auditor,
-      totalExpected,
-      matchedCount,
-      missingCount,
-      unexpectedCount,
-      scannedCount,
-      missingDetails,
-      unexpectedDetails
-    ]);
+    // 파싱된 이슈 객체 목록
+    let missingList = [];
+    let unexpectedList = [];
 
-    console.log('✅ 실사History 기록 완료:', { timestampStr, sessionRound, location, auditor, matchedCount, missingCount, unexpectedCount });
+    if (params.missingItemsJson) {
+      try { missingList = JSON.parse(params.missingItemsJson); } catch (e) {}
+    }
+    if (params.unexpectedItemsJson) {
+      try { unexpectedList = JSON.parse(params.unexpectedItemsJson); } catch (e) {}
+    }
+
+    // 파싱 실패 시 텍스트 파싱 폴백
+    if (missingList.length === 0 && params.missingDetails && params.missingDetails !== '없음' && params.missingDetails !== '-') {
+      params.missingDetails.split(',').forEach(part => {
+        const trimmed = part.trim();
+        if (trimmed) missingList.push({ name: trimmed, serial: '-', location: location, status: '-', reason: '실사 시 현장에서 발견되지 않음' });
+      });
+    }
+
+    if (unexpectedList.length === 0 && params.unexpectedDetails && params.unexpectedDetails !== '없음' && params.unexpectedDetails !== '-') {
+      params.unexpectedDetails.split(',').forEach(part => {
+        const trimmed = part.trim();
+        if (trimmed) unexpectedList.push({ name: trimmed, serial: '-', location: '타위치/미등록', status: '-', reason: '목록에 없는데 스캔됨' });
+      });
+    }
+
+    let addedRowsCount = 0;
+
+    // 1. 미발견 (분실) 장비 한 줄씩 추가
+    missingList.forEach(item => {
+      sheet.appendRow([
+        timestampStr,
+        sessionRound,
+        location,
+        auditor,
+        '❌ 미발견(분실)',
+        item.name || '미발견 장비',
+        item.serial || '-',
+        item.location ? `${item.location} (${item.status || '보관중'})` : '-',
+        item.reason || '실사 시 현장에서 발견되지 않음'
+      ]);
+      addedRowsCount++;
+    });
+
+    // 2. 초과 / 위치 이탈 장비 한 줄씩 추가
+    unexpectedList.forEach(item => {
+      sheet.appendRow([
+        timestampStr,
+        sessionRound,
+        location,
+        auditor,
+        '⚠️ 초과/위치이탈',
+        item.name || '초과 스캔 장비',
+        item.serial || '-',
+        item.location ? `${item.location} (${item.status || '-'})` : '구글 시트 미등록',
+        item.reason || '실사 목록에 없는 장비 스캔됨'
+      ]);
+      addedRowsCount++;
+    });
+
+    // 3. 이슈가 하나도 없을 경우 (전수 100% 정상 일치)
+    if (addedRowsCount === 0) {
+      sheet.appendRow([
+        timestampStr,
+        sessionRound,
+        location,
+        auditor,
+        '✅ 이상없음 (전수일치)',
+        '전체 장비',
+        '-',
+        '정상 위치',
+        '모든 장비가 100% 일치하게 배치되어 있습니다.'
+      ]);
+    }
+
+    console.log('✅ 실사History 기록 완료 (한 줄씩 추가됨):', { timestampStr, sessionRound, location, auditor, addedRowsCount });
 
     return createSuccessResponse({ 
       message: 'Inventory audit logged successfully',
       sessionRound: sessionRound,
-      timestamp: timestampStr
+      timestamp: timestampStr,
+      addedRows: addedRowsCount
     });
 
   } catch (error) {
