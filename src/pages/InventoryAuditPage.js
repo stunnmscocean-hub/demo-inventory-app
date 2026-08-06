@@ -116,7 +116,17 @@ const InventoryAuditPage = () => {
     fetchEquipments();
   }, []);
 
-  // 구글 시트에 존재하는 모든 보관 위치 목록 100% 동적 추출
+  // 수동 추가된 보관 장소 목록 (localStorage 보존)
+  const [customLocations, setCustomLocations] = useState(() => {
+    try {
+      const saved = localStorage.getItem('custom_audit_locations');
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // 구글 시트에 존재하는 위치 + 수동 추가된 위치 100% 동적 합성
   const availableLocations = useMemo(() => {
     const locSet = new Set();
     allEquipments.forEach(eq => {
@@ -126,12 +136,35 @@ const InventoryAuditPage = () => {
       }
     });
 
+    customLocations.forEach(cLoc => {
+      if (cLoc && cLoc.trim()) {
+        locSet.add(cLoc.trim());
+      }
+    });
+
     const list = Array.from(locSet);
     if (list.length === 0) {
       return ['2층 창고', '본사', '1층 전시장'];
     }
     return list;
-  }, [allEquipments]);
+  }, [allEquipments, customLocations]);
+
+  // 장소 수동 추가 핸들러
+  const handleAddCustomLocation = () => {
+    const input = window.prompt('➕ 새로 추가할 보관 장소명을 입력하세요:\n(예: 3층 창고, 지하 보관소, 외부 전시장 등)');
+    if (!input) return;
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    if (!customLocations.includes(trimmed)) {
+      const updated = [...customLocations, trimmed];
+      setCustomLocations(updated);
+      try {
+        localStorage.setItem('custom_audit_locations', JSON.stringify(updated));
+      } catch (e) {}
+    }
+    setSelectedLocation(trimmed);
+  };
 
   // 구글 시트에서 위치 목록이 로드되면 첫 번째 위치를 자동 선택
   useEffect(() => {
@@ -366,13 +399,41 @@ const InventoryAuditPage = () => {
               <select
                 className={styles.locationSelect}
                 value={selectedLocation}
-                onChange={(e) => setSelectedLocation(e.target.value)}
+                onChange={(e) => {
+                  if (e.target.value === '__ADD_NEW__') {
+                    handleAddCustomLocation();
+                  } else {
+                    setSelectedLocation(e.target.value);
+                  }
+                }}
                 disabled={isAuditing}
               >
                 {availableLocations.map((loc, idx) => (
                   <option key={idx} value={loc}>{loc}</option>
                 ))}
+                <option value="__ADD_NEW__">➕ 새 장소 직접 추가...</option>
               </select>
+
+              <button
+                onClick={handleAddCustomLocation}
+                disabled={isAuditing}
+                style={{
+                  backgroundColor: '#3b82f6',
+                  color: '#ffffff',
+                  border: 'none',
+                  padding: '8px 14px',
+                  borderRadius: '8px',
+                  fontSize: '13px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  boxShadow: '0 2px 4px rgba(59, 130, 246, 0.2)'
+                }}
+              >
+                ➕ 장소 추가
+              </button>
             </div>
 
             <div>
