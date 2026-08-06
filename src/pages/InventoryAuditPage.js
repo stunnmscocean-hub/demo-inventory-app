@@ -116,14 +116,29 @@ const InventoryAuditPage = () => {
     fetchEquipments();
   }, []);
 
-  // 구글 시트에 존재하는 모든 보관 위치 목록 추출
+  // 구글 시트에 존재하는 모든 보관 위치 목록 100% 동적 추출
   const availableLocations = useMemo(() => {
-    const locSet = new Set(['2층 창고', '본사', '1층 전시장', '기타 보관소']);
+    const locSet = new Set();
     allEquipments.forEach(eq => {
-      if (eq.location) locSet.add(eq.location);
+      const loc = (eq.location || '').toString().trim();
+      if (loc && loc !== '-' && loc !== 'undefined') {
+        locSet.add(loc);
+      }
     });
-    return Array.from(locSet);
+
+    const list = Array.from(locSet);
+    if (list.length === 0) {
+      return ['2층 창고', '본사', '1층 전시장'];
+    }
+    return list;
   }, [allEquipments]);
+
+  // 구글 시트에서 위치 목록이 로드되면 첫 번째 위치를 자동 선택
+  useEffect(() => {
+    if (availableLocations.length > 0 && !availableLocations.includes(selectedLocation)) {
+      setSelectedLocation(availableLocations[0]);
+    }
+  }, [availableLocations, selectedLocation]);
 
   // 실사 대상 위치에 보관 중이어야 하는 기준 장비 목록 (Expected List)
   const expectedEquipments = useMemo(() => {
