@@ -206,6 +206,10 @@ function doPost(e) {
         console.log('doPost: Calling logSearchHistory function.');
         return handleLogSearchHistory(params);
       
+      case 'logInventoryAudit':
+        console.log('doPost: Calling logInventoryAudit function.');
+        return handleLogInventoryAudit(params);
+      
       default:
         return createErrorResponse('invalid_action', 'No valid action specified.');
     }

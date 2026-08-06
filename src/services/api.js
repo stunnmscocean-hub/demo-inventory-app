@@ -635,26 +635,38 @@ export const logSearchHistory = async (logData = {}) => {
 // ===== 📦 재고 실사 기록 (실사History 시트에 기록) =====
 export const logInventoryAudit = async (auditData = {}) => {
   try {
-    const params = new URLSearchParams({
+    const payload = {
       action: 'logInventoryAudit',
       location: auditData.location || '',
+      auditor: auditData.auditor || auditData.userName || '담당자',
       totalExpected: auditData.totalExpected || 0,
       matchedCount: auditData.matchedCount || 0,
       missingCount: auditData.missingCount || 0,
       unexpectedCount: auditData.unexpectedCount || 0,
       scannedCount: auditData.scannedCount || 0,
+      missingDetails: auditData.missingDetails || '-',
+      unexpectedDetails: auditData.unexpectedDetails || '-',
       timestamp: auditData.timestamp || new Date().toLocaleString()
-    });
+    };
 
-    const url = `${GAS_URL}?${params.toString()}`;
-    console.log('🛫 [logInventoryAudit] 실사 기록 요청 전송:', url);
+    const params = new URLSearchParams(payload);
+    const getUrl = `${GAS_URL}?${params.toString()}`;
+    console.log('🛫 [logInventoryAudit] 실사 기록 요청 전송:', getUrl);
 
-    if (typeof window !== 'undefined') {
-      const img = new Image();
-      img.src = url;
+    // 1. fetch GET 전송 (no-cors, 302 리디렉션 자동 처리)
+    try {
+      await fetch(getUrl, { method: 'GET', mode: 'no-cors' });
+    } catch (fetchErr) {
+      console.warn('GET 전송 실패, POST 보조 전송:', fetchErr);
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
     }
 
-    fetch(url, { mode: 'no-cors' }).catch(() => {});
+    console.log('✅ [logInventoryAudit] 시트 전송 완료');
     return { success: true };
   } catch (error) {
     console.error('❌ [logInventoryAudit] 에러 발생:', error);
