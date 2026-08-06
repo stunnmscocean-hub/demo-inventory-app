@@ -139,15 +139,30 @@ const InventoryAuditPage = () => {
 
           if (serial) {
             const cleanS = serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-            if (cleanS && !serialMap.has(cleanS)) {
-              serialMap.set(cleanS, {
-                id: item.id || serial,
-                name: name,
-                serial: serial,
-                location: location,
-                status: status,
-                assignee: assignee
-              });
+            if (cleanS) {
+              if (!serialMap.has(cleanS)) {
+                // 최신 행 (가장 아래 행) 데이터를 최우선 등록
+                serialMap.set(cleanS, {
+                  id: item.id || serial,
+                  name: name,
+                  serial: serial,
+                  location: location,
+                  status: status,
+                  assignee: assignee
+                });
+              } else {
+                // 최신 행의 보관위치/상태가 누락된 경우 이전 행에서 보완
+                const existing = serialMap.get(cleanS);
+                if ((!existing.location || existing.location === '-') && location) {
+                  existing.location = location;
+                }
+                if ((!existing.status || existing.status === '-') && status) {
+                  existing.status = status;
+                }
+                if ((!existing.name || existing.name === '이름 없음') && name && name !== '이름 없음') {
+                  existing.name = name;
+                }
+              }
             }
           }
         });
