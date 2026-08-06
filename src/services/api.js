@@ -650,24 +650,17 @@ export const logInventoryAudit = async (auditData = {}) => {
       timestamp: auditData.timestamp || new Date().toLocaleString()
     };
 
-    const params = new URLSearchParams(payload);
-    const getUrl = `${GAS_URL}?${params.toString()}`;
-    console.log('🛫 [logInventoryAudit] 실사 기록 요청 전송:', getUrl);
+    console.log('🛫 [logInventoryAudit] POST 실사 기록 요청 전송 (위치:', payload.location, ', 미발견:', payload.missingCount, ')');
 
-    // 1. fetch GET 전송 (no-cors, 302 리디렉션 자동 처리)
-    try {
-      await fetch(getUrl, { method: 'GET', mode: 'no-cors' });
-    } catch (fetchErr) {
-      console.warn('GET 전송 실패, POST 보조 전송:', fetchErr);
-      await fetch(GAS_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify(payload)
-      });
-    }
+    // POST 방식으로 데이터 전송 (URL 초과로 인한 400 Bad Request 방지)
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload)
+    });
 
-    console.log('✅ [logInventoryAudit] 시트 전송 완료');
+    console.log('✅ [logInventoryAudit] 시트 전송 완료 (POST)');
     return { success: true };
   } catch (error) {
     console.error('❌ [logInventoryAudit] 에러 발생:', error);
