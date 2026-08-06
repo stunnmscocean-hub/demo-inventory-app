@@ -374,6 +374,18 @@ const InventoryAuditPage = () => {
           </div>
         </div>
 
+        {/* 로딩/에러 표시 */}
+        {loading && (
+          <div style={{ textAlign: 'center', padding: '30px', color: '#64748b', fontWeight: 'bold' }}>
+            ⏳ 시트 장비 데이터 로딩 중...
+          </div>
+        )}
+        {error && (
+          <div style={{ textAlign: 'center', padding: '20px', color: '#dc2626', background: '#fef2f2', borderRadius: '8px', marginBottom: '20px', fontWeight: 'bold' }}>
+            ❌ 데이터 로드 실패: {error}
+          </div>
+        )}
+
         {/* 스캐너 입력 카운터 */}
         {isAuditing && (
           <div className={styles.scannerCard}>
