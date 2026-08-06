@@ -88,19 +88,67 @@ const InventoryAuditPage = () => {
 
         console.log('📦 [재고실사] API 장비 수:', rawList.length);
 
-        // 최근 입력 데이터 기준으로 장비 시리얼 중복제거
+        // 최근 입력 데이터 기준으로 장비 시리얼 중복제거 (모든 컬럼명 변종 지원)
         const serialMap = new Map();
         [...rawList].reverse().forEach(item => {
-          const serial = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString().trim();
-          if (serial && !serialMap.has(serial.toLowerCase())) {
-            serialMap.set(serial.toLowerCase(), {
-              id: item.id || serial,
-              name: item.name || item['제품명'] || item['장비명'] || '이름 없음',
-              serial: serial,
-              location: (item.location || item['보관위치'] || '본사').toString().trim(),
-              status: (item.status || item['대여가능여부'] || '').toString().trim(),
-              assignee: (item.assignee || item['대여담당자'] || '').toString().trim()
-            });
+          const serial = (
+            item.serial || 
+            item.serialNumber || 
+            item['시리얼넘버'] || 
+            item['시리얼 넘버'] || 
+            item['시리얼'] || 
+            item['S/N'] || 
+            item['SN'] || 
+            item['시리얼 번호'] || 
+            ''
+          ).toString().trim();
+
+          const name = (
+            item.name || 
+            item['제품명'] || 
+            item['제품 명'] || 
+            item['장비명'] || 
+            item['장비 명'] || 
+            item['모델명'] || 
+            item['이름'] || 
+            '이름 없음'
+          ).toString().trim();
+
+          const location = (
+            item.location || 
+            item['보관위치'] || 
+            item['위치'] || 
+            item['보관 장소'] || 
+            '본사'
+          ).toString().trim();
+
+          const status = (
+            item.status || 
+            item['대여가능여부'] || 
+            item['상태'] || 
+            item['대여상태'] || 
+            ''
+          ).toString().trim();
+
+          const assignee = (
+            item.assignee || 
+            item['대여담당자'] || 
+            item['담당자'] || 
+            ''
+          ).toString().trim();
+
+          if (serial) {
+            const cleanS = serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+            if (cleanS && !serialMap.has(cleanS)) {
+              serialMap.set(cleanS, {
+                id: item.id || serial,
+                name: name,
+                serial: serial,
+                location: location,
+                status: status,
+                assignee: assignee
+              });
+            }
           }
         });
 
@@ -216,7 +264,7 @@ const InventoryAuditPage = () => {
     scannedSerialsSet.forEach(rawScanned => {
       const cleanS = rawScanned.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
       if (!expectedSerialMap.has(cleanS)) {
-        // 전제 시체에서 검색
+        // 전체 장비에서 검색
         const foundInMaster = allEquipments.find(eq => eq.serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanS);
         if (foundInMaster) {
           unexpectedList.push({
@@ -226,7 +274,7 @@ const InventoryAuditPage = () => {
         } else {
           unexpectedList.push({
             id: rawScanned,
-            name: `미등록 장비 (S/N: ${rawScanned})`,
+            name: '미등록 장비',
             serial: rawScanned,
             location: '미등록',
             status: '-',
