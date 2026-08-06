@@ -128,6 +128,12 @@ function doGet(e) {
     case 'uploadFile':
       return handleUploadFile(e.parameter.fileName, e.parameter.fileData, e.parameter.mimeType);
     
+    case 'logSearchHistory':
+      return handleLogSearchHistory(e.parameter);
+
+    case 'logInventoryAudit':
+      return handleLogInventoryAudit(e.parameter);
+
     case 'updateFormSubmission':
       return handleUpdateFormSubmission(e.parameter.serialNumber, e.parameter.fileUrl);
       
@@ -3209,5 +3215,44 @@ function handleLogSearchHistory(params) {
   } catch (error) {
     console.error('Error in handleLogSearchHistory:', error);
     return createErrorResponse('log_search_error', error.toString());
+  }
+}
+
+/**
+ * 📦 재고 실사 결과 실사History 시트에 기록 핸들러
+ */
+function handleLogInventoryAudit(params) {
+  try {
+    params = params || {};
+    console.log('=== handleLogInventoryAudit 시작 ===', params);
+
+    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    let sheet = spreadsheet.getSheetByName('실사History');
+    
+    // 실사History 시트가 없으면 생성 후 헤더 기록
+    if (!sheet) {
+      console.log('실사History 시트 생성 중...');
+      sheet = spreadsheet.insertSheet('실사History');
+      sheet.appendRow(['일시', '실사위치', '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수']);
+    }
+
+    const now = new Date();
+    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+
+    const location = params.location || '기타';
+    const totalExpected = params.totalExpected || 0;
+    const matchedCount = params.matchedCount || 0;
+    const missingCount = params.missingCount || 0;
+    const unexpectedCount = params.unexpectedCount || 0;
+    const scannedCount = params.scannedCount || 0;
+
+    sheet.appendRow([timestampStr, location, totalExpected, matchedCount, missingCount, unexpectedCount, scannedCount]);
+    console.log('✅ 실사History 기록 완료:', { timestampStr, location, matchedCount, missingCount, unexpectedCount });
+
+    return createSuccessResponse({ message: 'Inventory audit logged successfully' });
+
+  } catch (error) {
+    console.error('Error in handleLogInventoryAudit:', error);
+    return createErrorResponse('log_audit_error', error.toString());
   }
 }

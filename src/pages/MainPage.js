@@ -2397,11 +2397,32 @@ const MainPage = ({ user, onLogout }) => {
     return (
       <header className={styles.header}>
         <h1 className={styles.headerTitle}>{displayName}님, 환영합니다.</h1>
-        {user && onLogout && ( // Only show logout button if user and onLogout are provided
-          <button onClick={onLogout} className="button-secondary">
-            로그아웃
+        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={() => window.location.href = '/audit'}
+            style={{
+              backgroundColor: '#2563eb',
+              color: '#ffffff',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 4px rgba(37, 99, 235, 0.2)'
+            }}
+          >
+            📦 장비 재고 실사
           </button>
-        )}
+          {user && onLogout && ( // Only show logout button if user and onLogout are provided
+            <button onClick={onLogout} className="button-secondary">
+              로그아웃
+            </button>
+          )}
+        </div>
       </header>
     );
   };

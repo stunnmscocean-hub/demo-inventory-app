@@ -5,6 +5,7 @@ import useAuthStore from './stores/authStore';
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage';
 import QrPrintPage from './pages/QrPrintPage';
+import InventoryAuditPage from './pages/InventoryAuditPage';
 import OAuthCallback from './components/OAuthCallback';
 import './App.css';
 
@@ -106,6 +107,14 @@ function App() {
           <Route 
             path="/qr-print" 
             element={<QrPrintPage />} 
+          />
+          <Route 
+            path="/audit" 
+            element={
+              <ProtectedRoute isAuthenticated={isAuthenticated}>
+                <InventoryAuditPage />
+              </ProtectedRoute>
+            } 
           />
           <Route 
             path="/" 

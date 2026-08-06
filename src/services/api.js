@@ -631,3 +631,33 @@ export const logSearchHistory = async (logData = {}) => {
     return null;
   }
 };
+
+// ===== 📦 재고 실사 기록 (실사History 시트에 기록) =====
+export const logInventoryAudit = async (auditData = {}) => {
+  try {
+    const params = new URLSearchParams({
+      action: 'logInventoryAudit',
+      location: auditData.location || '',
+      totalExpected: auditData.totalExpected || 0,
+      matchedCount: auditData.matchedCount || 0,
+      missingCount: auditData.missingCount || 0,
+      unexpectedCount: auditData.unexpectedCount || 0,
+      scannedCount: auditData.scannedCount || 0,
+      timestamp: auditData.timestamp || new Date().toLocaleString()
+    });
+
+    const url = `${GAS_URL}?${params.toString()}`;
+    console.log('🛫 [logInventoryAudit] 실사 기록 요청 전송:', url);
+
+    if (typeof window !== 'undefined') {
+      const img = new Image();
+      img.src = url;
+    }
+
+    fetch(url, { mode: 'no-cors' }).catch(() => {});
+    return { success: true };
+  } catch (error) {
+    console.error('❌ [logInventoryAudit] 에러 발생:', error);
+    return null;
+  }
+};
