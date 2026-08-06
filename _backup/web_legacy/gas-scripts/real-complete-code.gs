@@ -3223,19 +3223,26 @@ function handleLogSearchHistory(params) {
 }
 
 /**
- * 📦 재고 실사 결과 실사History 시트에 기록 핸들러
+ * 📦 재고 실사 결과 재고조사 시트에 기록 핸들러 (GID: 2124573099)
  */
 function handleLogInventoryAudit(params) {
   try {
     params = params || {};
     console.log('=== handleLogInventoryAudit 시작 ===', params);
 
-    // 🎯 새로 만든 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ) 및 재고조사 탭 GID (1624892133)
+    // 🎯 새로 지정된 전용 재고실사 스프레드시트 ID 및 재고조사 탭 GID (2124573099)
     const AUDIT_SHEET_ID = params.spreadsheetId || '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
-    const AUDIT_TAB_GID = '1624892133';
-    const spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+    const AUDIT_TAB_GID = '2124573099';
+    
+    let spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+    } catch (openErr) {
+      console.error('스프레드시트 열기 실패:', openErr);
+      return createErrorResponse('audit_spreadsheet_not_found', '재고조사 스프레드시트를 열 수 없습니다: ' + openErr.toString());
+    }
 
-    // GID가 1624892133 인 재고조사 전용 탭 찾기
+    // GID가 2124573099 인 재고조사 전용 탭 찾기
     let sheet = null;
     const allSheets = spreadsheet.getSheets();
     for (let i = 0; i < allSheets.length; i++) {
@@ -3245,29 +3252,27 @@ function handleLogInventoryAudit(params) {
       }
     }
 
-    // GID로 못 찾았을 경우 '실사History' 탭 -> '시트1'이 아닌 탭 순으로 선택 (시트1 절대 사용 금지)
+    // GID로 못 찾았을 경우 '재고조사' 또는 '실사History' 이름의 탭만 확인
     if (!sheet) {
-      sheet = spreadsheet.getSheetByName('실사History') ||
-              allSheets.find(s => s.getName() !== '시트1') ||
-              allSheets[allSheets.length - 1];
+      sheet = spreadsheet.getSheetByName('재고조사') || spreadsheet.getSheetByName('실사History');
     }
-    
+
+    // 🚨 탭을 찾지 못한 경우 다른 시트(시트1 등)로 폴백/덮어쓰기 절대 금지 -> 즉시 에러 반환
+    if (!sheet) {
+      console.error('❌ 재고조사 시트(GID: 2124573099)를 찾을 수 없습니다.');
+      return createErrorResponse('audit_sheet_not_found', '재고조사 시트(GID: 2124573099)를 찾을 수 없습니다. 다른 시트 덮어쓰기 방지를 위해 기록을 중단합니다.');
+    }
+
     const headersList = [
       '일시', '실사회차', '실사위치', '실사담당자', 
       '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수', 
       '미발견 장비 세부목록', '초과/이탈 장비 세부목록'
     ];
 
-    // 헤더 확인 및 1행 고정
+    // 헤더가 전혀 없는 빈 시트인 경우에만 1행에 기본 헤더 추가
     const lastRow = sheet.getLastRow();
     if (lastRow === 0) {
       sheet.appendRow(headersList);
-    } else {
-      const lastCol = Math.max(sheet.getLastColumn(), 1);
-      const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
-      if (!currentHeaders.includes('실사회차')) {
-        sheet.getRange(1, 1, 1, headersList.length).setValues([headersList]);
-      }
     }
 
     const now = new Date();
@@ -3285,12 +3290,12 @@ function handleLogInventoryAudit(params) {
     let missingDetails = params.missingDetails || '-';
     let unexpectedDetails = params.unexpectedDetails || '-';
 
-    // JSON 파싱으로 넘겨받았을 때 텍스트 정리
+    // JSON 파싱으로 넘겨받았을 때 텍스트 정돈
     if (params.missingItemsJson) {
       try {
         const parsedM = JSON.parse(params.missingItemsJson);
         if (Array.isArray(parsedM) && parsedM.length > 0) {
-          missingDetails = parsedM.map(m => `${m.name} (S/N: ${m.serial})`).join(', ');
+          missingDetails = parsedM.map(m => `${m.name} (${m.serial})`).join(', ');
         } else {
           missingDetails = '없음';
         }
@@ -3301,7 +3306,7 @@ function handleLogInventoryAudit(params) {
       try {
         const parsedU = JSON.parse(params.unexpectedItemsJson);
         if (Array.isArray(parsedU) && parsedU.length > 0) {
-          unexpectedDetails = parsedU.map(u => `${u.name} (S/N: ${u.serial}) - ${u.reason || '타위치'}`).join(', ');
+          unexpectedDetails = parsedU.map(u => `${u.name} (${u.serial})`).join(', ');
         } else {
           unexpectedDetails = '없음';
         }
@@ -3335,13 +3340,14 @@ function handleLogInventoryAudit(params) {
       unexpectedDetails
     ]);
 
-    console.log('✅ 실사History 기록 완료 (원래 11컬럼 구조):', { timestampStr, sessionRound, location, auditor, matchedCount, missingCount, unexpectedCount });
+    console.log('✅ [재고조사 시트 (GID: 2124573099)] 기록 완료:', { timestampStr, sessionRound, location, auditor, matchedCount, missingCount, unexpectedCount });
 
     return createSuccessResponse({ 
       message: 'Inventory audit logged successfully',
       sessionRound: sessionRound,
       timestamp: timestampStr,
-      addedRows: addedRowsCount
+      sheetName: sheet.getName(),
+      gid: AUDIT_TAB_GID
     });
 
   } catch (error) {
