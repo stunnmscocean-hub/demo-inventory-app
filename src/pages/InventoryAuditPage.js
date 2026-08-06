@@ -278,18 +278,25 @@ const InventoryAuditPage = () => {
   const handleSaveToSheet = async () => {
     try {
       setIsSaving(true);
+
+      const missingDetails = auditAnalysis.missingList.map(item => `${item.name}(${item.serial})`).join(', ') || '없음';
+      const unexpectedDetails = auditAnalysis.unexpectedList.map(item => `${item.name}(${item.serial})`).join(', ') || '없음';
+
       const auditSummary = {
         location: selectedLocation,
+        auditor: '재고담당자',
         totalExpected: expectedEquipments.length,
         matchedCount: auditAnalysis.matchedList.length,
         missingCount: auditAnalysis.missingList.length,
         unexpectedCount: auditAnalysis.unexpectedList.length,
         scannedCount: scannedSerialsSet.size,
+        missingDetails: missingDetails,
+        unexpectedDetails: unexpectedDetails,
         timestamp: new Date().toLocaleString()
       };
 
       await logInventoryAudit(auditSummary);
-      alert(`✅ [실사 결과 저장 완료]\n\n위치: ${selectedLocation}\n정상 일치: ${auditSummary.matchedCount}개\n미발견: ${auditSummary.missingCount}개\n위치 불일치: ${auditSummary.unexpectedCount}개\n\n구글 시트에 성공적으로 기록되었습니다.`);
+      alert(`✅ [실사 이력 구글 시트 저장 완료]\n\n📍 위치: ${selectedLocation}\n✅ 정상 일치: ${auditSummary.matchedCount}개\n❌ 미발견: ${auditSummary.missingCount}개\n⚠️ 위치 불일치: ${auditSummary.unexpectedCount}개\n\n'실사History' 시트에 회차별로 차곡차곡 축적되었습니다.`);
     } catch (err) {
       alert(`저장 실패: ${err.message}`);
     } finally {

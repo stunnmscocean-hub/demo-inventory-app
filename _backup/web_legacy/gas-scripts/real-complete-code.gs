@@ -3229,27 +3229,75 @@ function handleLogInventoryAudit(params) {
     const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
     let sheet = spreadsheet.getSheetByName('실사History');
     
+    const headersList = [
+      '일시', '실사회차', '실사위치', '실사담당자', 
+      '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수', 
+      '미발견 장비 세부목록', '초과/이탈 장비 세부목록'
+    ];
+
     // 실사History 시트가 없으면 생성 후 헤더 기록
     if (!sheet) {
       console.log('실사History 시트 생성 중...');
       sheet = spreadsheet.insertSheet('실사History');
-      sheet.appendRow(['일시', '실사위치', '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수']);
+      sheet.appendRow(headersList);
+    } else {
+      // 헤더 확인 및 업그레이드
+      const lastCol = Math.max(sheet.getLastColumn(), 1);
+      const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
+      if (!currentHeaders.includes('실사회차')) {
+        sheet.getRange(1, 1, 1, headersList.length).setValues([headersList]);
+      }
     }
 
     const now = new Date();
-    const timestampStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const timestampStr = `${dateStr} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     const location = params.location || '기타';
+    const auditor = params.auditor || params.userName || '담당자';
     const totalExpected = params.totalExpected || 0;
     const matchedCount = params.matchedCount || 0;
     const missingCount = params.missingCount || 0;
     const unexpectedCount = params.unexpectedCount || 0;
     const scannedCount = params.scannedCount || 0;
 
-    sheet.appendRow([timestampStr, location, totalExpected, matchedCount, missingCount, unexpectedCount, scannedCount]);
-    console.log('✅ 실사History 기록 완료:', { timestampStr, location, matchedCount, missingCount, unexpectedCount });
+    const missingDetails = params.missingDetails || '-';
+    const unexpectedDetails = params.unexpectedDetails || '-';
 
-    return createSuccessResponse({ message: 'Inventory audit logged successfully' });
+    // 오늘 날짜 해당 위치의 실사 회차 계산
+    let todayCount = 0;
+    const lastRow = sheet.getLastRow();
+    if (lastRow > 1) {
+      const data = sheet.getRange(2, 1, lastRow - 1, 3).getValues();
+      todayCount = data.filter(row => {
+        const rowTime = (row[0] || '').toString();
+        const rowLoc = (row[2] || '').toString();
+        return rowTime.startsWith(dateStr) && rowLoc === location;
+      }).length;
+    }
+    const sessionRound = `${todayCount + 1}회차`;
+
+    sheet.appendRow([
+      timestampStr,
+      sessionRound,
+      location,
+      auditor,
+      totalExpected,
+      matchedCount,
+      missingCount,
+      unexpectedCount,
+      scannedCount,
+      missingDetails,
+      unexpectedDetails
+    ]);
+
+    console.log('✅ 실사History 기록 완료:', { timestampStr, sessionRound, location, auditor, matchedCount, missingCount, unexpectedCount });
+
+    return createSuccessResponse({ 
+      message: 'Inventory audit logged successfully',
+      sessionRound: sessionRound,
+      timestamp: timestampStr
+    });
 
   } catch (error) {
     console.error('Error in handleLogInventoryAudit:', error);
