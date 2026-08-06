@@ -3230,11 +3230,27 @@ function handleLogInventoryAudit(params) {
     params = params || {};
     console.log('=== handleLogInventoryAudit 시작 ===', params);
 
-    // 🎯 새로 만든 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ)
+    // 🎯 새로 만든 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ) 및 재고조사 탭 GID (1624892133)
     const AUDIT_SHEET_ID = params.spreadsheetId || '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
+    const AUDIT_TAB_GID = '1624892133';
     const spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
 
-    let sheet = spreadsheet.getSheetByName('실사History') || spreadsheet.getSheetByName('시트1') || spreadsheet.getSheets()[0];
+    // GID가 1624892133 인 재고조사 전용 탭 찾기
+    let sheet = null;
+    const allSheets = spreadsheet.getSheets();
+    for (let i = 0; i < allSheets.length; i++) {
+      if (allSheets[i].getSheetId().toString() === AUDIT_TAB_GID) {
+        sheet = allSheets[i];
+        break;
+      }
+    }
+
+    // GID로 못 찾았을 경우 '실사History' 탭 -> '시트1'이 아닌 탭 순으로 선택 (시트1 절대 사용 금지)
+    if (!sheet) {
+      sheet = spreadsheet.getSheetByName('실사History') ||
+              allSheets.find(s => s.getName() !== '시트1') ||
+              allSheets[allSheets.length - 1];
+    }
     
     const headersList = [
       '일시', '실사회차', '실사위치', '실사담당자', 
