@@ -3272,11 +3272,10 @@ function handleLogInventoryAudit(params) {
 
     const headersList = [
       '일시', '실사회차', '실사위치', '실사담당자', 
-      '기준장비수', '정상일치', '미발견(분실)', '위치불일치(초과)', '총스캔수', 
-      '미발견 장비 세부목록', '초과/이탈 장비 세부목록'
+      '구분(상태)', '제품명', '시리얼넘버', '등록위치', '현재상태', '비고/상세사유'
     ];
 
-    // 헤더가 전혀 없는 빈 시트인 경우에만 1행에 기본 헤더 추가
+    // 헤더가 전혀 없는 빈 시트인 경우에만 1행에 기본 헤더 추가 (기존 헤더 덮어쓰기 금지)
     const lastRow = sheet.getLastRow();
     if (lastRow === 0) {
       sheet.appendRow(headersList);
@@ -3288,37 +3287,6 @@ function handleLogInventoryAudit(params) {
 
     const location = params.location || '기타';
     const auditor = params.auditor || params.userName || '담당자';
-    const totalExpected = params.totalExpected || 0;
-    const matchedCount = params.matchedCount || 0;
-    const missingCount = params.missingCount || 0;
-    const unexpectedCount = params.unexpectedCount || 0;
-    const scannedCount = params.scannedCount || 0;
-
-    let missingDetails = params.missingDetails || '-';
-    let unexpectedDetails = params.unexpectedDetails || '-';
-
-    // JSON 파싱으로 넘겨받았을 때 텍스트 정돈
-    if (params.missingItemsJson) {
-      try {
-        const parsedM = JSON.parse(params.missingItemsJson);
-        if (Array.isArray(parsedM) && parsedM.length > 0) {
-          missingDetails = parsedM.map(m => `${m.name} (${m.serial})`).join(', ');
-        } else {
-          missingDetails = '없음';
-        }
-      } catch (e) {}
-    }
-
-    if (params.unexpectedItemsJson) {
-      try {
-        const parsedU = JSON.parse(params.unexpectedItemsJson);
-        if (Array.isArray(parsedU) && parsedU.length > 0) {
-          unexpectedDetails = parsedU.map(u => `${u.name} (${u.serial})`).join(', ');
-        } else {
-          unexpectedDetails = '없음';
-        }
-      } catch (e) {}
-    }
 
     // 오늘 날짜 해당 위치의 실사 회차 계산
     let todayCount = 0;
@@ -3333,28 +3301,83 @@ function handleLogInventoryAudit(params) {
     }
     const sessionRound = `${todayCount + 1}회차`;
 
-    sheet.appendRow([
-      timestampStr,
-      sessionRound,
-      location,
-      auditor,
-      totalExpected,
-      matchedCount,
-      missingCount,
-      unexpectedCount,
-      scannedCount,
-      missingDetails,
-      unexpectedDetails
-    ]);
+    // 시리얼넘버별 개별 이슈 행 추가
+    let missingList = [];
+    if (params.missingItemsJson) {
+      try { missingList = JSON.parse(params.missingItemsJson); } catch (e) {}
+    }
 
-    console.log('✅ [재고조사 시트 (GID: 2124573099)] 기록 완료:', { timestampStr, sessionRound, location, auditor, matchedCount, missingCount, unexpectedCount });
+    let unexpectedList = [];
+    if (params.unexpectedItemsJson) {
+      try { unexpectedList = JSON.parse(params.unexpectedItemsJson); } catch (e) {}
+    }
+
+    let addedRowsCount = 0;
+
+    // 1. 미발견 (분실 의심) 장비 시리얼별 한 줄씩 개별 추가
+    if (Array.isArray(missingList) && missingList.length > 0) {
+      missingList.forEach(item => {
+        sheet.appendRow([
+          timestampStr,
+          sessionRound,
+          location,
+          auditor,
+          '❌ 미발견(분실)',
+          item.name || '미발견 장비',
+          item.serial || '-',
+          item.location || location,
+          item.status || '보관중',
+          item.reason || '실사 시 현장에서 발견되지 않음 (분실 의심)'
+        ]);
+        addedRowsCount++;
+      });
+    }
+
+    // 2. 초과 / 위치 이탈 장비 시리얼별 한 줄씩 개별 추가
+    if (Array.isArray(unexpectedList) && unexpectedList.length > 0) {
+      unexpectedList.forEach(item => {
+        sheet.appendRow([
+          timestampStr,
+          sessionRound,
+          location,
+          auditor,
+          '⚠️ 초과/위치이탈',
+          item.name || '초과 스캔 장비',
+          item.serial || '-',
+          item.location || '미등록',
+          item.status || '-',
+          item.reason || '실사 목록에 없는 장비 스캔됨 (위치 이탈)'
+        ]);
+        addedRowsCount++;
+      });
+    }
+
+    // 3. 이슈가 하나도 없을 경우 (전수 100% 정상 일치)
+    if (addedRowsCount === 0) {
+      sheet.appendRow([
+        timestampStr,
+        sessionRound,
+        location,
+        auditor,
+        '✅ 이상없음 (전수일치)',
+        '전체 장비',
+        '-',
+        location,
+        '정상 위치',
+        '모든 장비가 100% 일치하게 배치되어 있습니다.'
+      ]);
+      addedRowsCount = 1;
+    }
+
+    console.log('✅ [재고조사 시트 (GID: 2124573099)] 시리얼별 한 줄씩 개별 기록 완료:', { timestampStr, sessionRound, location, auditor, addedRowsCount });
 
     return createSuccessResponse({ 
       message: 'Inventory audit logged successfully',
       sessionRound: sessionRound,
       timestamp: timestampStr,
       sheetName: sheet.getName(),
-      gid: AUDIT_TAB_GID
+      gid: AUDIT_TAB_GID,
+      addedRows: addedRowsCount
     });
 
   } catch (error) {
