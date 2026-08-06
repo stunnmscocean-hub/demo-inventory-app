@@ -230,11 +230,30 @@ const InventoryAuditPage = () => {
 
     // 신규 스캔 성공
     const isExpected = expectedEquipments.some(eq => eq.serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanInput);
+    const foundEquipment = allEquipments.find(eq => eq.serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase() === cleanInput);
+
+    let logMsg = '';
+    let logStatus = 'expected';
+
+    if (isExpected) {
+      logMsg = `✅ [정상 일치] ${foundEquipment ? foundEquipment.name : trimmed} (${trimmed})`;
+      logStatus = 'expected';
+    } else if (foundEquipment) {
+      const reason = foundEquipment.location !== selectedLocation 
+        ? `타 위치 등록 (${foundEquipment.location})` 
+        : `상태 불일치 (${foundEquipment.status})`;
+      logMsg = `⚠️ [위치 불일치/초과] ${foundEquipment.name} (${trimmed}) - ${reason}`;
+      logStatus = 'unexpected';
+    } else {
+      logMsg = `⚠️ [미등록 장비 스캔됨] S/N: ${trimmed} (구글 시트 미등록)`;
+      logStatus = 'unexpected';
+    }
+
     playSound(isExpected ? 'success' : 'warning');
 
     setScannedSerialsSet(prev => new Set([...prev, trimmed]));
     setScannedLogs(prev => [
-      { serial: trimmed, isExpected, time: new Date().toLocaleTimeString() },
+      { serial: trimmed, isExpected, logMsg, logStatus, time: new Date().toLocaleTimeString() },
       ...prev
     ]);
 
@@ -280,7 +299,7 @@ const InventoryAuditPage = () => {
       setIsSaving(true);
 
       const missingDetails = auditAnalysis.missingList.map(item => `${item.name}(${item.serial})`).join(', ') || '없음';
-      const unexpectedDetails = auditAnalysis.unexpectedList.map(item => `${item.name}(${item.serial})`).join(', ') || '없음';
+      const unexpectedDetails = auditAnalysis.unexpectedList.map(item => `${item.name}(${item.serial}) - ${item.reason || '초과스캔'}`).join(', ') || '없음';
 
       const auditSummary = {
         location: selectedLocation,
@@ -296,7 +315,7 @@ const InventoryAuditPage = () => {
       };
 
       await logInventoryAudit(auditSummary);
-      alert(`✅ [실사 이력 구글 시트 저장 완료]\n\n📍 위치: ${selectedLocation}\n✅ 정상 일치: ${auditSummary.matchedCount}개\n❌ 미발견: ${auditSummary.missingCount}개\n⚠️ 위치 불일치: ${auditSummary.unexpectedCount}개\n\n'실사History' 시트에 회차별로 차곡차곡 축적되었습니다.`);
+      alert(`✅ [실사 이력 구글 시트 저장 완료]\n\n📍 위치: ${selectedLocation}\n✅ 정상 일치: ${auditSummary.matchedCount}개\n❌ 미발견: ${auditSummary.missingCount}개\n⚠️ 위치 불일치/초과: ${auditSummary.unexpectedCount}개\n\n'실사History' 시트에 미발견 및 초과 찍힌 장비 정보가 함께 저장되었습니다.`);
     } catch (err) {
       alert(`저장 실패: ${err.message}`);
     } finally {
@@ -386,6 +405,32 @@ const InventoryAuditPage = () => {
             <p className={styles.scannerTip}>
               💡 무선 바코드 스캐너를 쥐고 장비 QR 라벨을 틱-틱 연속으로 찍으시면 자동으로 카운트됩니다. (엔터 자동 감지)
             </p>
+
+            {/* ⚡ 실시간 스캔 피드 (초과/타위치 장비 즉시 하이라이트) */}
+            {scannedLogs.length > 0 && (
+              <div style={{ marginTop: '14px', borderTop: '1px solid #334155', paddingTop: '10px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#94a3b8', marginBottom: '6px' }}>⚡ 최근 스캔 현황:</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {scannedLogs.slice(0, 3).map((log, idx) => (
+                    <div key={idx} style={{
+                      fontSize: '13px',
+                      padding: '8px 12px',
+                      borderRadius: '6px',
+                      fontWeight: 'bold',
+                      background: log.logStatus === 'expected' ? '#14532d' : '#7c2d12',
+                      color: log.logStatus === 'expected' ? '#86efac' : '#fdba74',
+                      border: log.logStatus === 'expected' ? '1px solid #22c55e' : '1px solid #f97316',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}>
+                      <span>{log.logMsg}</span>
+                      <span style={{ fontSize: '11px', opacity: 0.85 }}>{log.time}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
