@@ -637,6 +637,7 @@ export const logInventoryAudit = async (auditData = {}) => {
   try {
     const payload = {
       action: 'logInventoryAudit',
+      spreadsheetId: '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ',
       location: auditData.location || '',
       auditor: auditData.auditor || auditData.userName || '담당자',
       totalExpected: auditData.totalExpected || 0,

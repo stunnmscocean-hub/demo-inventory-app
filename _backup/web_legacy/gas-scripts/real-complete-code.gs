@@ -3230,15 +3230,9 @@ function handleLogInventoryAudit(params) {
     params = params || {};
     console.log('=== handleLogInventoryAudit 시작 ===', params);
 
-    // 새로 생성된 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ)
+    // 🎯 새로 만든 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ)
     const AUDIT_SHEET_ID = params.spreadsheetId || '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
-    let spreadsheet;
-    try {
-      spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
-    } catch (e) {
-      console.warn('전용 실사 시트 오픈 실패, 기본 시트로 폴백:', e);
-      spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
-    }
+    const spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
 
     let sheet = spreadsheet.getSheetByName('실사History') || spreadsheet.getSheetByName('시트1') || spreadsheet.getSheets()[0];
     
