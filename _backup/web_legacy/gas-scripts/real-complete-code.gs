@@ -3226,8 +3226,17 @@ function handleLogInventoryAudit(params) {
     params = params || {};
     console.log('=== handleLogInventoryAudit 시작 ===', params);
 
-    const spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
-    let sheet = spreadsheet.getSheetByName('실사History');
+    // 새로 생성된 전용 재고실사 스프레드시트 ID (13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ)
+    const AUDIT_SHEET_ID = params.spreadsheetId || '13cKidfXW_tENgtbx65AqWxRJvi7s86JcBcrMQHfK3oQ';
+    let spreadsheet;
+    try {
+      spreadsheet = SpreadsheetApp.openById(AUDIT_SHEET_ID);
+    } catch (e) {
+      console.warn('전용 실사 시트 오픈 실패, 기본 시트로 폴백:', e);
+      spreadsheet = SpreadsheetApp.openById(CONFIG.DEFAULT_SHEET_ID);
+    }
+
+    let sheet = spreadsheet.getSheetByName('실사History') || spreadsheet.getSheetByName('시트1') || spreadsheet.getSheets()[0];
     
     const headersList = [
       '일시', '실사회차', '실사위치', '실사담당자', 
@@ -3235,13 +3244,11 @@ function handleLogInventoryAudit(params) {
       '미발견 장비 세부목록', '초과/이탈 장비 세부목록'
     ];
 
-    // 실사History 시트가 없으면 생성 후 헤더 기록
-    if (!sheet) {
-      console.log('실사History 시트 생성 중...');
-      sheet = spreadsheet.insertSheet('실사History');
+    // 헤더 확인 및 업그레이드
+    const lastRow = sheet.getLastRow();
+    if (lastRow === 0) {
       sheet.appendRow(headersList);
     } else {
-      // 헤더 확인 및 업그레이드
       const lastCol = Math.max(sheet.getLastColumn(), 1);
       const currentHeaders = sheet.getRange(1, 1, 1, lastCol).getValues()[0];
       if (!currentHeaders.includes('실사회차')) {

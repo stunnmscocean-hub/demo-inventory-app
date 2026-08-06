@@ -23,15 +23,6 @@ const ProtectedRoute = ({ isAuthenticated, children }) => {
     return <Navigate to="/login" replace />;
   }
 
-  // 로그인 성공 시 보존된 QR 쿼리 파라미터 복원 리디렉션
-  const pendingParams = sessionStorage.getItem('pending_qr_params');
-  if (pendingParams) {
-    console.log('📱 [ProtectedRoute] 로그인 성공 - QR 쿼리 복원:', pendingParams);
-    sessionStorage.removeItem('pending_qr_params');
-    const targetUrl = pendingParams.startsWith('/') ? pendingParams : `/${pendingParams}`;
-    return <Navigate to={targetUrl} replace />;
-  }
-
   return children;
 };
 
