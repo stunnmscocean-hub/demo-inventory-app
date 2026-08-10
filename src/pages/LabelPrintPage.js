@@ -730,7 +730,8 @@ const LabelPrintPage = () => {
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'space-between',
-                            boxSizing: 'border-box'
+                            boxSizing: 'border-box',
+                            fontFamily: "'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', 'Inter', -apple-system, sans-serif"
                           }}
                         >
                           {/* 0. 상단 공통 헤더: 회사 로고 & 연락처 */}
