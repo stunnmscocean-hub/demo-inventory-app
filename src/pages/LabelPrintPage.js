@@ -4,36 +4,30 @@ import BarcodeSvg from '../components/BarcodeSvg';
 import styles from './LabelPrintPage.module.css';
 
 const LabelPrintPage = () => {
-  const domain = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr';
+  const [domain, setDomain] = useState(
+    window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr'
+  );
+  const [search, setSearch] = useState('');
   const [allEquipments, setAllEquipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 출력 모드: 'barcode' (바코드 전용), 'dual_qr' (듀얼 QR), 'hybrid' (바코드+QR)
-  const [labelMode, setLabelMode] = useState('barcode');
+  // 출력 범위 선택: 'queue' (선택 대기열만), '8' (8페이지부터), '1' (1페이지부터 전체)
+  const [startPageRange, setStartPageRange] = useState('queue');
+  const [sortPage8ByProduct, setSortPage8ByProduct] = useState(true); // 8페이지 이후 제품명 정렬 여부
+  const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
+  const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 위치 오프셋 (0~9)
+  const [highlightAlpha, setHighlightAlpha] = useState(true); // 영문 음영 강조 여부
 
-  // 선택된 인쇄 대기열: [{ id, name, serial, location, qty, isCustom }]
+  // 선택된 인쇄 대기열: [{ id, name, serial, location, type: 'barcode' | 'qr', qty: number }]
   const [printQueue, setPrintQueue] = useState([]);
 
-  // 모달 제어
-  const [isSelectModalOpen, setIsSelectModalOpen] = useState(false);
-  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
-
-  // 검색 및 필터 (모달 내부)
-  const [modalSearch, setModalSearch] = useState('');
-  const [modalLocationFilter, setModalLocationFilter] = useState('ALL');
-
-  // 신규 장비 직접 입력 폼 상태
+  // 신규 장비 직접 입력 상태
+  const [isManualAdding, setIsManualAdding] = useState(false);
   const [manualForm, setManualForm] = useState({
     name: '',
-    serial: '',
-    qty: 1
+    serial: ''
   });
-
-  // 인쇄 레이아웃 미세 설정
-  const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 간격 (mm)
-  const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 위치 (0~9: 1~10번째 칸부터 인쇄)
-  const [highlightAlpha, setHighlightAlpha] = useState(true); // 시리얼 넘버 영문 하이라이트 여부
 
   // 구글 시트에서 전체 장비 데이터 로드
   useEffect(() => {
@@ -98,13 +92,15 @@ const LabelPrintPage = () => {
         const list = Array.from(serialMap.values());
         setAllEquipments(list);
 
-        // 초기 기본값: 최근 등록된 10개 장비 자동 큐에 추가
-        setPrintQueue(prev => {
-          if (prev.length === 0 && list.length > 0) {
-            return list.slice(0, 10).map(item => ({ ...item, qty: 1 }));
-          }
-          return prev;
-        });
+        // 초기 기본값: 최근 등록된 10개 장비를 바코드 1장씩 큐에 추가
+        if (list.length > 0) {
+          const initialQueue = list.slice(0, 10).map(item => ({
+            ...item,
+            type: 'barcode',
+            qty: 1
+          }));
+          setPrintQueue(initialQueue);
+        }
       } catch (err) {
         console.error('장비 데이터 로드 실패:', err);
         setError(err.message);
@@ -116,90 +112,91 @@ const LabelPrintPage = () => {
     fetchEquipments();
   }, []);
 
-  // 전체 고유 위치 목록
-  const uniqueLocations = useMemo(() => {
-    const set = new Set();
-    allEquipments.forEach(eq => {
-      if (eq.location) set.add(eq.location);
-    });
-    return Array.from(set).sort();
-  }, [allEquipments]);
-
-  // 모달 내부 필터된 장비 목록
-  const filteredEquipmentsForModal = useMemo(() => {
+  // 좌측 사이드바 필터된 장비 목록
+  const filteredEquipments = useMemo(() => {
     return allEquipments.filter(eq => {
-      const matchSearch =
-        (eq.name || '').toLowerCase().includes(modalSearch.toLowerCase()) ||
-        (eq.serial || '').toLowerCase().includes(modalSearch.toLowerCase());
-      const matchLoc = modalLocationFilter === 'ALL' || eq.location === modalLocationFilter;
-      return matchSearch && matchLoc;
+      const name = (eq.name || '').toLowerCase();
+      const serial = (eq.serial || '').toLowerCase();
+      const loc = (eq.location || '').toLowerCase();
+      const q = search.toLowerCase().trim();
+      return name.includes(q) || serial.includes(q) || loc.includes(q);
     });
-  }, [allEquipments, modalSearch, modalLocationFilter]);
+  }, [allEquipments, search]);
 
-  // 대기열 수량 변경
-  const updateQueueQty = (serial, delta) => {
+  // 대기열에 아이템 추가 (type: 'barcode' | 'qr')
+  const addToQueue = (item, type = 'barcode') => {
+    setPrintQueue(prev => {
+      const existingIdx = prev.findIndex(q => q.serial === item.serial && q.type === type);
+      if (existingIdx >= 0) {
+        const copy = [...prev];
+        copy[existingIdx].qty += 1;
+        return copy;
+      }
+      return [...prev, { ...item, type, qty: 1 }];
+    });
+    // 대기열 뷰로 자동 전환
+    if (startPageRange !== 'queue') {
+      setStartPageRange('queue');
+    }
+  };
+
+  // 대기열 수량 조절
+  const updateQueueQty = (serial, type, delta) => {
     setPrintQueue(prev => {
       return prev
-        .map(item => {
-          if (item.serial === serial) {
-            const newQty = Math.max(1, (item.qty || 1) + delta);
-            return { ...item, qty: newQty };
+        .map(q => {
+          if (q.serial === serial && q.type === type) {
+            const nextQty = q.qty + delta;
+            return nextQty > 0 ? { ...q, qty: nextQty } : null;
           }
-          return item;
+          return q;
         })
         .filter(Boolean);
     });
   };
 
-  // 대기열에서 개별 삭제
-  const removeFromQueue = (serial) => {
-    setPrintQueue(prev => prev.filter(item => item.serial !== serial));
+  // 대기열에서 아이템 삭제
+  const removeFromQueue = (serial, type) => {
+    setPrintQueue(prev => prev.filter(q => !(q.serial === serial && q.type === type)));
   };
 
   // 대기열 전체 비우기
   const clearQueue = () => {
-    if (window.confirm('출력 대기열을 모두 비우시겠습니까?')) {
-      setPrintQueue([]);
-    }
+    setPrintQueue([]);
   };
 
-  // 대기열 수량 일괄 설정
-  const setAllQueueQty = (qty) => {
-    setPrintQueue(prev => prev.map(item => ({ ...item, qty: qty })));
-  };
-
-  // 모달에서 장비 토글 선택
-  const handleModalToggleEquipment = (eq) => {
-    setPrintQueue(prev => {
-      const exists = prev.some(item => item.serial === eq.serial);
-      if (exists) {
-        return prev.filter(item => item.serial !== eq.serial);
-      } else {
-        return [...prev, { ...eq, qty: 1 }];
-      }
-    });
-  };
-
-  // 모달에서 현재 필터된 장비 전체 선택
-  const handleSelectAllFiltered = () => {
+  // 현재 필터된 장비 전체를 바코드로 추가
+  const addAllFilteredAsBarcode = () => {
     const newItems = [...printQueue];
-    filteredEquipmentsForModal.forEach(eq => {
-      if (!newItems.some(item => item.serial === eq.serial)) {
-        newItems.push({ ...eq, qty: 1 });
+    filteredEquipments.forEach(eq => {
+      const existing = newItems.find(q => q.serial === eq.serial && q.type === 'barcode');
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        newItems.push({ ...eq, type: 'barcode', qty: 1 });
       }
     });
     setPrintQueue(newItems);
+    setStartPageRange('queue');
   };
 
-  // 모달에서 현재 필터된 장비 선택 해제
-  const handleDeselectAllFiltered = () => {
-    const filterSerials = new Set(filteredEquipmentsForModal.map(e => e.serial));
-    setPrintQueue(prev => prev.filter(item => !filterSerials.has(item.serial)));
+  // 현재 필터된 장비 전체를 QR로 추가
+  const addAllFilteredAsQr = () => {
+    const newItems = [...printQueue];
+    filteredEquipments.forEach(eq => {
+      const existing = newItems.find(q => q.serial === eq.serial && q.type === 'qr');
+      if (existing) {
+        existing.qty += 1;
+      } else {
+        newItems.push({ ...eq, type: 'qr', qty: 1 });
+      }
+    });
+    setPrintQueue(newItems);
+    setStartPageRange('queue');
   };
 
-  // 신규 장비 직접 입력 추가
-  const handleAddManualItem = (e) => {
-    e.preventDefault();
+  // 신규 장비 수동 입력 추가
+  const handleAddManualItem = (type = 'barcode') => {
     if (!manualForm.name.trim()) {
       alert('제품명을 입력해 주세요.');
       return;
@@ -210,58 +207,79 @@ const LabelPrintPage = () => {
     }
 
     const newItem = {
-      id: `custom_${Date.now()}`,
+      id: `manual_${Date.now()}`,
       name: manualForm.name.trim(),
       serial: manualForm.serial.trim().toUpperCase(),
       location: '신규등록',
-      qty: Math.max(1, parseInt(manualForm.qty, 10) || 1),
-      isCustom: true
+      type: type,
+      qty: 1
     };
 
     setPrintQueue(prev => {
-      const existingIdx = prev.findIndex(item => item.serial === newItem.serial);
+      const existingIdx = prev.findIndex(q => q.serial === newItem.serial && q.type === type);
       if (existingIdx >= 0) {
         const copy = [...prev];
-        copy[existingIdx].qty += newItem.qty;
+        copy[existingIdx].qty += 1;
         return copy;
       }
       return [newItem, ...prev];
     });
 
-    setManualForm({ name: '', serial: '', qty: 1 });
-    setIsManualModalOpen(false);
+    setManualForm({ name: '', serial: '' });
+    setStartPageRange('queue');
   };
 
-  // 실제 출력용 확장 리스트 (수량만큼 복제 + 시작 오프셋 빈칸 포함)
-  const flattenedLabels = useMemo(() => {
-    const list = [];
+  // ===== 최종 출력 데이터 목록 계산 =====
+  const targetLabelList = useMemo(() => {
+    let rawTarget = [];
 
-    // 시작 위치 오프셋 (1페이지의 앞부분 빈 슬롯)
-    for (let i = 0; i < startSlotOffset; i++) {
-      list.push({ isBlank: true, id: `blank_${i}` });
+    if (startPageRange === 'queue') {
+      // 1. 대기열 모드: 각 아이템을 qty 수량만큼 반복
+      printQueue.forEach(item => {
+        const count = item.qty || 1;
+        for (let c = 0; c < count; c++) {
+          rawTarget.push({
+            ...item,
+            isBlank: false,
+            uniqueKey: `${item.serial}_${item.type}_${c}`
+          });
+        }
+      });
+    } else {
+      // 2. 기존 QR 페이지 방식 (8페이지부터 or 1페이지부터 전체)
+      const page1To7Items = allEquipments.slice(0, 70).map(eq => ({ ...eq, type: 'qr', qty: 1 }));
+      const page8PlusItems = allEquipments.slice(70).map(eq => ({ ...eq, type: 'qr', qty: 1 }));
+
+      const sortedPage8Plus = sortPage8ByProduct ? [...page8PlusItems].sort((a, b) => {
+        const nameA = (a.name || '').toString().trim();
+        const nameB = (b.name || '').toString().trim();
+        return nameA.localeCompare(nameB, 'ko', { numeric: true, sensitivity: 'base' });
+      }) : page8PlusItems;
+
+      const baseList = startPageRange === '8' ? sortedPage8Plus : [...page1To7Items, ...sortedPage8Plus];
+      rawTarget = baseList.map((eq, idx) => ({
+        ...eq,
+        isBlank: false,
+        uniqueKey: `${eq.serial}_${idx}`
+      }));
     }
 
-    // 대기열 아이템들을 qty 수량만큼 반복 추가
-    printQueue.forEach(item => {
-      const count = item.qty || 1;
-      for (let c = 0; c < count; c++) {
-        list.push({
-          ...item,
-          isBlank: false,
-          uniqueKey: `${item.serial}_${c}`
-        });
-      }
-    });
+    // 시작 위치 오프셋 (1페이지 앞부분 빈 슬롯) 적용
+    const finalSlots = [];
+    for (let i = 0; i < startSlotOffset; i++) {
+      finalSlots.push({ isBlank: true, id: `blank_${i}` });
+    }
+    finalSlots.push(...rawTarget);
 
-    return list;
-  }, [printQueue, startSlotOffset]);
+    return finalSlots;
+  }, [startPageRange, printQueue, allEquipments, sortPage8ByProduct, startSlotOffset]);
 
-  // 총 출력 라벨 수 및 페이지 수 계산
-  const totalActualLabels = printQueue.reduce((acc, cur) => acc + (cur.qty || 1), 0);
-  const totalPages = Math.ceil(flattenedLabels.length / 10);
+  const totalActualLabels = targetLabelList.filter(s => !s.isBlank).length;
+  const totalPages = Math.ceil(targetLabelList.length / 10);
+  const startPageNum = startPageRange === '8' ? 8 : 1;
 
   // 시리얼 넘버 영문 하이라이트 포맷 함수
-  const renderHighlightedSerial = (serialText) => {
+  const formatHighlightedSerial = (serialText) => {
     if (!serialText) return '';
     const parts = serialText.toString().split(/([a-zA-Z가-힣_#-]+)/g);
     return (
@@ -270,13 +288,13 @@ const LabelPrintPage = () => {
           if (!part) return null;
           if (highlightAlpha && /[a-zA-Z가-힣_#-]/.test(part)) {
             return (
-              <span 
-                key={index} 
-                style={{ 
-                  backgroundColor: '#e2e8f0', 
+              <span
+                key={index}
+                style={{
+                  backgroundColor: '#d9d9d9',
                   borderRadius: '2px',
                   padding: '0 1px',
-                  fontWeight: '700' 
+                  fontWeight: '700'
                 }}
               >
                 {part}
@@ -338,7 +356,7 @@ const LabelPrintPage = () => {
             border-radius: 0 !important;
             box-shadow: none !important;
             margin: 0 !important;
-            padding: 4mm 6mm !important;
+            padding: 3.5mm 4.5mm !important;
             box-sizing: border-box !important;
             overflow: hidden !important;
             background: #fff !important;
@@ -350,20 +368,20 @@ const LabelPrintPage = () => {
 
         @media screen {
           .label-sheet-wrapper {
-            max-width: 980px;
-            margin: 20px auto;
-            padding: 0 16px;
+            max-width: 920px;
+            margin: 0 auto;
+            padding: 10px 0;
           }
           .label-page {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
-            margin-bottom: 32px;
-            padding: 18px;
+            margin-bottom: 28px;
+            padding: 16px;
             background: #ffffff;
             border: 2px dashed #94a3b8;
             border-radius: 12px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.04);
           }
           .label-card {
             border: 1px solid #cbd5e1;
@@ -372,10 +390,10 @@ const LabelPrintPage = () => {
             background: #ffffff;
             min-height: 160px;
             box-sizing: border-box;
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            transition: box-shadow 0.15s ease;
           }
           .label-card:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
           }
           .label-card.blank-slot {
             background: #f8fafc;
@@ -390,68 +408,78 @@ const LabelPrintPage = () => {
         }
       `}</style>
 
-      {/* ===== 상단 컨트롤 바 (화면 전용) ===== */}
+      {/* ===== 상단 컨트롤 바 (기존 QR 옵션 100% 동일 유지) ===== */}
       <header className={`no-print ${styles.topBar}`}>
         <div className={styles.titleGroup}>
-          <h1>🏷️ 스마트 라벨 출력 센터</h1>
+          <h1>🏷️ 장비 바코드 / QR 라벨 출력 센터</h1>
           <p>
-            Formtec LS-3510 (88.9 × 52.0mm) · ⚠️ <strong>인쇄 설정: 여백 [없음(None)], 배율 [100%]</strong>
+            Formtec LS-3510 (88.9 × 52.0mm) · ⚠️ <strong>인쇄 설정: 여백 [없음(None)], 비율 [100%]</strong>
           </p>
         </div>
 
         <div className={styles.controlsGroup}>
-          {/* 모드 탭 스위처 */}
-          <div className={styles.modeTabs}>
-            <button
-              onClick={() => setLabelMode('barcode')}
-              className={`${styles.tabBtn} ${labelMode === 'barcode' ? styles.active : ''}`}
+          {/* 출력 범위 선택 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>출력 범위:</span>
+            <select
+              value={startPageRange}
+              onChange={(e) => setStartPageRange(e.target.value)}
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #2563eb',
+                backgroundColor: '#eff6ff',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: '#1e40af'
+              }}
             >
-              📊 바코드 라벨
-            </button>
-            <button
-              onClick={() => setLabelMode('dual_qr')}
-              className={`${styles.tabBtn} ${labelMode === 'dual_qr' ? styles.active : ''}`}
-            >
-              📱 듀얼 QR 라벨
-            </button>
-            <button
-              onClick={() => setLabelMode('hybrid')}
-              className={`${styles.tabBtn} ${labelMode === 'hybrid' ? styles.active : ''}`}
-            >
-              🏷️ 통합 라벨 (바코드+QR)
-            </button>
+              <option value="queue">📋 선택 대기열만 출력 ({printQueue.reduce((a, c) => a + c.qty, 0)}장)</option>
+              <option value="8">8페이지부터 전체 출력 (71번째~)</option>
+              <option value="1">1페이지부터 전체 출력 (1번째~)</option>
+            </select>
           </div>
 
-          {/* 장비 선택 버튼 */}
-          <button
-            onClick={() => setIsSelectModalOpen(true)}
-            className={styles.btnSecondary}
-          >
-            📋 장비 목록 선택 ({printQueue.length}종류)
-          </button>
+          {/* 8페이지 이후 제품명 정렬 옵션 */}
+          {startPageRange !== 'queue' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', fontWeight: '600', color: '#334155', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={sortPage8ByProduct}
+                onChange={(e) => setSortPage8ByProduct(e.target.checked)}
+                style={{ cursor: 'pointer' }}
+              />
+              🏷️ 8페이지~ 제품명 정렬
+            </label>
+          )}
 
-          {/* 신규 직접 추가 버튼 */}
-          <button
-            onClick={() => setIsManualModalOpen(true)}
-            className={styles.btnSuccess}
-          >
-            ➕ 신규 장비 직접 추가
-          </button>
-
-          {/* 2열 간격 미세 조정 */}
+          {/* 도메인 선택 */}
           <select
-            value={col2Gap}
-            onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
+            value={domain}
+            onChange={(e) => setDomain(e.target.value)}
             className={styles.optionSelect}
-            title="2번째 열 라벨 우측 이동 간격"
           >
-            <option value={0.0}>열 간격: +0.0 mm</option>
-            <option value={1.5}>열 간격: +1.5 mm</option>
-            <option value={2.0}>열 간격: +2.0 mm</option>
-            <option value={2.5}>열 간격: +2.5 mm (추천)</option>
-            <option value={3.0}>열 간격: +3.0 mm</option>
-            <option value={3.5}>열 간격: +3.5 mm</option>
+            <option value="https://demodevice.kr">demodevice.kr (운영)</option>
+            <option value="http://localhost:3000">localhost:3000 (로컬)</option>
           </select>
+
+          {/* 2열 이동 간격 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 이동:</span>
+            <select
+              value={col2Gap}
+              onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
+              className={styles.optionSelect}
+            >
+              <option value={0}>0 mm (기본)</option>
+              <option value={1.5}>+1.5 mm</option>
+              <option value={2.0}>+2.0 mm</option>
+              <option value={2.5}>+2.5 mm (추천)</option>
+              <option value={3.0}>+3.0 mm</option>
+              <option value={3.5}>+3.5 mm</option>
+              <option value={4.0}>+4.0 mm</option>
+            </select>
+          </div>
 
           {/* 시작 위치 오프셋 */}
           <select
@@ -460,480 +488,372 @@ const LabelPrintPage = () => {
             className={styles.optionSelect}
             title="첫 페이지 시작 칸 번호"
           >
-            <option value={0}>시작 위치: 1번째 칸 (새 라벨지)</option>
-            <option value={1}>시작 위치: 2번째 칸부터</option>
-            <option value={2}>시작 위치: 3번째 칸부터</option>
-            <option value={3}>시작 위치: 4번째 칸부터</option>
-            <option value={4}>시작 위치: 5번째 칸부터</option>
-            <option value={5}>시작 위치: 6번째 칸부터</option>
-            <option value={6}>시작 위치: 7번째 칸부터</option>
-            <option value={7}>시작 위치: 8번째 칸부터</option>
-            <option value={8}>시작 위치: 9번째 칸부터</option>
-            <option value={9}>시작 위치: 10번째 칸부터</option>
+            <option value={0}>시작: 1번째 칸 (새 라벨지)</option>
+            <option value={1}>시작: 2번째 칸부터</option>
+            <option value={2}>시작: 3번째 칸부터</option>
+            <option value={3}>시작: 4번째 칸부터</option>
+            <option value={4}>시작: 5번째 칸부터</option>
+            <option value={5}>시작: 6번째 칸부터</option>
+            <option value={6}>시작: 7번째 칸부터</option>
+            <option value={7}>시작: 8번째 칸부터</option>
+            <option value={8}>시작: 9번째 칸부터</option>
+            <option value={9}>시작: 10번째 칸부터</option>
           </select>
 
-          {/* 영문 하이라이트 토글 */}
+          {/* 영문 하이라이트 */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer' }}>
             <input
               type="checkbox"
               checked={highlightAlpha}
               onChange={(e) => setHighlightAlpha(e.target.checked)}
             />
-            <span>영문 음영강조</span>
+            <span>영문 음영</span>
           </label>
 
-          {/* 인쇄 실행 버튼 */}
+          {/* 인쇄 버튼 */}
           <button
             onClick={() => window.print()}
             className={styles.btnPrimary}
             disabled={totalActualLabels === 0}
           >
-            🖨️ 라벨 인쇄 (총 {totalActualLabels}장)
+            🖨️ 라벨 인쇄 ({totalActualLabels}장)
           </button>
         </div>
       </header>
 
-      {/* ===== 대기열 상태 바 & 칩 목록 (화면 전용) ===== */}
-      <div className={`no-print ${styles.queueBar}`}>
-        <div className={styles.queueInfo}>
-          <span className={styles.queueBadge}>
-            총 {totalActualLabels}장 출력 대기
-          </span>
-          <span style={{ color: '#64748b' }}>
-            ({printQueue.length}종류 장비 · A4 {totalPages}페이지 소요)
-          </span>
-        </div>
-
-        <div className={styles.queueActions}>
-          <span style={{ fontSize: '12px', color: '#64748b', marginRight: '4px' }}>일괄 수량:</span>
-          <button onClick={() => setAllQueueQty(1)} className={styles.btnSecondary} style={{ padding: '4px 8px', fontSize: '12px' }}>1장</button>
-          <button onClick={() => setAllQueueQty(2)} className={styles.btnSecondary} style={{ padding: '4px 8px', fontSize: '12px' }}>2장</button>
-          <button onClick={() => setAllQueueQty(3)} className={styles.btnSecondary} style={{ padding: '4px 8px', fontSize: '12px' }}>3장</button>
-          <button onClick={clearQueue} className={styles.btnSecondary} style={{ padding: '4px 8px', fontSize: '12px', color: '#dc2626' }}>🧹 대기열 비우기</button>
-        </div>
-      </div>
-
-      {/* 선택된 장비 칩 리스트 (수량 조절 및 삭제 가능) */}
-      {printQueue.length > 0 && (
-        <div className={`no-print ${styles.selectedChips}`}>
-          {printQueue.map((item) => (
-            <div key={item.serial} className={styles.chip}>
-              <span className={styles.chipName}>{item.name}</span>
-              <span className={styles.chipSerial}>({item.serial})</span>
-              <div className={styles.chipQtyControl}>
-                <button onClick={() => updateQueueQty(item.serial, -1)} className={styles.chipQtyBtn}>-</button>
-                <span>{item.qty}장</span>
-                <button onClick={() => updateQueueQty(item.serial, 1)} className={styles.chipQtyBtn}>+</button>
-              </div>
-              <button onClick={() => removeFromQueue(item.serial)} className={styles.chipDeleteBtn} title="삭제">×</button>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* 로딩 / 에러 표시 */}
-      {loading && (
-        <div className="no-print" style={{ textAlign: 'center', padding: '60px', color: '#64748b' }}>
-          ⏳ 구글 시트에서 장비 데이터를 불러오는 중...
-        </div>
-      )}
-      {error && (
-        <div className="no-print" style={{ textAlign: 'center', padding: '30px', color: '#dc2626', background: '#fef2f2', margin: '20px', borderRadius: '8px' }}>
-          ❌ 데이터 로드 실패: {error}
-        </div>
-      )}
-
-      {/* ===== 실제 라벨 시트 렌더링 (10칸씩 A4 한 페이지 분할) ===== */}
-      <main className="label-sheet-wrapper">
-        {totalActualLabels === 0 && !loading && (
-          <div className="no-print" style={{ textAlign: 'center', padding: '80px 20px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>📭</div>
-            <h3 style={{ fontSize: '18px', color: '#334155', marginBottom: '8px' }}>출력할 장비가 선택되지 않았습니다</h3>
-            <p style={{ fontSize: '13px', color: '#64748b', marginBottom: '20px' }}>
-              상단의 <strong>[📋 장비 목록 선택]</strong> 버튼을 눌러 출력할 장비를 선택하거나,<br />
-              <strong>[➕ 신규 장비 직접 추가]</strong>로 라벨을 즉시 만들어 보세요.
-            </p>
-            <button onClick={() => setIsSelectModalOpen(true)} className={styles.btnPrimary} style={{ margin: '0 auto' }}>
-              📋 장비 목록에서 선택하기
-            </button>
-          </div>
-        )}
-
-        {Array.from({ length: totalPages }, (_, pageIdx) => {
-          const pageSlots = flattenedLabels.slice(pageIdx * 10, (pageIdx + 1) * 10);
-          const actualPageNum = pageIdx + 1;
-
-          return (
-            <React.Fragment key={pageIdx}>
-              {/* 페이지 헤더 (화면 전용) */}
-              <div className="no-print" style={{ fontSize: '13px', fontWeight: '800', color: '#334155', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>📄 A4 라벨지 {actualPageNum}페이지</span>
-                  <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>
-                    (슬롯 {pageIdx * 10 + 1} ~ {Math.min((pageIdx + 1) * 10, flattenedLabels.length)}번째)
-                  </span>
-                </div>
-                <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: '600' }}>
-                  Formtec LS-3510 (88.9 × 52.0mm)
-                </span>
-              </div>
-
-              {/* 10칸 그리드 페이지 */}
-              <div className="label-page">
-                {pageSlots.map((slot, slotIdx) => {
-                  if (slot.isBlank) {
-                    return (
-                      <div key={slot.id || slotIdx} className="label-card blank-slot">
-                        <span>[빈 슬롯 (오프셋 건너뜀)]</span>
-                      </div>
-                    );
-                  }
-
-                  const serial = (slot.serial || '').toString().trim();
-                  const name = slot.name || '미등록 장비';
-                  const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
-                  const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
-                  const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
-                  const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
-
-                  return (
-                    <div
-                      key={slot.uniqueKey || slotIdx}
-                      className="label-card"
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {/* 0. 상단 공통 헤더: 회사 로고 & 연락처 */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '3px' }}>
-                        <img
-                          src="/logo_ocean.png"
-                          alt="Logo"
-                          style={{ width: '15px', height: '15px', objectFit: 'contain' }}
-                          onError={(e) => { e.target.style.display = 'none'; }}
-                        />
-                        <span style={{ fontSize: '7.5pt', fontWeight: '700', color: '#1e293b', letterSpacing: '-0.3px', flex: 1, whiteSpace: 'nowrap' }}>
-                          오우션테크놀러지 Demo Device
-                        </span>
-                        <span style={{ fontSize: '7pt', color: '#64748b', whiteSpace: 'nowrap' }}>
-                          02-2188-7737
-                        </span>
-                      </div>
-
-                      {/* 1. 장비명 & 시리얼 번호 (텍스트) */}
-                      <div style={{ marginBottom: '2px' }}>
-                        <div style={{
-                          fontSize: '10.5pt',
-                          fontWeight: '800',
-                          color: '#0f172a',
-                          lineHeight: '1.25',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis'
-                        }}>
-                          {name}
-                        </div>
-                        <div style={{
-                          fontSize: '9.5pt',
-                          color: '#1e293b',
-                          fontWeight: '700',
-                          marginTop: '2px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '2px'
-                        }}>
-                          <span style={{ color: '#64748b' }}>S/N: </span>
-                          {renderHighlightedSerial(serial)}
-                        </div>
-                      </div>
-
-                      {/* 2. 하단 렌더링 (모드별 분기) */}
-                      {labelMode === 'barcode' && (
-                        /* 📊 [바코드 전용 모드] Python generate_labels.py 규격 1:1 완벽 구현 */
-                        <div style={{
-                          flex: 1,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          paddingTop: '2px'
-                        }}>
-                          <BarcodeSvg
-                            value={serial}
-                            width={1.25}
-                            height={42}
-                            displayValue={false}
-                          />
-                        </div>
-                      )}
-
-                      {labelMode === 'dual_qr' && (
-                        /* 📱 [듀얼 QR 모드] 대여신청 + 반납처리 */
-                        <div style={{
-                          display: 'flex',
-                          gap: '8px',
-                          alignItems: 'center',
-                          justifyContent: 'space-around',
-                          flex: 1,
-                          paddingTop: '2px'
-                        }}>
-                          {/* 대여 신청 QR */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: '7pt',
-                              fontWeight: '800',
-                              color: '#fff',
-                              background: '#2563eb',
-                              padding: '1px 5px',
-                              borderRadius: '3px',
-                              marginBottom: '2px'
-                            }}>
-                              🔵 대여 신청
-                            </span>
-                            <img
-                              src={applyQr}
-                              alt="신청"
-                              style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
-                            />
-                          </div>
-
-                          {/* 반납 처리 QR */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: '7pt',
-                              fontWeight: '800',
-                              color: '#fff',
-                              background: '#dc2626',
-                              padding: '1px 5px',
-                              borderRadius: '3px',
-                              marginBottom: '2px'
-                            }}>
-                              🔴 반납 처리
-                            </span>
-                            <img
-                              src={returnQr}
-                              alt="반납"
-                              style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {labelMode === 'hybrid' && (
-                        /* 🏷️ [통합 모드] 바코드 + 대여신청/반납 QR */
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '6px',
-                          flex: 1,
-                          paddingTop: '2px'
-                        }}>
-                          {/* 좌측: 바코드 */}
-                          <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-                            <BarcodeSvg
-                              value={serial}
-                              width={1.05}
-                              height={38}
-                              displayValue={false}
-                            />
-                          </div>
-
-                          {/* 우측: 콤팩트 QR */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: '6.5pt',
-                              fontWeight: '800',
-                              color: '#2563eb',
-                              marginBottom: '1px'
-                            }}>
-                              스캔신청
-                            </span>
-                            <img
-                              src={applyQr}
-                              alt="신청QR"
-                              style={{ width: '56px', height: '56px', border: '1px solid #cbd5e1', borderRadius: '3px', background: '#fff' }}
-                            />
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </React.Fragment>
-          );
-        })}
-      </main>
-
-      {/* ===== 모달 1: 장비 목록 선택 모달 ===== */}
-      {isSelectModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsSelectModalOpen(false)}>
-          <div className={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>📋 출력할 장비 선택 (전체 {allEquipments.length}개 중)</h2>
-              <button onClick={() => setIsSelectModalOpen(false)} className={styles.modalCloseBtn}>✕</button>
-            </div>
-
-            <div className={styles.modalBody}>
-              {/* 검색 및 위치 필터 */}
-              <div className={styles.tableSearchBox}>
-                <input
-                  type="text"
-                  placeholder="🔍 장비명 또는 시리얼 넘버 검색..."
-                  value={modalSearch}
-                  onChange={(e) => setModalSearch(e.target.value)}
-                  className={styles.formInput}
-                  style={{ flex: 1 }}
-                />
-                <select
-                  value={modalLocationFilter}
-                  onChange={(e) => setModalLocationFilter(e.target.value)}
-                  className={styles.optionSelect}
-                  style={{ minWidth: '130px' }}
-                >
-                  <option value="ALL">전체 위치</option>
-                  {uniqueLocations.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* 일괄 선택 컨트롤 */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                <span style={{ fontSize: '13px', color: '#64748b' }}>
-                  필터링된 결과: <strong>{filteredEquipmentsForModal.length}</strong>개
-                </span>
-                <div style={{ display: 'flex', gap: '6px' }}>
-                  <button onClick={handleSelectAllFiltered} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '12px' }}>
-                    ✓ 현재 결과 전체 선택
-                  </button>
-                  <button onClick={handleDeselectAllFiltered} className={styles.btnSecondary} style={{ padding: '4px 10px', fontSize: '12px' }}>
-                    ✕ 현재 결과 선택 해제
-                  </button>
-                </div>
-              </div>
-
-              {/* 장비 선택 테이블 */}
-              <div className={styles.tableContainer}>
-                <table className={styles.selectItemTable}>
-                  <thead>
-                    <tr>
-                      <th style={{ width: '40px', textAlign: 'center' }}>선택</th>
-                      <th>장비명</th>
-                      <th>시리얼 넘버</th>
-                      <th>보관 위치</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredEquipmentsForModal.map(eq => {
-                      const isSelected = printQueue.some(item => item.serial === eq.serial);
-                      return (
-                        <tr
-                          key={eq.serial}
-                          className={isSelected ? styles.selectedRow : ''}
-                          onClick={() => handleModalToggleEquipment(eq)}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <td style={{ textAlign: 'center' }}>
-                            <input
-                              type="checkbox"
-                              checked={isSelected}
-                              onChange={() => {}} // 행 클릭으로 토글
-                            />
-                          </td>
-                          <td style={{ fontWeight: '700', color: '#0f172a' }}>{eq.name}</td>
-                          <td style={{ fontFamily: 'monospace', color: '#334155' }}>{eq.serial}</td>
-                          <td>
-                            <span style={{ background: '#e2e8f0', padding: '2px 6px', borderRadius: '4px', fontSize: '11px' }}>
-                              {eq.location}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className={styles.modalFooter}>
+      {/* ===== 2열 분할 레이아웃 (좌측 제품 선택 사이드바 + 우측 라벨 시트 프리뷰) ===== */}
+      <div className={styles.splitLayout}>
+        {/* 좌측 사이드바: 제품 리스트 및 바코드/QR 선택 */}
+        <aside className={`no-print ${styles.leftSidebar}`}>
+          <div className={styles.sidebarHeader}>
+            <div className={styles.sidebarTitle}>
+              <span>📦 장비 목록 ({filteredEquipments.length}개)</span>
               <button
-                onClick={() => setIsSelectModalOpen(false)}
-                className={styles.btnPrimary}
+                onClick={() => setIsManualAdding(!isManualAdding)}
+                className={styles.quickBtn}
+                style={{ color: '#16a34a', fontWeight: '700' }}
               >
-                완료 ({printQueue.length}개 장비 선택됨)
+                {isManualAdding ? '✕ 닫기' : '➕ 신규 직접 입력'}
               </button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {/* ===== 모달 2: 신규 장비 직접 입력 모달 ===== */}
-      {isManualModalOpen && (
-        <div className={styles.modalOverlay} onClick={() => setIsManualModalOpen(false)}>
-          <div className={styles.modalContent} style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-            <div className={styles.modalHeader}>
-              <h2>➕ 신규 장비 직접 입력 추가</h2>
-              <button onClick={() => setIsManualModalOpen(false)} className={styles.modalCloseBtn}>✕</button>
+            {/* 검색창 */}
+            <div className={styles.searchBox}>
+              <input
+                type="text"
+                placeholder="🔍 제품명, 시리얼, 위치 검색..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className={styles.searchInput}
+              />
             </div>
 
-            <form onSubmit={handleAddManualItem}>
-              <div className={styles.modalBody}>
-                <div className={styles.manualFormGroup}>
-                  <div className={styles.formRow}>
-                    <label>장비 제품명 *</label>
-                    <input
-                      type="text"
-                      placeholder="예: Rally Bar, Spot, Connect..."
-                      value={manualForm.name}
-                      onChange={(e) => setManualForm(prev => ({ ...prev, name: e.target.value }))}
-                      className={styles.formInput}
-                      required
-                      autoFocus
-                    />
-                  </div>
+            {/* 빠른 일괄 추가 버튼 */}
+            <div className={styles.quickActionBtns}>
+              <button onClick={addAllFilteredAsBarcode} className={styles.quickBtn}>
+                + 전체 바코드 추가
+              </button>
+              <button onClick={addAllFilteredAsQr} className={styles.quickBtn}>
+                + 전체 QR 추가
+              </button>
+              <button onClick={clearQueue} className={styles.quickBtn} style={{ color: '#dc2626' }}>
+                🧹 비우기
+              </button>
+            </div>
 
-                  <div className={styles.formRow}>
-                    <label>시리얼 넘버 (S/N) *</label>
-                    <input
-                      type="text"
-                      placeholder="예: 2616CGW40X39"
-                      value={manualForm.serial}
-                      onChange={(e) => setManualForm(prev => ({ ...prev, serial: e.target.value }))}
-                      className={styles.formInput}
-                      required
-                    />
-                  </div>
-
-                  <div className={styles.formRow}>
-                    <label>출력 라벨 매수</label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="100"
-                      value={manualForm.qty}
-                      onChange={(e) => setManualForm(prev => ({ ...prev, qty: parseInt(e.target.value, 10) || 1 }))}
-                      className={styles.formInput}
-                    />
-                  </div>
+            {/* 신규 장비 직접 입력 인라인 폼 */}
+            {isManualAdding && (
+              <div className={styles.manualAddCard}>
+                <h4>➕ 신규 미등록 장비 라벨 생성</h4>
+                <div className={styles.manualInputRow}>
+                  <input
+                    type="text"
+                    placeholder="제품명 (예: Spot, Rally Bar)"
+                    value={manualForm.name}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, name: e.target.value }))}
+                    className={styles.manualInput}
+                  />
+                  <input
+                    type="text"
+                    placeholder="S/N (예: 2616CGW40X39)"
+                    value={manualForm.serial}
+                    onChange={(e) => setManualForm(prev => ({ ...prev, serial: e.target.value }))}
+                    className={styles.manualInput}
+                  />
+                </div>
+                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                  <button onClick={() => handleAddManualItem('barcode')} className={styles.btnBarcodeAdd}>
+                    + 바코드 추가
+                  </button>
+                  <button onClick={() => handleAddManualItem('qr')} className={styles.btnQrAdd}>
+                    + QR 추가
+                  </button>
                 </div>
               </div>
-
-              <div className={styles.modalFooter}>
-                <button type="button" onClick={() => setIsManualModalOpen(false)} className={styles.btnSecondary}>
-                  취소
-                </button>
-                <button type="submit" className={styles.btnSuccess}>
-                  대기열에 추가하기
-                </button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      )}
+
+          {/* 장비 카드 리스트 */}
+          <div className={styles.equipmentListScroll}>
+            {loading && (
+              <div style={{ textAlign: 'center', padding: '40px 10px', color: '#64748b', fontSize: '13px' }}>
+                ⏳ 장비 데이터 로딩 중...
+              </div>
+            )}
+            {error && (
+              <div style={{ textAlign: 'center', padding: '20px 10px', color: '#dc2626', fontSize: '12px' }}>
+                ❌ 로드 실패: {error}
+              </div>
+            )}
+
+            {!loading && !error && filteredEquipments.map((eq) => {
+              const barcodeItem = printQueue.find(q => q.serial === eq.serial && q.type === 'barcode');
+              const qrItem = printQueue.find(q => q.serial === eq.serial && q.type === 'qr');
+              const inQueue = Boolean(barcodeItem || qrItem);
+
+              return (
+                <div key={eq.serial} className={`${styles.equipmentCard} ${inQueue ? styles.inQueue : ''}`}>
+                  <div className={styles.cardHeader}>
+                    <span className={styles.cardName}>{eq.name}</span>
+                    <span className={styles.cardLocation}>{eq.location || '본사'}</span>
+                  </div>
+                  <div className={styles.cardSerial}>
+                    S/N: {eq.serial}
+                  </div>
+
+                  <div className={styles.cardActionRow}>
+                    {/* 바코드 추가/수량 */}
+                    {barcodeItem ? (
+                      <div className={`${styles.queueBadge} ${styles.barcode}`}>
+                        <span>바코드:</span>
+                        <button onClick={() => updateQueueQty(eq.serial, 'barcode', -1)} className={styles.badgeQtyBtn}>-</button>
+                        <span>{barcodeItem.qty}장</span>
+                        <button onClick={() => updateQueueQty(eq.serial, 'barcode', 1)} className={styles.badgeQtyBtn}>+</button>
+                        <button onClick={() => removeFromQueue(eq.serial, 'barcode')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToQueue(eq, 'barcode')} className={styles.btnBarcodeAdd}>
+                        + 바코드
+                      </button>
+                    )}
+
+                    {/* QR 추가/수량 */}
+                    {qrItem ? (
+                      <div className={`${styles.queueBadge} ${styles.qr}`}>
+                        <span>QR:</span>
+                        <button onClick={() => updateQueueQty(eq.serial, 'qr', -1)} className={styles.badgeQtyBtn}>-</button>
+                        <span>{qrItem.qty}장</span>
+                        <button onClick={() => updateQueueQty(eq.serial, 'qr', 1)} className={styles.badgeQtyBtn}>+</button>
+                        <button onClick={() => removeFromQueue(eq.serial, 'qr')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
+                      </div>
+                    ) : (
+                      <button onClick={() => addToQueue(eq, 'qr')} className={styles.btnQrAdd}>
+                        + QR
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 사이드바 하단 요약 */}
+          <div className={styles.sidebarFooter}>
+            <span style={{ fontSize: '12px', fontWeight: '700', color: '#1e40af' }}>
+              선택 대기열: {printQueue.reduce((a, c) => a + c.qty, 0)}장
+            </span>
+            <button
+              onClick={() => setStartPageRange('queue')}
+              className={styles.quickBtn}
+              style={{ background: startPageRange === 'queue' ? '#2563eb' : '#fff', color: startPageRange === 'queue' ? '#fff' : '#334155' }}
+            >
+              대기열만 보기
+            </button>
+          </div>
+        </aside>
+
+        {/* 우측 메인 뷰: Formtec LS-3510 라벨지 실물 미리보기 & 인쇄 영역 */}
+        <main className={styles.rightMain}>
+          <div className="label-sheet-wrapper">
+            {totalActualLabels === 0 && !loading && (
+              <div className="no-print" style={{ textAlign: 'center', padding: '80px 20px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏷️</div>
+                <h3 style={{ fontSize: '18px', color: '#334155', marginBottom: '8px' }}>출력할 라벨이 없습니다</h3>
+                <p style={{ fontSize: '13px', color: '#64748b' }}>
+                  좌측 장비 목록에서 <strong>[+ 바코드]</strong> 또는 <strong>[+ QR]</strong> 버튼을 눌러 라벨을 추가해 주세요.
+                </p>
+              </div>
+            )}
+
+            {Array.from({ length: totalPages }, (_, pageIdx) => {
+              const pageSlots = targetLabelList.slice(pageIdx * 10, (pageIdx + 1) * 10);
+              const actualPageNum = pageIdx + startPageNum;
+
+              return (
+                <React.Fragment key={pageIdx}>
+                  {/* 페이지 헤더 (화면 전용) */}
+                  <div className="no-print" style={{ fontSize: '13px', fontWeight: '800', color: '#334155', marginBottom: '8px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>📄 {actualPageNum}페이지</span>
+                      <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>
+                        (슬롯 {pageIdx * 10 + 1} ~ {Math.min((pageIdx + 1) * 10, targetLabelList.length)}번째)
+                      </span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: '#2563eb', fontWeight: '600' }}>
+                      Formtec LS-3510 (88.9 × 52.0mm)
+                    </span>
+                  </div>
+
+                  {/* 10칸 그리드 페이지 */}
+                  <div className="label-page">
+                    {pageSlots.map((slot, slotIdx) => {
+                      if (slot.isBlank) {
+                        return (
+                          <div key={slot.id || slotIdx} className="label-card blank-slot">
+                            <span>[빈 슬롯 (시작 위치 오프셋)]</span>
+                          </div>
+                        );
+                      }
+
+                      const serial = (slot.serial || '').toString().trim();
+                      const name = slot.name || '미등록 장비';
+                      const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
+                      const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
+                      const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
+                      const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
+
+                      return (
+                        <div
+                          key={slot.uniqueKey || slotIdx}
+                          className="label-card"
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          {/* 0. 상단 공통 헤더: 회사 로고 & 연락처 */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '3px' }}>
+                            <img
+                              src="/logo_ocean.png"
+                              alt="Logo"
+                              style={{ width: '15px', height: '15px', objectFit: 'contain' }}
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                            <span style={{ fontSize: '7.5pt', fontWeight: '700', color: '#1e293b', letterSpacing: '-0.3px', flex: 1, whiteSpace: 'nowrap' }}>
+                              오우션테크놀러지 Demo Device
+                            </span>
+                            <span style={{ fontSize: '7pt', color: '#64748b', whiteSpace: 'nowrap' }}>
+                              02-2188-7737
+                            </span>
+                          </div>
+
+                          {/* 1. 장비명 & 시리얼 번호 */}
+                          <div style={{ marginBottom: '2px' }}>
+                            <div style={{
+                              fontSize: '10.5pt',
+                              fontWeight: '800',
+                              color: '#0f172a',
+                              lineHeight: '1.25',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              {name}
+                            </div>
+                            <div style={{
+                              fontSize: '9.5pt',
+                              color: '#1e293b',
+                              fontWeight: '700',
+                              marginTop: '2px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '2px'
+                            }}>
+                              <span style={{ color: '#64748b' }}>S/N: </span>
+                              {formatHighlightedSerial(serial)}
+                            </div>
+                          </div>
+
+                          {/* 2. 하단 렌더링: 바코드 or QR 선택에 따라 렌더링 */}
+                          {slot.type === 'barcode' ? (
+                            /* 📊 [바코드 라벨] Python generate_labels.py 규격 1:1 완벽 구현 */
+                            <div style={{
+                              flex: 1,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              paddingTop: '2px'
+                            }}>
+                              <BarcodeSvg
+                                value={serial}
+                                width={1.25}
+                                height={42}
+                                displayValue={false}
+                              />
+                            </div>
+                          ) : (
+                            /* 📱 [듀얼 QR 라벨] 대여신청 + 반납처리 */
+                            <div style={{
+                              display: 'flex',
+                              gap: '8px',
+                              alignItems: 'center',
+                              justifyContent: 'space-around',
+                              flex: 1,
+                              paddingTop: '2px'
+                            }}>
+                              {/* 대여 신청 QR */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <span style={{
+                                  fontSize: '7pt',
+                                  fontWeight: '800',
+                                  color: '#fff',
+                                  background: '#2563eb',
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  marginBottom: '2px'
+                                }}>
+                                  🔵 대여 신청
+                                </span>
+                                <img
+                                  src={applyQr}
+                                  alt="신청"
+                                  style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
+                                />
+                              </div>
+
+                              {/* 반납 처리 QR */}
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                <span style={{
+                                  fontSize: '7pt',
+                                  fontWeight: '800',
+                                  color: '#fff',
+                                  background: '#dc2626',
+                                  padding: '1px 5px',
+                                  borderRadius: '3px',
+                                  marginBottom: '2px'
+                                }}>
+                                  🔴 반납 처리
+                                </span>
+                                <img
+                                  src={returnQr}
+                                  alt="반납"
+                                  style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </main>
+      </div>
     </div>
   );
 };

@@ -2,21 +2,23 @@
 
 .container {
   font-family: 'Pretendard', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background-color: #f8fafc;
+  background-color: #f1f5f9;
   min-height: 100vh;
   color: #1e293b;
+  display: flex;
+  flex-direction: column;
 }
 
-/* 상단 메인 헤더 바 */
+/* 상단 메인 컨트롤 바 */
 .topBar {
   background: #ffffff;
   border-bottom: 1px solid #e2e8f0;
-  padding: 16px 24px;
+  padding: 12px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: 12px;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -24,17 +26,17 @@
 }
 
 .titleGroup h1 {
-  font-size: 20px;
+  font-size: 17px;
   font-weight: 800;
   color: #0f172a;
-  margin: 0 0 4px 0;
+  margin: 0 0 2px 0;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .titleGroup p {
-  font-size: 12px;
+  font-size: 11.5px;
   color: #64748b;
   margin: 0;
 }
@@ -42,48 +44,28 @@
 .controlsGroup {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
-/* 모드 탭 스위처 */
-.modeTabs {
-  display: flex;
-  background: #f1f5f9;
-  padding: 4px;
-  border-radius: 8px;
-  gap: 4px;
-}
-
-.tabBtn {
-  border: none;
-  background: transparent;
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
+.optionSelect {
+  padding: 6px 10px;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tabBtn.active {
+  font-size: 12px;
+  color: #334155;
   background: #ffffff;
-  color: #2563eb;
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  font-weight: 600;
+  outline: none;
+  cursor: pointer;
 }
 
-/* 주요 액션 버튼 */
 .btnPrimary {
   background: #2563eb;
   color: #ffffff;
   border: none;
   border-radius: 6px;
-  padding: 8px 18px;
+  padding: 7px 16px;
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -98,310 +80,273 @@
   background: #1d4ed8;
 }
 
-.btnSecondary {
-  background: #ffffff;
-  color: #334155;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
+/* 2열 스플릿 레이아웃 (좌측 제품 선택 사이드바 + 우측 라벨지 프리뷰) */
+.splitLayout {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.btnSecondary:hover {
-  background: #f1f5f9;
-  border-color: #94a3b8;
-}
-
-.btnSuccess {
-  background: #059669;
-  color: #ffffff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.2s ease;
-}
-
-.btnSuccess:hover {
-  background: #047857;
-}
-
-/* 옵션 셀렉트 그룹 */
-.optionSelect {
-  padding: 6px 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  font-size: 12px;
-  color: #334155;
-  background: #ffffff;
-  font-weight: 600;
-  outline: none;
-  cursor: pointer;
-}
-
-/* 대기열 및 선택 바 */
-.queueBar {
-  max-width: 980px;
-  margin: 16px auto 0;
-  padding: 12px 20px;
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-}
-
-.queueInfo {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-}
-
-.queueBadge {
-  background: #dbeafe;
-  color: #1e40af;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-.queueActions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* 선택된 장비 목록 태그 뷰 */
-.selectedChips {
-  max-width: 980px;
-  margin: 10px auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  max-height: 120px;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.chip {
-  background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 20px;
-  padding: 4px 10px 4px 12px;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-}
-
-.chipName {
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.chipSerial {
-  color: #64748b;
-  font-family: monospace;
-}
-
-.chipQtyControl {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: #f1f5f9;
-  border-radius: 12px;
-  padding: 1px 6px;
-  font-size: 11px;
-}
-
-.chipQtyBtn {
-  border: none;
-  background: transparent;
-  color: #2563eb;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 0 2px;
-}
-
-.chipDeleteBtn {
-  border: none;
-  background: #fee2e2;
-  color: #dc2626;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: bold;
-  line-height: 1;
-}
-
-/* 모달 스타일 */
-.modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(3px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modalContent {
-  background: #ffffff;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 850px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
+  flex: 1;
+  height: calc(100vh - 65px);
   overflow: hidden;
 }
 
-.modalHeader {
-  padding: 16px 24px;
-  border-bottom: 1px solid #e2e8f0;
+/* 좌측 사이드바 */
+.leftSidebar {
+  width: 400px;
+  min-width: 360px;
+  background: #ffffff;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.sidebarHeader {
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #ffffff;
+}
+
+.sidebarTitle {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.searchBox {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.searchInput {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.searchInput:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.quickActionBtns {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.quickBtn {
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.quickBtn:hover {
+  background: #edf2f7;
+  border-color: #cbd5e1;
+  color: #1e293b;
+}
+
+/* 신규 수동 추가 인라인 카드 */
+.manualAddCard {
+  background: #f0fdf4;
+  border: 1px dashed #86efac;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-top: 8px;
+}
+
+.manualAddCard h4 {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: #166534;
+}
+
+.manualInputRow {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.manualInput {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  font-size: 12px;
+  background: #ffffff;
+  outline: none;
+}
+
+.manualInput:focus {
+  border-color: #22c55e;
+}
+
+/* 장비 목록 스크롤 영역 */
+.equipmentListScroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 10px 14px;
+}
+
+.equipmentCard {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+
+.equipmentCard:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.04);
+}
+
+.equipmentCard.inQueue {
+  border-color: #93c5fd;
+  background: #f8faff;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 4px;
+}
+
+.cardName {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.25;
+}
+
+.cardLocation {
+  font-size: 10.5px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 1.5px 5px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.cardSerial {
+  font-size: 11.5px;
+  color: #334155;
+  font-family: monospace;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.cardActionRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  border-top: 1px dashed #f1f5f9;
+  padding-top: 6px;
+}
+
+.btnBarcodeAdd {
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s;
+}
+
+.btnBarcodeAdd:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+}
+
+.btnQrAdd {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.15s;
+}
+
+.btnQrAdd:hover {
+  background: #dbeafe;
+}
+
+/* 대기열 뱃지 */
+.queueBadge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #dbeafe;
+  color: #1e40af;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.queueBadge.barcode {
+  background: #e0e7ff;
+  color: #3730a3;
+}
+
+.queueBadge.qr {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.badgeQtyBtn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0 2px;
+  font-size: 11px;
+}
+
+/* 사이드바 하단 큐 요약 */
+.sidebarFooter {
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.modalHeader h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.modalCloseBtn {
-  border: none;
-  background: transparent;
-  font-size: 20px;
-  color: #64748b;
-  cursor: pointer;
-  padding: 4px;
-  border-radius: 6px;
-}
-
-.modalCloseBtn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-.modalBody {
-  padding: 20px 24px;
-  overflow-y: auto;
+/* 우측 라벨 시트 메인 뷰 */
+.rightMain {
   flex: 1;
-}
-
-.modalFooter {
-  padding: 16px 24px;
-  border-top: 1px solid #e2e8f0;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  background: #f8fafc;
-}
-
-/* 수동 추가 폼 */
-.manualFormGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.formRow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.formRow label {
-  font-size: 13px;
-  font-weight: 700;
-  color: #334155;
-}
-
-.formInput {
-  padding: 10px 14px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  font-size: 14px;
-  color: #0f172a;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.formInput:focus {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-/* 장비 선택 테이블 */
-.tableSearchBox {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.tableContainer {
-  max-height: 420px;
+  height: 100%;
   overflow-y: auto;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-}
-
-.selectItemTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-.selectItemTable th, .selectItemTable td {
-  padding: 10px 14px;
-  text-align: left;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.selectItemTable th {
-  background: #f8fafc;
-  font-weight: 700;
-  color: #475569;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.selectItemTable tr:hover {
-  background: #f8fafc;
-}
-
-.selectItemTable tr.selectedRow {
-  background: #eff6ff;
+  padding: 20px 24px;
+  background: #f1f5f9;
 }
