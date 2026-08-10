@@ -7,29 +7,26 @@ const LabelPrintPage = () => {
   const [domain, setDomain] = useState(
     window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr'
   );
-  const [search, setSearch] = useState('');
   const [allEquipments, setAllEquipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // 출력 범위 선택: 'queue' (선택 대기열만), '8' (8페이지부터), '1' (1페이지부터 전체)
-  const [startPageRange, setStartPageRange] = useState('queue');
-  const [sortPage8ByProduct, setSortPage8ByProduct] = useState(true); // 8페이지 이후 제품명 정렬 여부
+  // 다중 시리얼 넘버 텍스트 입력 상태
+  const [serialInputText, setSerialInputText] = useState('');
+
+  // 사용자가 수정한 장비명 맵: { [serial]: customName }
+  const [customNameMap, setCustomNameMap] = useState({});
+
+  // 선택된 인쇄 대기열: [{ id, name, serial, location, type: 'barcode' | 'qr', qty: number }]
+  // 기본값: 0개 (빈 목록)
+  const [printQueue, setPrintQueue] = useState([]);
+
+  // 인쇄 옵션 (기존 QR 인쇄 설정과 100% 동일)
   const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
   const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 위치 오프셋 (0~9)
   const [highlightAlpha, setHighlightAlpha] = useState(true); // 영문 음영 강조 여부
 
-  // 선택된 인쇄 대기열: [{ id, name, serial, location, type: 'barcode' | 'qr', qty: number }]
-  const [printQueue, setPrintQueue] = useState([]);
-
-  // 신규 장비 직접 입력 상태
-  const [isManualAdding, setIsManualAdding] = useState(false);
-  const [manualForm, setManualForm] = useState({
-    name: '',
-    serial: ''
-  });
-
-  // 구글 시트에서 전체 장비 데이터 로드
+  // 구글 시트에서 전체 장비 마스터 데이터 로드
   useEffect(() => {
     const fetchEquipments = async () => {
       try {
@@ -89,18 +86,7 @@ const LabelPrintPage = () => {
           }
         });
 
-        const list = Array.from(serialMap.values());
-        setAllEquipments(list);
-
-        // 초기 기본값: 최근 등록된 10개 장비를 바코드 1장씩 큐에 추가
-        if (list.length > 0) {
-          const initialQueue = list.slice(0, 10).map(item => ({
-            ...item,
-            type: 'barcode',
-            qty: 1
-          }));
-          setPrintQueue(initialQueue);
-        }
+        setAllEquipments(Array.from(serialMap.values()));
       } catch (err) {
         console.error('장비 데이터 로드 실패:', err);
         setError(err.message);
@@ -112,18 +98,50 @@ const LabelPrintPage = () => {
     fetchEquipments();
   }, []);
 
-  // 좌측 사이드바 필터된 장비 목록
-  const filteredEquipments = useMemo(() => {
-    return allEquipments.filter(eq => {
-      const name = (eq.name || '').toLowerCase();
-      const serial = (eq.serial || '').toLowerCase();
-      const loc = (eq.location || '').toLowerCase();
-      const q = search.toLowerCase().trim();
-      return name.includes(q) || serial.includes(q) || loc.includes(q);
+  // 시리얼 넘버 데이터베이스 검색용 인덱스 맵 (대소문자/특수문자 무시)
+  const equipmentLookupMap = useMemo(() => {
+    const map = new Map();
+    allEquipments.forEach(eq => {
+      const clean = eq.serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      map.set(clean, eq);
     });
-  }, [allEquipments, search]);
+    return map;
+  }, [allEquipments]);
 
-  // 대기열에 아이템 추가 (type: 'barcode' | 'qr')
+  // 입력된 텍스트에서 시리얼 넘버들을 파싱하여 장비 객체 목록 생성
+  const parsedEnteredItems = useMemo(() => {
+    if (!serialInputText.trim()) return [];
+
+    const lines = serialInputText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+
+    return lines.map((line, idx) => {
+      const trimmedSerial = line;
+      const clean = trimmedSerial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const matched = equipmentLookupMap.get(clean);
+
+      const defaultName = matched ? matched.name : '신규 등록 제품';
+      const finalName = customNameMap[trimmedSerial] || defaultName;
+      const location = matched ? (matched.location || '본사') : '신규등록';
+
+      return {
+        id: `entered_${idx}_${trimmedSerial}`,
+        serial: trimmedSerial,
+        name: finalName,
+        location: location,
+        isMatched: Boolean(matched)
+      };
+    });
+  }, [serialInputText, equipmentLookupMap, customNameMap]);
+
+  // 제품명 직접 수정
+  const handleNameChange = (serial, newName) => {
+    setCustomNameMap(prev => ({ ...prev, [serial]: newName }));
+  };
+
+  // 대기열에 아이템 추가
   const addToQueue = (item, type = 'barcode') => {
     setPrintQueue(prev => {
       const existingIdx = prev.findIndex(q => q.serial === item.serial && q.type === type);
@@ -134,10 +152,6 @@ const LabelPrintPage = () => {
       }
       return [...prev, { ...item, type, qty: 1 }];
     });
-    // 대기열 뷰로 자동 전환
-    if (startPageRange !== 'queue') {
-      setStartPageRange('queue');
-    }
   };
 
   // 대기열 수량 조절
@@ -160,109 +174,63 @@ const LabelPrintPage = () => {
     setPrintQueue(prev => prev.filter(q => !(q.serial === serial && q.type === type)));
   };
 
-  // 대기열 전체 비우기
-  const clearQueue = () => {
+  // 입력된 모든 장비를 바코드로 일괄 추가
+  const handleAddAllAsBarcode = () => {
+    if (parsedEnteredItems.length === 0) {
+      alert('시리얼 넘버를 먼저 입력해 주세요.');
+      return;
+    }
+    parsedEnteredItems.forEach(item => {
+      addToQueue(item, 'barcode');
+    });
+  };
+
+  // 입력된 모든 장비를 QR로 일괄 추가
+  const handleAddAllAsQr = () => {
+    if (parsedEnteredItems.length === 0) {
+      alert('시리얼 넘버를 먼저 입력해 주세요.');
+      return;
+    }
+    parsedEnteredItems.forEach(item => {
+      addToQueue(item, 'qr');
+    });
+  };
+
+  // 텍스트 및 대기열 전체 비우기
+  const handleResetAll = () => {
+    setSerialInputText('');
     setPrintQueue([]);
   };
 
-  // 현재 필터된 장비 전체를 바코드로 추가
-  const addAllFilteredAsBarcode = () => {
-    const newItems = [...printQueue];
-    filteredEquipments.forEach(eq => {
-      const existing = newItems.find(q => q.serial === eq.serial && q.type === 'barcode');
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        newItems.push({ ...eq, type: 'barcode', qty: 1 });
-      }
-    });
-    setPrintQueue(newItems);
-    setStartPageRange('queue');
-  };
-
-  // 현재 필터된 장비 전체를 QR로 추가
-  const addAllFilteredAsQr = () => {
-    const newItems = [...printQueue];
-    filteredEquipments.forEach(eq => {
-      const existing = newItems.find(q => q.serial === eq.serial && q.type === 'qr');
-      if (existing) {
-        existing.qty += 1;
-      } else {
-        newItems.push({ ...eq, type: 'qr', qty: 1 });
-      }
-    });
-    setPrintQueue(newItems);
-    setStartPageRange('queue');
-  };
-
-  // 신규 장비 수동 입력 추가
-  const handleAddManualItem = (type = 'barcode') => {
-    if (!manualForm.name.trim()) {
-      alert('제품명을 입력해 주세요.');
-      return;
-    }
-    if (!manualForm.serial.trim()) {
-      alert('시리얼 번호를 입력해 주세요.');
-      return;
-    }
-
-    const newItem = {
-      id: `manual_${Date.now()}`,
-      name: manualForm.name.trim(),
-      serial: manualForm.serial.trim().toUpperCase(),
-      location: '신규등록',
-      type: type,
-      qty: 1
-    };
-
-    setPrintQueue(prev => {
-      const existingIdx = prev.findIndex(q => q.serial === newItem.serial && q.type === type);
-      if (existingIdx >= 0) {
-        const copy = [...prev];
-        copy[existingIdx].qty += 1;
-        return copy;
-      }
-      return [newItem, ...prev];
-    });
-
-    setManualForm({ name: '', serial: '' });
-    setStartPageRange('queue');
+  // 예시 시리얼 넘버 입력
+  const handleLoadSampleSerials = () => {
+    const sample = [
+      '2233FD2H3N58',
+      '2445WDU0SLA8',
+      '7276FF0045060FA2',
+      '7276FF0045060F90',
+      '2621DM1G0DT9',
+      '2621DMSG0069',
+      '2616CG141WP9'
+    ].join('\n');
+    setSerialInputText(sample);
   };
 
   // ===== 최종 출력 데이터 목록 계산 =====
   const targetLabelList = useMemo(() => {
-    let rawTarget = [];
+    const rawTarget = [];
 
-    if (startPageRange === 'queue') {
-      // 1. 대기열 모드: 각 아이템을 qty 수량만큼 반복
-      printQueue.forEach(item => {
-        const count = item.qty || 1;
-        for (let c = 0; c < count; c++) {
-          rawTarget.push({
-            ...item,
-            isBlank: false,
-            uniqueKey: `${item.serial}_${item.type}_${c}`
-          });
-        }
-      });
-    } else {
-      // 2. 기존 QR 페이지 방식 (8페이지부터 or 1페이지부터 전체)
-      const page1To7Items = allEquipments.slice(0, 70).map(eq => ({ ...eq, type: 'qr', qty: 1 }));
-      const page8PlusItems = allEquipments.slice(70).map(eq => ({ ...eq, type: 'qr', qty: 1 }));
-
-      const sortedPage8Plus = sortPage8ByProduct ? [...page8PlusItems].sort((a, b) => {
-        const nameA = (a.name || '').toString().trim();
-        const nameB = (b.name || '').toString().trim();
-        return nameA.localeCompare(nameB, 'ko', { numeric: true, sensitivity: 'base' });
-      }) : page8PlusItems;
-
-      const baseList = startPageRange === '8' ? sortedPage8Plus : [...page1To7Items, ...sortedPage8Plus];
-      rawTarget = baseList.map((eq, idx) => ({
-        ...eq,
-        isBlank: false,
-        uniqueKey: `${eq.serial}_${idx}`
-      }));
-    }
+    // 대기열 아이템들을 qty 수량만큼 반복
+    printQueue.forEach(item => {
+      const count = item.qty || 1;
+      for (let c = 0; c < count; c++) {
+        rawTarget.push({
+          ...item,
+          isBlank: false,
+          uniqueKey: `${item.serial}_${item.type}_${c}`
+        });
+      }
+    });
 
     // 시작 위치 오프셋 (1페이지 앞부분 빈 슬롯) 적용
     const finalSlots = [];
@@ -272,11 +240,10 @@ const LabelPrintPage = () => {
     finalSlots.push(...rawTarget);
 
     return finalSlots;
-  }, [startPageRange, printQueue, allEquipments, sortPage8ByProduct, startSlotOffset]);
+  }, [printQueue, startSlotOffset]);
 
   const totalActualLabels = targetLabelList.filter(s => !s.isBlank).length;
   const totalPages = Math.ceil(targetLabelList.length / 10);
-  const startPageNum = startPageRange === '8' ? 8 : 1;
 
   // 시리얼 넘버 영문 하이라이트 포맷 함수
   const formatHighlightedSerial = (serialText) => {
@@ -418,41 +385,6 @@ const LabelPrintPage = () => {
         </div>
 
         <div className={styles.controlsGroup}>
-          {/* 출력 범위 선택 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>출력 범위:</span>
-            <select
-              value={startPageRange}
-              onChange={(e) => setStartPageRange(e.target.value)}
-              style={{
-                padding: '6px 10px',
-                borderRadius: '6px',
-                border: '1px solid #2563eb',
-                backgroundColor: '#eff6ff',
-                fontSize: '13px',
-                fontWeight: '700',
-                color: '#1e40af'
-              }}
-            >
-              <option value="queue">📋 선택 대기열만 출력 ({printQueue.reduce((a, c) => a + c.qty, 0)}장)</option>
-              <option value="8">8페이지부터 전체 출력 (71번째~)</option>
-              <option value="1">1페이지부터 전체 출력 (1번째~)</option>
-            </select>
-          </div>
-
-          {/* 8페이지 이후 제품명 정렬 옵션 */}
-          {startPageRange !== 'queue' && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12.5px', fontWeight: '600', color: '#334155', cursor: 'pointer' }}>
-              <input
-                type="checkbox"
-                checked={sortPage8ByProduct}
-                onChange={(e) => setSortPage8ByProduct(e.target.checked)}
-                style={{ cursor: 'pointer' }}
-              />
-              🏷️ 8페이지~ 제품명 정렬
-            </label>
-          )}
-
           {/* 도메인 선택 */}
           <select
             value={domain}
@@ -521,133 +453,135 @@ const LabelPrintPage = () => {
         </div>
       </header>
 
-      {/* ===== 2열 분할 레이아웃 (좌측 제품 선택 사이드바 + 우측 라벨 시트 프리뷰) ===== */}
+      {/* ===== 2열 분할 레이아웃 (좌측 시리얼 입력/제품 스택 + 우측 라벨 시트 프리뷰) ===== */}
       <div className={styles.splitLayout}>
-        {/* 좌측 사이드바: 제품 리스트 및 바코드/QR 선택 */}
+        {/* 좌측 패널: 시리얼 넘버 다중 입력 & 제품 스택 */}
         <aside className={`no-print ${styles.leftSidebar}`}>
           <div className={styles.sidebarHeader}>
             <div className={styles.sidebarTitle}>
-              <span>📦 장비 목록 ({filteredEquipments.length}개)</span>
+              <span>📝 시리얼 넘버 입력 (줄바꿈 구분)</span>
+              <button onClick={handleLoadSampleSerials} className={styles.btnReset} style={{ padding: '2px 6px', fontSize: '11px' }}>
+                샘플 입력
+              </button>
+            </div>
+
+            {/* 다중 시리얼 넘버 텍스트에어리어 */}
+            <textarea
+              className={styles.serialTextarea}
+              placeholder="시리얼 넘버를 줄바꿈(엔터)하여 붙여넣으세요.&#13;&#10;예:&#13;&#10;2233FD2H3N58&#13;&#10;2445WDU0SLA8&#13;&#10;7276FF0045060FA2"
+              value={serialInputText}
+              onChange={(e) => setSerialInputText(e.target.value)}
+            />
+
+            {/* 일괄 추가 버튼 영역 */}
+            <div className={styles.batchActionRow}>
               <button
-                onClick={() => setIsManualAdding(!isManualAdding)}
-                className={styles.quickBtn}
-                style={{ color: '#16a34a', fontWeight: '700' }}
+                onClick={handleAddAllAsBarcode}
+                className={styles.btnBatchBarcode}
+                disabled={parsedEnteredItems.length === 0}
               >
-                {isManualAdding ? '✕ 닫기' : '➕ 신규 직접 입력'}
+                📊 + 전체 바코드 추가 ({parsedEnteredItems.length})
               </button>
-            </div>
-
-            {/* 검색창 */}
-            <div className={styles.searchBox}>
-              <input
-                type="text"
-                placeholder="🔍 제품명, 시리얼, 위치 검색..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className={styles.searchInput}
-              />
-            </div>
-
-            {/* 빠른 일괄 추가 버튼 */}
-            <div className={styles.quickActionBtns}>
-              <button onClick={addAllFilteredAsBarcode} className={styles.quickBtn}>
-                + 전체 바코드 추가
+              <button
+                onClick={handleAddAllAsQr}
+                className={styles.btnBatchQr}
+                disabled={parsedEnteredItems.length === 0}
+              >
+                📱 + 전체 QR 추가 ({parsedEnteredItems.length})
               </button>
-              <button onClick={addAllFilteredAsQr} className={styles.quickBtn}>
-                + 전체 QR 추가
-              </button>
-              <button onClick={clearQueue} className={styles.quickBtn} style={{ color: '#dc2626' }}>
+              <button
+                onClick={handleResetAll}
+                className={styles.btnReset}
+                title="전체 비우기"
+              >
                 🧹 비우기
               </button>
             </div>
-
-            {/* 신규 장비 직접 입력 인라인 폼 */}
-            {isManualAdding && (
-              <div className={styles.manualAddCard}>
-                <h4>➕ 신규 미등록 장비 라벨 생성</h4>
-                <div className={styles.manualInputRow}>
-                  <input
-                    type="text"
-                    placeholder="제품명 (예: Spot, Rally Bar)"
-                    value={manualForm.name}
-                    onChange={(e) => setManualForm(prev => ({ ...prev, name: e.target.value }))}
-                    className={styles.manualInput}
-                  />
-                  <input
-                    type="text"
-                    placeholder="S/N (예: 2616CGW40X39)"
-                    value={manualForm.serial}
-                    onChange={(e) => setManualForm(prev => ({ ...prev, serial: e.target.value }))}
-                    className={styles.manualInput}
-                  />
-                </div>
-                <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                  <button onClick={() => handleAddManualItem('barcode')} className={styles.btnBarcodeAdd}>
-                    + 바코드 추가
-                  </button>
-                  <button onClick={() => handleAddManualItem('qr')} className={styles.btnQrAdd}>
-                    + QR 추가
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* 장비 카드 리스트 */}
+          {/* 파싱된 장비 카드 스택 리스트 */}
           <div className={styles.equipmentListScroll}>
-            {loading && (
-              <div style={{ textAlign: 'center', padding: '40px 10px', color: '#64748b', fontSize: '13px' }}>
-                ⏳ 장비 데이터 로딩 중...
-              </div>
-            )}
+            <div className={styles.listHeaderInfo}>
+              <span>인식된 제품 목록 ({parsedEnteredItems.length}개)</span>
+              {loading && <span style={{ color: '#2563eb' }}>데이터 조회 중...</span>}
+            </div>
+
             {error && (
-              <div style={{ textAlign: 'center', padding: '20px 10px', color: '#dc2626', fontSize: '12px' }}>
+              <div style={{ textAlign: 'center', padding: '10px', color: '#dc2626', fontSize: '12px' }}>
                 ❌ 로드 실패: {error}
               </div>
             )}
 
-            {!loading && !error && filteredEquipments.map((eq) => {
-              const barcodeItem = printQueue.find(q => q.serial === eq.serial && q.type === 'barcode');
-              const qrItem = printQueue.find(q => q.serial === eq.serial && q.type === 'qr');
+            {parsedEnteredItems.length === 0 && !loading && (
+              <div style={{ textAlign: 'center', padding: '40px 10px', color: '#94a3b8', fontSize: '12.5px' }}>
+                위 텍스트창에 시리얼 넘버를 붙여넣으시면<br />
+                구글 시트에서 제품명을 자동 조회하여<br />
+                이곳에 제품 카드가 차곡차곡 쌓입니다.
+              </div>
+            )}
+
+            {parsedEnteredItems.map((item, idx) => {
+              const barcodeItem = printQueue.find(q => q.serial === item.serial && q.type === 'barcode');
+              const qrItem = printQueue.find(q => q.serial === item.serial && q.type === 'qr');
               const inQueue = Boolean(barcodeItem || qrItem);
 
               return (
-                <div key={eq.serial} className={`${styles.equipmentCard} ${inQueue ? styles.inQueue : ''}`}>
+                <div key={`${item.serial}_${idx}`} className={`${styles.equipmentCard} ${inQueue ? styles.inQueue : ''}`}>
                   <div className={styles.cardHeader}>
-                    <span className={styles.cardName}>{eq.name}</span>
-                    <span className={styles.cardLocation}>{eq.location || '본사'}</span>
+                    {/* 제품명 (수정 가능 인풋) */}
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) => handleNameChange(item.serial, e.target.value)}
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: '800',
+                        color: '#0f172a',
+                        border: 'none',
+                        borderBottom: '1px dotted #cbd5e1',
+                        background: 'transparent',
+                        padding: '1px 2px',
+                        outline: 'none',
+                        width: '75%'
+                      }}
+                      title="제품명을 수정할 수 있습니다"
+                    />
+                    <span className={styles.cardLocation} style={{ background: item.isMatched ? '#f1f5f9' : '#fef3c7', color: item.isMatched ? '#475569' : '#b45309' }}>
+                      {item.isMatched ? item.location : '신규미등록'}
+                    </span>
                   </div>
+
                   <div className={styles.cardSerial}>
-                    S/N: {eq.serial}
+                    S/N: {item.serial}
                   </div>
 
                   <div className={styles.cardActionRow}>
-                    {/* 바코드 추가/수량 */}
+                    {/* 바코드 버튼/수량 */}
                     {barcodeItem ? (
                       <div className={`${styles.queueBadge} ${styles.barcode}`}>
                         <span>바코드:</span>
-                        <button onClick={() => updateQueueQty(eq.serial, 'barcode', -1)} className={styles.badgeQtyBtn}>-</button>
+                        <button onClick={() => updateQueueQty(item.serial, 'barcode', -1)} className={styles.badgeQtyBtn}>-</button>
                         <span>{barcodeItem.qty}장</span>
-                        <button onClick={() => updateQueueQty(eq.serial, 'barcode', 1)} className={styles.badgeQtyBtn}>+</button>
-                        <button onClick={() => removeFromQueue(eq.serial, 'barcode')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
+                        <button onClick={() => updateQueueQty(item.serial, 'barcode', 1)} className={styles.badgeQtyBtn}>+</button>
+                        <button onClick={() => removeFromQueue(item.serial, 'barcode')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
                       </div>
                     ) : (
-                      <button onClick={() => addToQueue(eq, 'barcode')} className={styles.btnBarcodeAdd}>
+                      <button onClick={() => addToQueue(item, 'barcode')} className={styles.btnBarcodeAdd}>
                         + 바코드
                       </button>
                     )}
 
-                    {/* QR 추가/수량 */}
+                    {/* QR 버튼/수량 */}
                     {qrItem ? (
                       <div className={`${styles.queueBadge} ${styles.qr}`}>
                         <span>QR:</span>
-                        <button onClick={() => updateQueueQty(eq.serial, 'qr', -1)} className={styles.badgeQtyBtn}>-</button>
+                        <button onClick={() => updateQueueQty(item.serial, 'qr', -1)} className={styles.badgeQtyBtn}>-</button>
                         <span>{qrItem.qty}장</span>
-                        <button onClick={() => updateQueueQty(eq.serial, 'qr', 1)} className={styles.badgeQtyBtn}>+</button>
-                        <button onClick={() => removeFromQueue(eq.serial, 'qr')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
+                        <button onClick={() => updateQueueQty(item.serial, 'qr', 1)} className={styles.badgeQtyBtn}>+</button>
+                        <button onClick={() => removeFromQueue(item.serial, 'qr')} style={{ border: 'none', background: 'transparent', color: '#6b7280', cursor: 'pointer', marginLeft: '2px' }}>×</button>
                       </div>
                     ) : (
-                      <button onClick={() => addToQueue(eq, 'qr')} className={styles.btnQrAdd}>
+                      <button onClick={() => addToQueue(item, 'qr')} className={styles.btnQrAdd}>
                         + QR
                       </button>
                     )}
@@ -657,37 +591,35 @@ const LabelPrintPage = () => {
             })}
           </div>
 
-          {/* 사이드바 하단 요약 */}
+          {/* 사이드바 하단 큐 요약 */}
           <div className={styles.sidebarFooter}>
-            <span style={{ fontSize: '12px', fontWeight: '700', color: '#1e40af' }}>
-              선택 대기열: {printQueue.reduce((a, c) => a + c.qty, 0)}장
+            <span style={{ fontSize: '12.5px', fontWeight: '800', color: '#1e40af' }}>
+              📦 인쇄 대기열: {printQueue.reduce((a, c) => a + c.qty, 0)}장
             </span>
-            <button
-              onClick={() => setStartPageRange('queue')}
-              className={styles.quickBtn}
-              style={{ background: startPageRange === 'queue' ? '#2563eb' : '#fff', color: startPageRange === 'queue' ? '#fff' : '#334155' }}
-            >
-              대기열만 보기
-            </button>
+            <span style={{ fontSize: '11.5px', color: '#64748b' }}>
+              (A4 {totalPages}페이지 소요)
+            </span>
           </div>
         </aside>
 
         {/* 우측 메인 뷰: Formtec LS-3510 라벨지 실물 미리보기 & 인쇄 영역 */}
         <main className={styles.rightMain}>
           <div className="label-sheet-wrapper">
-            {totalActualLabels === 0 && !loading && (
+            {totalActualLabels === 0 && (
               <div className="no-print" style={{ textAlign: 'center', padding: '80px 20px', background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
                 <div style={{ fontSize: '48px', marginBottom: '16px' }}>🏷️</div>
-                <h3 style={{ fontSize: '18px', color: '#334155', marginBottom: '8px' }}>출력할 라벨이 없습니다</h3>
+                <h3 style={{ fontSize: '18px', color: '#334155', marginBottom: '8px' }}>출력 대기열이 비어 있습니다</h3>
                 <p style={{ fontSize: '13px', color: '#64748b' }}>
-                  좌측 장비 목록에서 <strong>[+ 바코드]</strong> 또는 <strong>[+ QR]</strong> 버튼을 눌러 라벨을 추가해 주세요.
+                  좌측 입력창에 시리얼 넘버를 입력하신 후<br />
+                  <strong>[📊 + 전체 바코드 추가]</strong> 또는 <strong>[📱 + 전체 QR 추가]</strong> 버튼을 누르시면<br />
+                  이곳에 실물 폼텍 라벨지가 즉시 렌더링됩니다.
                 </p>
               </div>
             )}
 
             {Array.from({ length: totalPages }, (_, pageIdx) => {
               const pageSlots = targetLabelList.slice(pageIdx * 10, (pageIdx + 1) * 10);
-              const actualPageNum = pageIdx + startPageNum;
+              const actualPageNum = pageIdx + 1;
 
               return (
                 <React.Fragment key={pageIdx}>
