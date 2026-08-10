@@ -4,9 +4,7 @@ import BarcodeSvg from '../components/BarcodeSvg';
 import styles from './LabelPrintPage.module.css';
 
 const LabelPrintPage = () => {
-  const [domain, setDomain] = useState(
-    window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr'
-  );
+  const domain = window.location.origin.includes('localhost') ? 'http://localhost:3000' : 'https://demodevice.kr';
   const [allEquipments, setAllEquipments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -101,13 +99,12 @@ const LabelPrintPage = () => {
         setAllEquipments(list);
 
         // 초기 기본값: 최근 등록된 10개 장비 자동 큐에 추가
-        if (list.length > 0 && printQueue.length === 0) {
-          const initialSelection = list.slice(0, 10).map(item => ({
-            ...item,
-            qty: 1
-          }));
-          setPrintQueue(initialSelection);
-        }
+        setPrintQueue(prev => {
+          if (prev.length === 0 && list.length > 0) {
+            return list.slice(0, 10).map(item => ({ ...item, qty: 1 }));
+          }
+          return prev;
+        });
       } catch (err) {
         console.error('장비 데이터 로드 실패:', err);
         setError(err.message);
