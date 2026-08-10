@@ -5,6 +5,7 @@ import useAuthStore from './stores/authStore';
 import LoginPage from './pages/LoginPage';
 import MainPage from './pages/MainPage';
 import QrPrintPage from './pages/QrPrintPage';
+import LabelPrintPage from './pages/LabelPrintPage';
 import InventoryAuditPage from './pages/InventoryAuditPage';
 import OAuthCallback from './components/OAuthCallback';
 import './App.css';
@@ -74,7 +75,15 @@ function App() {
             element={<OAuthCallback />} 
           />
           <Route 
+            path="/label-print" 
+            element={<LabelPrintPage />} 
+          />
+          <Route 
             path="/qr-print" 
+            element={<LabelPrintPage />} 
+          />
+          <Route 
+            path="/qr-print-legacy" 
             element={<QrPrintPage />} 
           />
           <Route 

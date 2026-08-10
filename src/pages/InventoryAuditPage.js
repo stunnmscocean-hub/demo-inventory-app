@@ -460,6 +460,13 @@ const InventoryAuditPage = () => {
           <p>위치별 실시간 바코드/QR 스캔 및 재고 3원 대조 검증</p>
         </div>
         <div className={styles.headerActions}>
+          <button 
+            className={styles.backBtn} 
+            onClick={() => window.open('/label-print', '_blank')}
+            style={{ backgroundColor: '#4f46e5', color: '#ffffff', border: 'none' }}
+          >
+            🏷️ 바코드/QR 라벨 출력
+          </button>
           <button className={styles.backBtn} onClick={() => navigate('/')}>
             🏠 메인 화면으로 돌아가기
           </button>

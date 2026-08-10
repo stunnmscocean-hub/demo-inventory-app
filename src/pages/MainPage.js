@@ -2399,6 +2399,25 @@ const MainPage = ({ user, onLogout }) => {
         <h1 className={styles.headerTitle}>{displayName}님, 환영합니다.</h1>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <button
+            onClick={() => window.open('/label-print', '_blank')}
+            style={{
+              backgroundColor: '#4f46e5',
+              color: '#ffffff',
+              border: 'none',
+              padding: '6px 12px',
+              borderRadius: '6px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
+            }}
+          >
+            🏷️ 라벨 출력 (바코드/QR)
+          </button>
+          <button
             onClick={() => window.location.href = '/audit'}
             style={{
               backgroundColor: '#2563eb',
@@ -4049,9 +4068,9 @@ const MainPage = ({ user, onLogout }) => {
               <span>사용중인 장비</span>
             </label>
             <button
-              onClick={() => window.open('/qr-print', '_blank')}
+              onClick={() => window.open('/label-print', '_blank')}
               style={{
-                backgroundColor: '#2563eb',
+                backgroundColor: '#4f46e5',
                 color: '#ffffff',
                 border: 'none',
                 borderRadius: '6px',
@@ -4063,7 +4082,7 @@ const MainPage = ({ user, onLogout }) => {
                 whiteSpace: 'nowrap'
               }}
             >
-              🖨️ QR 라벨 출력
+              🏷️ 라벨 출력 (바코드/QR)
             </button>
           </div>
         </div>
