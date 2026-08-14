@@ -963,8 +963,7 @@ const MainPage = ({ user, onLogout }) => {
   // 📱 듀얼 QR 스캔 URL 파라미터 감지 (action=apply / action=return)
   // localStorage + Cookie 듀얼 저장으로 iOS 사파리 다중 탭 개설 시 장바구니 실시간 동기화
   useEffect(() => {
-    if (!allEquipments || allEquipments.length === 0) return;
-
+    // 1️⃣ 장바구니 복원 헬퍼
     const getStoredCartSerials = () => {
       try {
         const fromLocal = localStorage.getItem('qr_cart_serials');
@@ -995,114 +994,135 @@ const MainPage = ({ user, onLogout }) => {
       } catch (e) {}
     };
 
-    // 1️⃣ 먼저 localStorage + Cookie에 저장된 기존 장바구니 복원 (아이폰 사파리 새 탭 대응)
-    try {
-      const savedSerials = getStoredCartSerials();
-      if (savedSerials.length > 0) {
-        const restoredItems = savedSerials
-          .map(serial => {
-            const cleanSaved = (serial || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-            return allEquipments.find(item => {
-              const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
-              const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-              return cleanItemSerial === cleanSaved;
-            });
-          })
-          .filter(Boolean);
-
-        if (restoredItems.length > 0) {
-          setSelectedEquipments(prev => {
-            const merged = [...prev];
-            restoredItems.forEach(item => {
-              const itemCleanSerial = (item.serial || item.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-              const exists = merged.some(eq => {
-                const eqCleanSerial = (eq.serial || eq.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-                return (eqCleanSerial && itemCleanSerial) ? eqCleanSerial === itemCleanSerial : eq.id === item.id;
+    // 장비 데이터가 로드되었을 때 기존 장바구니 복원 (1회 실행)
+    if (allEquipments && allEquipments.length > 0) {
+      try {
+        const savedSerials = getStoredCartSerials();
+        if (savedSerials.length > 0) {
+          const restoredItems = savedSerials
+            .map(serial => {
+              const cleanSaved = (serial || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+              return allEquipments.find(item => {
+                const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
+                const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                return cleanItemSerial === cleanSaved;
               });
-              if (!exists) merged.push(item);
-            });
+            })
+            .filter(Boolean);
 
-            const mergedSerials = merged.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
-            setStoredCartSerials(mergedSerials);
-            return merged;
-          });
-          console.log('📱 [QR 장바구니] 기존 장바구니 복원 완료:', savedSerials);
+          if (restoredItems.length > 0) {
+            setSelectedEquipments(prev => {
+              const merged = [...prev];
+              restoredItems.forEach(item => {
+                const itemCleanSerial = (item.serial || item.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                const exists = merged.some(eq => {
+                  const eqCleanSerial = (eq.serial || eq.serialNumber || '').toString().replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                  return (eqCleanSerial && itemCleanSerial) ? eqCleanSerial === itemCleanSerial : eq.id === item.id;
+                });
+                if (!exists) merged.push(item);
+              });
+
+              const mergedSerials = merged.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
+              setStoredCartSerials(mergedSerials);
+              return merged;
+            });
+          }
         }
-      }
-    } catch (e) { console.warn('장바구니 복원 실패:', e); }
+      } catch (e) { console.warn('장바구니 복원 실패:', e); }
+    }
 
     // 2️⃣ 현재 URL의 QR 파라미터 처리
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action') || params.get('scan_action') || 'apply';
     const scannedSerial = params.get('serial') || params.get('scan') || params.get('sn');
 
-    if (scannedSerial && !hasLoggedQrScanRef.current) {
-      // 💡 장비 목록 데이터가 아직 로드되지 않았으면 로드가 완료될 때까지 대기
-      if (!allEquipments || allEquipments.length === 0) {
-        return;
-      }
+    if (!scannedSerial) return;
 
-      hasLoggedQrScanRef.current = true; // 최초 1회만 스캔 로그 기록
+    const cleanScanned = scannedSerial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-      // 시리얼 번호 정규화 (공백/특수문자 제거 후 소문자 비교)
-      const cleanScanned = scannedSerial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-      const targetEq = allEquipments.find(item => {
-        const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
-        const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-        return cleanItemSerial === cleanScanned;
-      });
+    // 이미 처리 완료된 시리얼이면 중복 처리 방지
+    if (hasLoggedQrScanRef.current === cleanScanned) {
+      return;
+    }
 
-      // 📊 조회History 시트에 QR 스캔 로깅 (targetEq 매칭 여부와 상관없이 무조건 기록)
+    // 장비 목록에서 대상 장비 검색
+    const targetEq = (allEquipments || []).find(item => {
+      const s = (item.serial || item.serialNumber || item['시리얼넘버'] || '').toString();
+      const cleanItemSerial = s.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      return cleanItemSerial === cleanScanned;
+    });
+
+    // 🎯 CASE 1: 장비를 찾은 경우 (캐시 또는 최신 서버 데이터에 존재)
+    if (targetEq) {
+      hasLoggedQrScanRef.current = cleanScanned; // 처리 완료 플래그 설정
+
+      // 📊 정상 장비명으로 1회만 로깅
       logSearchHistory({
         email: user?.email || '미인증/확인중',
         userName: user?.name || '사용자',
         accessType: action === 'apply' ? 'QR_대여신청' : (action === 'return' ? 'QR_반납' : 'QR_스캔'),
         query: scannedSerial,
-        equipmentName: targetEq ? targetEq.name : `미등록장비(S/N: ${scannedSerial})`,
+        equipmentName: targetEq.name,
         applied: false
       });
 
-      if (targetEq) {
-        const cleanStatus = (targetEq.status || '').toString().trim().replace(/\s+/g, '');
+      const cleanStatus = (targetEq.status || '').toString().trim().replace(/\s+/g, '');
 
-        if (action === 'apply') {
-          // 🔵 데모 신청용 QR
-          if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
-            alert(`⚠️ [실물 현황 불일치 감지]\n\n구글 시트 상에는 '대여중'으로 등록되어 있으나, 실물 QR 스캔이 확인되었습니다.\n\n해당 장비를 신청 목록에 추가합니다.`);
-          }
-          // 장바구니 카트에 누적 추가 + localStorage & Cookie 듀얼 저장
-          setSelectedEquipments(prev => {
-            const exists = prev.some(eq => (eq.serial || eq.id) === (targetEq.serial || targetEq.id));
-            if (exists) return prev;
-            const updated = [...prev, targetEq];
-            const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
-            setStoredCartSerials(serials);
-            console.log('📱 [QR 장바구니] 장비 추가, 현재 카트:', serials);
-            return updated;
-          });
-          setShowApplicationForm(true);
-          setApplicationFormState('expanded');
-
-          // URL에서 QR 파라미터 제거 (주소창 깔끔하게)
-          window.history.replaceState(null, '', window.location.pathname);
-        } else if (action === 'return') {
-          // 🔴 반납용 QR
-          if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
-            const confirmReturn = window.confirm(`📦 [장비 반납 확인]\n\n장비명: ${targetEq.name}\n시리얼: ${targetEq.serial}\n\n이 장비를 반납 완료 처리하시겠습니까?`);
-            if (confirmReturn) {
-              returnEquipment(targetEq).then(() => {
-                alert(`✅ ${targetEq.name} (${targetEq.serial}) 반납 처리가 완료되었습니다.`);
-                window.location.href = window.location.pathname;
-              }).catch(err => alert(`반납 실패: ${err.message}`));
-            }
-          } else {
-            alert(`ℹ️ 이미 반납 완료되어 보관 중인 장비입니다.`);
-          }
+      if (action === 'apply') {
+        if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
+          alert(`⚠️ [실물 현황 불일치 감지]\n\n구글 시트 상에는 '대여중'으로 등록되어 있으나, 실물 QR 스캔이 확인되었습니다.\n\n해당 장비를 신청 목록에 추가합니다.`);
         }
+        setSelectedEquipments(prev => {
+          const exists = prev.some(eq => (eq.serial || eq.id) === (targetEq.serial || targetEq.id));
+          if (exists) return prev;
+          const updated = [...prev, targetEq];
+          const serials = updated.map(eq => (eq.serial || eq.serialNumber || '').toString().trim()).filter(Boolean);
+          setStoredCartSerials(serials);
+          console.log('📱 [QR 장바구니] 장비 추가, 현재 카트:', serials);
+          return updated;
+        });
+        setShowApplicationForm(true);
+        setApplicationFormState('expanded');
+
+        // URL에서 QR 파라미터 즉시 제거하여 중복 스캔 방지
+        window.history.replaceState(null, '', window.location.pathname);
+      } else if (action === 'return') {
+        if (['대여중', '대여신청', '사용중'].includes(cleanStatus)) {
+          const confirmReturn = window.confirm(`📦 [장비 반납 확인]\n\n장비명: ${targetEq.name}\n시리얼: ${targetEq.serial}\n\n이 장비를 반납 완료 처리하시겠습니까?`);
+          if (confirmReturn) {
+            returnEquipment(targetEq).then(() => {
+              alert(`✅ ${targetEq.name} (${targetEq.serial}) 반납 처리가 완료되었습니다.`);
+              window.location.href = window.location.pathname;
+            }).catch(err => alert(`반납 실패: ${err.message}`));
+          }
+        } else {
+          alert(`ℹ️ 이미 반납 완료되어 보관 중인 장비입니다.`);
+        }
+        window.history.replaceState(null, '', window.location.pathname);
       }
+    } else {
+      // 🎯 CASE 2: 장비를 아직 못 찾은 경우
+      // 만약 아직 백그라운드 서버 데이터 로딩 중이라면,
+      // ❌ 절대 "미등록장비"로 미리 로그를 남기지 않고, 최신 데이터가 도착할 때까지 대기!
+      if (loadingEquipments) {
+        console.log(`⏳ [QR 스캔 대기] 장비(${scannedSerial})를 캐시에서 찾지 못해 최신 서버 장비 데이터를 기다리는 중입니다...`);
+        return;
+      }
+
+      // 서버 최신 데이터 로딩이 완전히 끝났는데도(loadingEquipments === false) 없는 경우에만 최종 미등록 처리
+      hasLoggedQrScanRef.current = cleanScanned;
+      logSearchHistory({
+        email: user?.email || '미인증/확인중',
+        userName: user?.name || '사용자',
+        accessType: action === 'apply' ? 'QR_대여신청' : (action === 'return' ? 'QR_반납' : 'QR_스캔'),
+        query: scannedSerial,
+        equipmentName: `미등록장비(S/N: ${scannedSerial})`,
+        applied: false
+      });
+      alert(`⚠️ 등록되지 않은 시리얼 번호입니다: ${scannedSerial}`);
+      window.history.replaceState(null, '', window.location.pathname);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allEquipments]);
+  }, [allEquipments, loadingEquipments, user?.email, user?.name]);
 
   useEffect(() => {
     const fetchAllCsvData = async () => {

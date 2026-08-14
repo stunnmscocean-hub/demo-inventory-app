@@ -64,7 +64,15 @@ function App() {
             path="/login" 
             element={
               isAuthenticated ? (
-                <Navigate to={sessionStorage.getItem('pending_qr_params') ? (sessionStorage.getItem('pending_qr_params').startsWith('/') ? sessionStorage.getItem('pending_qr_params') : `/${sessionStorage.getItem('pending_qr_params')}`) : "/"} replace />
+                (() => {
+                  const pending = sessionStorage.getItem('pending_qr_params');
+                  if (pending) {
+                    sessionStorage.removeItem('pending_qr_params');
+                    const target = pending.startsWith('/') ? pending : `/${pending}`;
+                    return <Navigate to={target} replace />;
+                  }
+                  return <Navigate to="/" replace />;
+                })()
               ) : (
                 <LoginPage />
               )

@@ -26,6 +26,19 @@ const useAuthStore = create(
       
       login: (user, accessToken) => {
         console.log('AuthStore login called with:', { user, accessToken: accessToken ? 'exists' : 'null' });
+        
+        // 🗑️ 새롭게 로그인 시 이전 장비/파트너 캐시 및 장바구니 캐시 완전 초기화
+        try {
+          localStorage.removeItem('demo_equipment_cache');
+          localStorage.removeItem('demo_partner_cache');
+          localStorage.removeItem('demo_my_demos_cache');
+          localStorage.removeItem('qr_cart_serials');
+          document.cookie = 'qr_cart_serials=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+          console.log('🧹 [AuthStore] 로그인 시 이전 캐시 및 장바구니 초기화 완료');
+        } catch (e) {
+          console.warn('캐시 초기화 중 오류:', e);
+        }
+
         set({ 
           user,
           accessToken: accessToken || null,
@@ -35,13 +48,23 @@ const useAuthStore = create(
         console.log('AuthStore state after login:', get());
       },
       
-      logout: () => 
+      logout: () => {
+        try {
+          localStorage.removeItem('demo_equipment_cache');
+          localStorage.removeItem('demo_partner_cache');
+          localStorage.removeItem('demo_my_demos_cache');
+          localStorage.removeItem('qr_cart_serials');
+          sessionStorage.removeItem('pending_qr_params');
+          document.cookie = 'qr_cart_serials=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax';
+        } catch (e) {}
+
         set({ 
           user: null,
           accessToken: null,
           isAuthenticated: false,
           error: null
-        }),
+        });
+      },
       
       setLoading: (loading, message = '') => 
         set({ isLoading: loading, loadingMessage: message }),
