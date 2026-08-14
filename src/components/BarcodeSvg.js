@@ -44,8 +44,7 @@ const BarcodeSvg = ({
       style={{ 
         maxWidth: '100%', 
         height: `${height}px`, 
-        display: 'block',
-        margin: '0 auto' 
+        display: 'block'
       }} 
     />
   );

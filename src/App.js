@@ -80,10 +80,6 @@ function App() {
           />
           <Route 
             path="/qr-print" 
-            element={<LabelPrintPage />} 
-          />
-          <Route 
-            path="/qr-print-legacy" 
             element={<QrPrintPage />} 
           />
           <Route 

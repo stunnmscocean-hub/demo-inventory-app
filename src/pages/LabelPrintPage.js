@@ -245,28 +245,16 @@ const LabelPrintPage = () => {
   const totalActualLabels = targetLabelList.filter(s => !s.isBlank).length;
   const totalPages = Math.ceil(targetLabelList.length / 10);
 
-  // 시리얼 넘버 영문 하이라이트 포맷 함수
-  const formatHighlightedSerial = (serialText) => {
+  // 기존 QrPrintPage.js와 100% 동일한 시리얼 포맷 함수 (QR 라벨용)
+  const formatSerial = (serialText) => {
     if (!serialText) return '';
     const parts = serialText.toString().split(/([a-zA-Z가-힣_#-]+)/g);
     return (
-      <span style={{ fontFamily: "'Roboto Mono', 'Courier New', monospace", letterSpacing: '0.3px' }}>
+      <span>
         {parts.map((part, index) => {
           if (!part) return null;
           if (highlightAlpha && /[a-zA-Z가-힣_#-]/.test(part)) {
-            return (
-              <span
-                key={index}
-                style={{
-                  backgroundColor: '#d9d9d9',
-                  borderRadius: '2px',
-                  padding: '0 1px',
-                  fontWeight: '700'
-                }}
-              >
-                {part}
-              </span>
-            );
+            return <span key={index} style={{ backgroundColor: '#d9d9d9' }}>{part}</span>;
           }
           return <span key={index}>{part}</span>;
         })}
@@ -288,33 +276,52 @@ const LabelPrintPage = () => {
             padding: 0 !important;
             background: #fff !important;
             width: 210mm !important;
-            height: 297mm !important;
+            height: auto !important;
+            min-height: auto !important;
+            overflow: visible !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
-          .no-print { display: none !important; }
+          .no-print {
+            display: none !important;
+          }
+          /* 부모 레이아웃의 고정 높이 및 overflow:hidden 완전 해제 */
+          div, main, aside, section, article {
+            height: auto !important;
+            max-height: none !important;
+            overflow: visible !important;
+            position: static !important;
+          }
           .label-sheet-wrapper {
             width: 210mm !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
+            display: block !important;
           }
           .label-page {
             width: 210mm !important;
             height: 297mm !important;
+            min-height: 297mm !important;
+            max-height: 297mm !important;
             padding-top: 17mm !important;
             padding-left: 16.1mm !important;
             padding-right: 16.1mm !important;
+            page-break-before: auto !important;
             page-break-after: always !important;
+            break-after: page !important;
             box-sizing: border-box !important;
             display: grid !important;
             grid-template-columns: 88.9mm 88.9mm !important;
             grid-template-rows: repeat(5, 52mm) !important;
             column-gap: ${col2Gap}mm !important;
             row-gap: 0 !important;
+            background: #fff !important;
+            overflow: hidden !important;
           }
           .label-page:last-child {
             page-break-after: avoid !important;
+            break-after: avoid !important;
           }
           .label-card {
             width: 88.9mm !important;
@@ -654,129 +661,130 @@ const LabelPrintPage = () => {
                       const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
                       const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
 
-                      return (
+                      return slot.type === 'barcode' ? (
+                        /* 📊 [바코드 라벨 전용: Python generate_labels.py 규격 100% 동일] */
                         <div
                           key={slot.uniqueKey || slotIdx}
-                          className="label-card"
+                          className="label-card label-barcode-card"
                           style={{
+                            width: '88.9mm',
+                            height: '52mm',
+                            padding: '3.5mm 10mm',
+                            boxSizing: 'border-box',
                             display: 'flex',
                             flexDirection: 'column',
-                            justifyContent: 'space-between',
-                            boxSizing: 'border-box',
-                            fontFamily: "'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', 'Inter', -apple-system, sans-serif"
+                            justifyContent: 'flex-start',
+                            fontFamily: "'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', sans-serif",
+                            background: '#ffffff'
                           }}
                         >
-                          {/* 0. 상단 공통 헤더: 회사 로고 & 연락처 */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '3px' }}>
+                          {/* 0. Logo and Header (8mm logo + 8pt text) */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '2mm', marginBottom: '3.5mm' }}>
                             <img
                               src="/logo_ocean.png"
                               alt="Logo"
-                              style={{ width: '15px', height: '15px', objectFit: 'contain' }}
+                              style={{ width: '8mm', height: '8mm', objectFit: 'contain' }}
                               onError={(e) => { e.target.style.display = 'none'; }}
                             />
-                            <span style={{ fontSize: '7.5pt', fontWeight: '700', color: '#1e293b', letterSpacing: '-0.3px', flex: 1, whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '8pt', color: '#000000', fontWeight: '400', whiteSpace: 'nowrap' }}>
+                              오우션테크놀러지 Demo Device (02-2188-7737)
+                            </span>
+                          </div>
+
+                          {/* 1. Product Name (10pt regular/bold black) */}
+                          <div style={{
+                            fontSize: '10pt',
+                            fontWeight: '600',
+                            color: '#000000',
+                            lineHeight: '1.2',
+                            marginBottom: '2.5mm',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            {name}
+                          </div>
+
+                          {/* 2. Serial Number (10pt, S/N: + alphabet highlighted) */}
+                          <div style={{
+                            fontSize: '10pt',
+                            color: '#000000',
+                            fontWeight: '400',
+                            marginBottom: '3mm',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}>
+                            <span>S/N:&nbsp;</span>
+                            {formatSerial(serial)}
+                          </div>
+
+                          {/* 3. Barcode (Left-aligned, height 13mm, barWidth 1.1) */}
+                          <div style={{ marginTop: 'auto', marginBottom: '1.5mm', display: 'flex', justifyContent: 'flex-start' }}>
+                            <BarcodeSvg
+                              value={serial}
+                              width={1.1}
+                              height={46}
+                              displayValue={false}
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        /* 📱 [듀얼 QR 라벨 전용: QrPrintPage.js 규격 100% 동일] */
+                        <div
+                          key={slot.uniqueKey || slotIdx}
+                          className="label-card label-qr-card"
+                          style={{
+                            width: '88.9mm',
+                            height: '52mm',
+                            padding: '3.5mm 4.5mm',
+                            boxSizing: 'border-box',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            fontFamily: "'Noto Sans KR', 'Inter', sans-serif",
+                            background: '#ffffff'
+                          }}
+                        >
+                          {/* 0. 헤더: 회사명 & 연락처 (하단 구분선) */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '8px', fontWeight: '700', color: '#334155' }}>
                               오우션테크놀러지 Demo Device
                             </span>
-                            <span style={{ fontSize: '7pt', color: '#64748b', whiteSpace: 'nowrap' }}>
+                            <span style={{ fontSize: '7.5px', color: '#64748b' }}>
                               02-2188-7737
                             </span>
                           </div>
 
-                          {/* 1. 장비명 & 시리얼 번호 */}
-                          <div style={{ marginBottom: '2px' }}>
-                            <div style={{
-                              fontSize: '10.5pt',
-                              fontWeight: '800',
-                              color: '#0f172a',
-                              lineHeight: '1.25',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}>
+                          {/* 1. 상단: 장비명 + 시리얼 */}
+                          <div style={{ marginBottom: '4px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: '1.25', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {name}
                             </div>
-                            <div style={{
-                              fontSize: '9.5pt',
-                              color: '#1e293b',
-                              fontWeight: '700',
-                              marginTop: '2px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '2px'
-                            }}>
-                              <span style={{ color: '#64748b' }}>S/N: </span>
-                              {formatHighlightedSerial(serial)}
+                            <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', fontFamily: "'Inter', monospace", marginTop: '2px' }}>
+                              S/N: {formatSerial(serial)}
                             </div>
                           </div>
 
-                          {/* 2. 하단 렌더링: 바코드 or QR 선택에 따라 렌더링 */}
-                          {slot.type === 'barcode' ? (
-                            /* 📊 [바코드 라벨] Python generate_labels.py 규격 1:1 완벽 구현 */
-                            <div style={{
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              paddingTop: '2px'
-                            }}>
-                              <BarcodeSvg
-                                value={serial}
-                                width={1.25}
-                                height={42}
-                                displayValue={false}
-                              />
+                          {/* 2. 하단: 듀얼 QR (대여신청 + 반납처리) */}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-around', flex: 1 }}>
+                            {/* 대여 신청 QR */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '8px', fontWeight: '800', color: '#fff', background: '#2563eb',
+                                padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                              }}>🔵 대여 신청</span>
+                              <img src={applyQr} alt="신청" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
                             </div>
-                          ) : (
-                            /* 📱 [듀얼 QR 라벨] 대여신청 + 반납처리 */
-                            <div style={{
-                              display: 'flex',
-                              gap: '8px',
-                              alignItems: 'center',
-                              justifyContent: 'space-around',
-                              flex: 1,
-                              paddingTop: '2px'
-                            }}>
-                              {/* 대여 신청 QR */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <span style={{
-                                  fontSize: '7pt',
-                                  fontWeight: '800',
-                                  color: '#fff',
-                                  background: '#2563eb',
-                                  padding: '1px 5px',
-                                  borderRadius: '3px',
-                                  marginBottom: '2px'
-                                }}>
-                                  🔵 대여 신청
-                                </span>
-                                <img
-                                  src={applyQr}
-                                  alt="신청"
-                                  style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
-                                />
-                              </div>
 
-                              {/* 반납 처리 QR */}
-                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <span style={{
-                                  fontSize: '7pt',
-                                  fontWeight: '800',
-                                  color: '#fff',
-                                  background: '#dc2626',
-                                  padding: '1px 5px',
-                                  borderRadius: '3px',
-                                  marginBottom: '2px'
-                                }}>
-                                  🔴 반납 처리
-                                </span>
-                                <img
-                                  src={returnQr}
-                                  alt="반납"
-                                  style={{ width: '84px', height: '84px', border: '1px solid #cbd5e1', borderRadius: '4px', background: '#fff' }}
-                                />
-                              </div>
+                            {/* 반납 처리 QR */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '8px', fontWeight: '800', color: '#fff', background: '#dc2626',
+                                padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                              }}>🔴 반납 처리</span>
+                              <img src={returnQr} alt="반납" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })}

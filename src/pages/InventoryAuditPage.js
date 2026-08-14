@@ -241,9 +241,15 @@ const InventoryAuditPage = () => {
     if (!selectedLocation) return [];
     return allEquipments.filter(eq => {
       const isLocMatch = eq.location.toLowerCase() === selectedLocation.toLowerCase();
-      // 대여중이 아닌 보관중/반납완료/대여가능 상태
-      const isAvailable = !['대여중', '대여신청', '사용중'].includes(eq.status.replace(/\s+/g, ''));
-      return isLocMatch && isAvailable;
+      const cleanStatus = (eq.status || '').replace(/\s+/g, '').toLowerCase();
+
+      // 1. 외부 반출/사용중 상태 제외
+      const isCheckedOut = ['대여중', '대여신청', '사용중'].some(s => cleanStatus.includes(s.toLowerCase()));
+
+      // 2. 사용 불가 / 고장 / 폐기 / 불량 / RMA 상태 제외 (스킵)
+      const isUnusable = ['사용불가', '대여불가', '고장', '폐기', '불량', 'rma'].some(s => cleanStatus.includes(s.toLowerCase()));
+
+      return isLocMatch && !isCheckedOut && !isUnusable;
     });
   }, [allEquipments, selectedLocation]);
 

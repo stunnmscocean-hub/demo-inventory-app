@@ -2740,6 +2740,14 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
             return rowTimestamp;
           }
 
+          const formatOnlyDate = function(dateInput) {
+            if (!dateInput) return '';
+            const str = dateInput.toString().trim();
+            if (str.includes('T')) return str.split('T')[0];
+            if (str.includes(' ')) return str.split(' ')[0];
+            return str;
+          };
+
           const keyMapping = {
             '시리얼넘버': equipment.serialNumber || equipment.serial || '',
             '제품명': equipment.name || '',
@@ -2747,8 +2755,8 @@ function handleAddDataToSheet(spreadsheetId, formData, selectedEquipments) {
             '보관위치': equipment.location || '',
             '대여가능여부': '대여신청',
             '대여담당자': formData.requester || '',
-            '시작일': formData.checkoutDate || '',
-            '종료일': formData.returnDate || '',
+            '시작일': formatOnlyDate(formData.checkoutDate || ''),
+            '종료일': formatOnlyDate(formData.returnDate || ''),
             '파트너명': formData.partnerCompanyName || '',
             '파트너담당자명': formData.partnerContactPerson || '',
             '사용자명': formData.usageCompanyName || '',

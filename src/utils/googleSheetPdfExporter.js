@@ -2,7 +2,7 @@
 // src/utils/googleSheetPdfExporter.js - Google Apps Script 방식
 
 // Google Apps Script Web App URL (.env.local에서 읽어옴)
-export const APPS_SCRIPT_WEB_APP_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbxMBYAV9wZXg4I0pYVG_HC5Tw5oxhLwjPA0Jb2e1tJx-1DopQJCMPiSlf_aZzb1K8VV/exec';
+export const APPS_SCRIPT_WEB_APP_URL = process.env.REACT_APP_GAS_URL || 'https://script.google.com/macros/s/AKfycbzzQKnEVtbySaANQHWhVZEDLoZIjwIOqQoBmwqBOC_Xw_IHudZ9dwaWjcuWqQ_vDL_Y/exec';
 
 // 디버깅을 위한 URL 로그
 console.log('Apps Script URL:', APPS_SCRIPT_WEB_APP_URL);
