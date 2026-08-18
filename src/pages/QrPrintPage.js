@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { getEquipmentData } from '../services/api';
 
 const QrPrintPage = () => {
@@ -8,6 +8,7 @@ const QrPrintPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [startPageRange, setStartPageRange] = useState('8'); // 기본값: 8페이지부터 출력 (71번째~)
+  const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 칸 오프셋 (0~9)
   const [sortPage8ByProduct, setSortPage8ByProduct] = useState(true); // 8페이지 이후 제품명 정렬 여부
   const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
 
@@ -55,29 +56,46 @@ const QrPrintPage = () => {
     fetchEquipments();
   }, []);
 
-  const filtered = allEquipments.filter(eq => {
-    const name = (eq.name || '').toLowerCase();
-    const serial = (eq.serial || '').toLowerCase();
-    const q = search.toLowerCase().trim();
-    return name.includes(q) || serial.includes(q);
-  });
+  const filtered = useMemo(() => {
+    return allEquipments.filter(eq => {
+      const name = (eq.name || '').toLowerCase();
+      const serial = (eq.serial || '').toLowerCase();
+      const q = search.toLowerCase().trim();
+      return name.includes(q) || serial.includes(q);
+    });
+  }, [allEquipments, search]);
 
-  // 1. 1~7페이지(1~70번째 장비)와 8페이지 이후(71번째 장비~) 분리
-  const page1To7Items = filtered.slice(0, 70);
-  const page8PlusItems = filtered.slice(70);
+  // 1. 1~7페이지(1~70번째 장비)와 8페이지 이후(71번째 장비~) 분리 및 정렬
+  const targetEquipments = useMemo(() => {
+    const page1To7Items = filtered.slice(0, 70);
+    const page8PlusItems = filtered.slice(70);
 
-  // 2. 8페이지 이후 장비 제품명(가나다/ABC) 순 정렬
-  const sortedPage8Plus = sortPage8ByProduct ? [...page8PlusItems].sort((a, b) => {
-    const nameA = (a.name || '').toString().trim();
-    const nameB = (b.name || '').toString().trim();
-    return nameA.localeCompare(nameB, 'ko', { numeric: true, sensitivity: 'base' });
-  }) : page8PlusItems;
+    const sortedPage8Plus = sortPage8ByProduct ? [...page8PlusItems].sort((a, b) => {
+      const nameA = (a.name || '').toString().trim();
+      const nameB = (b.name || '').toString().trim();
+      return nameA.localeCompare(nameB, 'ko', { numeric: true, sensitivity: 'base' });
+    }) : page8PlusItems;
 
-  // 3. 출력 대상 데이터 및 페이지 범위 계산
-  // - startPageRange가 '8'인 경우: 8페이지부터 출력 대상 (71번째~끝)
-  // - startPageRange가 '1'인 경우: 전체 장비 (1~7페이지 + 정렬된 8페이지~)
-  const targetEquipments = startPageRange === '8' ? sortedPage8Plus : [...page1To7Items, ...sortedPage8Plus];
+    return startPageRange === '8' ? sortedPage8Plus : [...page1To7Items, ...sortedPage8Plus];
+  }, [filtered, sortPage8ByProduct, startPageRange]);
+
   const startPageNum = startPageRange === '8' ? 8 : 1;
+
+  // 4. 시작 위치 오프셋 (1페이지 앞부분 빈 슬롯) 적용 - 용지 재활용 건너뛰기
+  const targetSlots = useMemo(() => {
+    const slots = [];
+    for (let i = 0; i < startSlotOffset; i++) {
+      slots.push({ isBlank: true, id: `blank_${i}` });
+    }
+    targetEquipments.forEach((eq, idx) => {
+      slots.push({
+        ...eq,
+        isBlank: false,
+        slotKey: `eq_${eq.serial || idx}`
+      });
+    });
+    return slots;
+  }, [targetEquipments, startSlotOffset]);
 
   const formatSerial = (serialText) => {
     if (!serialText) return '';
@@ -149,6 +167,11 @@ const QrPrintPage = () => {
             overflow: hidden !important;
             background: #fff !important;
           }
+          .label-card.blank-slot {
+            visibility: hidden !important;
+            border: none !important;
+            background: transparent !important;
+          }
         }
 
         @media screen {
@@ -172,6 +195,17 @@ const QrPrintPage = () => {
             border-radius: 8px;
             padding: 12px;
             background: #fff;
+          }
+          .label-card.blank-slot {
+            background: #f8fafc;
+            border: 1px dashed #cbd5e1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+            font-size: 12px;
+            font-weight: 600;
+            min-height: 160px;
           }
         }
       `}</style>
@@ -207,6 +241,36 @@ const QrPrintPage = () => {
             >
               <option value="8">8페이지부터 출력 (71번째~)</option>
               <option value="1">1페이지부터 전체 출력 (1번째~)</option>
+            </select>
+          </div>
+
+          {/* 시작 위치 오프셋 (칸 건너뛰기) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>시작 칸:</span>
+            <select
+              value={startSlotOffset}
+              onChange={(e) => setStartSlotOffset(parseInt(e.target.value, 10))}
+              title="첫 페이지 시작 칸 번호 (용지 재활용 건너뛰기)"
+              style={{
+                padding: '6px 10px',
+                borderRadius: '6px',
+                border: '1px solid #10b981',
+                backgroundColor: startSlotOffset > 0 ? '#ecfdf5' : '#ffffff',
+                fontSize: '13px',
+                fontWeight: '700',
+                color: startSlotOffset > 0 ? '#047857' : '#334155'
+              }}
+            >
+              <option value={0}>시작: 1번째 칸 (새 라벨지)</option>
+              <option value={1}>시작: 2번째 칸부터 (1칸 건너뜀)</option>
+              <option value={2}>시작: 3번째 칸부터 (2칸 건너뜀)</option>
+              <option value={3}>시작: 4번째 칸부터 (3칸 건너뜀)</option>
+              <option value={4}>시작: 5번째 칸부터 (4칸 건너뜀)</option>
+              <option value={5}>시작: 6번째 칸부터 (5칸 건너뜀)</option>
+              <option value={6}>시작: 7번째 칸부터 (6칸 건너뜀)</option>
+              <option value={7}>시작: 8번째 칸부터 (7칸 건너뜀)</option>
+              <option value={8}>시작: 9번째 칸부터 (8칸 건너뜀)</option>
+              <option value={9}>시작: 10번째 칸부터 (9칸 건너뜀)</option>
             </select>
           </div>
 
@@ -288,7 +352,7 @@ const QrPrintPage = () => {
           {/* 장비 수 및 팁 */}
           <div className="no-print" style={{ maxWidth: '900px', margin: '16px auto 8px', padding: '0 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '13px', color: '#1e40af', fontWeight: '700', background: '#dbeafe', padding: '4px 10px', borderRadius: '6px' }}>
-              📦 {startPageRange === '8' ? '8페이지부터 출력 중' : '전체 출력 중'} · 총 {targetEquipments.length}개 장비 (전체 {filtered.length}개 중) · {Math.ceil(targetEquipments.length / 10)}페이지 {sortPage8ByProduct ? '(8페이지~ 제품명 가나다순 정렬 적용)' : ''}
+              📦 {startPageRange === '8' ? '8페이지부터 출력 중' : '전체 출력 중'} · 총 {targetEquipments.length}개 장비 {startSlotOffset > 0 ? `(첫 장 ${startSlotOffset + 1}번째 칸부터 시작)` : ''} · 총 {Math.ceil(targetSlots.length / 10)}페이지 {sortPage8ByProduct ? '(8페이지~ 제품명 가나다순 정렬 적용)' : ''}
             </span>
             <span style={{ fontSize: '12px', color: '#0284c7', background: '#e0f2fe', padding: '4px 10px', borderRadius: '4px', fontWeight: '500' }}>
               💡 크롬 인쇄 팁: 설정 → [여백: 없음] 설정 필수
@@ -297,8 +361,8 @@ const QrPrintPage = () => {
 
           {/* ===== 라벨 시트 렌더링 (10개씩 한 페이지) ===== */}
           <div className="label-sheet">
-            {Array.from({ length: Math.ceil(targetEquipments.length / 10) }, (_, pageIdx) => {
-              const pageItems = targetEquipments.slice(pageIdx * 10, (pageIdx + 1) * 10);
+            {Array.from({ length: Math.ceil(targetSlots.length / 10) }, (_, pageIdx) => {
+              const pageSlots = targetSlots.slice(pageIdx * 10, (pageIdx + 1) * 10);
               const actualPageNum = pageIdx + startPageNum;
 
               return (
@@ -306,65 +370,73 @@ const QrPrintPage = () => {
                   <div className="no-print" style={{ fontSize: '13px', fontWeight: '700', color: '#334155', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span>📄 {actualPageNum}페이지</span>
                     <span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>
-                      (장비 {pageIdx * 10 + 1 + (startPageRange === '8' ? 70 : 0)} ~ {Math.min((pageIdx + 1) * 10 + (startPageRange === '8' ? 70 : 0), filtered.length)}번째)
+                      (슬롯 {pageIdx * 10 + 1} ~ {Math.min((pageIdx + 1) * 10, targetSlots.length)}번째)
                     </span>
                   </div>
                   <div className="label-page">
-                  {pageItems.map((eq, idx) => {
-                    const serial = (eq.serial || '').toString().trim();
-                    const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
-                    const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
-                    const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
-                    const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
+                    {pageSlots.map((slot, slotIdx) => {
+                      if (slot.isBlank) {
+                        return (
+                          <div key={slot.id || slotIdx} className="label-card blank-slot">
+                            <span>[빈 칸 - 건너뜀 (시작 위치 오프셋)]</span>
+                          </div>
+                        );
+                      }
 
-                    return (
-                      <div key={idx} className="label-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box' }}>
-                        {/* 0. 헤더: 회사명 & 연락처 */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '4px' }}>
-                          <span style={{ fontSize: '8px', fontWeight: '700', color: '#334155' }}>
-                            오우션테크놀러지 Demo Device
-                          </span>
-                          <span style={{ fontSize: '7.5px', color: '#64748b' }}>
-                            02-2188-7737
-                          </span>
+                      const serial = (slot.serial || '').toString().trim();
+                      const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
+                      const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
+                      const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
+                      const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
+
+                      return (
+                        <div key={slot.slotKey || slotIdx} className="label-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box' }}>
+                          {/* 0. 헤더: 회사명 & 연락처 */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '4px' }}>
+                            <span style={{ fontSize: '8px', fontWeight: '700', color: '#334155' }}>
+                              오우션테크놀러지 Demo Device
+                            </span>
+                            <span style={{ fontSize: '7.5px', color: '#64748b' }}>
+                              02-2188-7737
+                            </span>
+                          </div>
+
+                          {/* 1. 상단: 장비명 + 시리얼 */}
+                          <div style={{ marginBottom: '4px' }}>
+                            <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: '1.25', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {slot.name}
+                            </div>
+                            <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', fontFamily: "'Inter', monospace", marginTop: '2px' }}>
+                              S/N: {formatSerial(serial)}
+                            </div>
+                          </div>
+
+                          {/* 2. 하단: 듀얼 QR (크기 확대하여 52mm 칸 내부 여백 가득 채움) */}
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-around', flex: 1 }}>
+                            {/* 대여 신청 QR */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '8px', fontWeight: '800', color: '#fff', background: '#2563eb',
+                                padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                              }}>🔵 대여 신청</span>
+                              <img src={applyQr} alt="신청" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
+                            </div>
+
+                            {/* 반납 QR */}
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                              <span style={{
+                                fontSize: '8px', fontWeight: '800', color: '#fff', background: '#dc2626',
+                                padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                              }}>🔴 반납 처리</span>
+                              <img src={returnQr} alt="반납" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
+                            </div>
+                          </div>
                         </div>
-
-                        {/* 1. 상단: 장비명 + 시리얼 */}
-                        <div style={{ marginBottom: '4px' }}>
-                          <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: '1.25', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {eq.name}
-                          </div>
-                          <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', fontFamily: "'Inter', monospace", marginTop: '2px' }}>
-                            S/N: {formatSerial(serial)}
-                          </div>
-                        </div>
-
-                        {/* 2. 하단: 듀얼 QR (크기 확대하여 52mm 칸 내부 여백 가득 채움) */}
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-around', flex: 1 }}>
-                          {/* 대여 신청 QR */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#2563eb',
-                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
-                            }}>🔵 대여 신청</span>
-                            <img src={applyQr} alt="신청" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
-                          </div>
-
-                          {/* 반납 QR */}
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <span style={{
-                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#dc2626',
-                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
-                            }}>🔴 반납 처리</span>
-                            <img src={returnQr} alt="반납" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </React.Fragment>
-            );
+                      );
+                    })}
+                  </div>
+                </React.Fragment>
+              );
             })}
           </div>
         </>
