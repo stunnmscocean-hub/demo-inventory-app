@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { getEquipmentData } from '../services/api';
+import { getForceCacheData, setCacheData, CACHE_KEYS } from '../utils/dataCache';
 import BarcodeSvg from '../components/BarcodeSvg';
 import styles from './LabelPrintPage.module.css';
 
@@ -24,13 +25,65 @@ const LabelPrintPage = () => {
   // 인쇄 옵션 (기존 QR 인쇄 설정과 100% 동일)
   const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
   const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 위치 오프셋 (0~9)
-  const [highlightAlpha, setHighlightAlpha] = useState(true); // 영문 음영 강조 여부
+  const [highlightAlpha, setHighlightAlpha] = useState(true); // 시리얼 넘버 알파벳 하이라이트 여부
 
-  // 구글 시트에서 전체 장비 마스터 데이터 로드
+  // 헬퍼: raw 리스트로부터 고유 장비 맵 생성
+  const processRawEquipments = (rawList) => {
+    const serialMap = new Map();
+    [...rawList].reverse().forEach(item => {
+      const serial = (
+        item.serial ||
+        item.serialNumber ||
+        item['시리얼넘버'] ||
+        item['시리얼 넘버'] ||
+        item['시리얼'] ||
+        item['S/N'] ||
+        item['SN'] ||
+        ''
+      ).toString().trim();
+
+      const name = (
+        item.name ||
+        item['제품명'] ||
+        item['장비명'] ||
+        item['이름'] ||
+        '이름 없음'
+      ).toString().trim();
+
+      const location = (
+        item.location ||
+        item['보관위치'] ||
+        item['위치'] ||
+        '본사'
+      ).toString().trim();
+
+      if (serial) {
+        const cleanS = serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+        if (cleanS && !serialMap.has(cleanS)) {
+          serialMap.set(cleanS, {
+            id: item.id || serial,
+            name: name,
+            serial: serial,
+            location: location
+          });
+        }
+      }
+    });
+    return Array.from(serialMap.values());
+  };
+
+  // 구글 시트에서 전체 장비 데이터 가져오기 (캐시 즉시 로드 + 백그라운드 갱신)
   useEffect(() => {
+    // ⚡ 1. 캐시 데이터 즉시 로드 (0.01초 만에 장비명 매칭 준비)
+    const cachedEquipment = getForceCacheData(CACHE_KEYS.EQUIPMENT);
+    if (cachedEquipment && cachedEquipment.length > 0) {
+      const processed = processRawEquipments(cachedEquipment);
+      setAllEquipments(processed);
+      setLoading(false);
+    }
+
     const fetchEquipments = async () => {
       try {
-        setLoading(true);
         setError(null);
         const data = await getEquipmentData();
 
@@ -45,48 +98,11 @@ const LabelPrintPage = () => {
           }
         }
 
-        const serialMap = new Map();
-        [...rawList].reverse().forEach(item => {
-          const serial = (
-            item.serial ||
-            item.serialNumber ||
-            item['시리얼넘버'] ||
-            item['시리얼 넘버'] ||
-            item['시리얼'] ||
-            item['S/N'] ||
-            item['SN'] ||
-            ''
-          ).toString().trim();
-
-          const name = (
-            item.name ||
-            item['제품명'] ||
-            item['장비명'] ||
-            item['이름'] ||
-            '이름 없음'
-          ).toString().trim();
-
-          const location = (
-            item.location ||
-            item['보관위치'] ||
-            item['위치'] ||
-            '본사'
-          ).toString().trim();
-
-          if (serial) {
-            const cleanS = serial.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-            if (cleanS && !serialMap.has(cleanS)) {
-              serialMap.set(cleanS, {
-                id: item.id || serial,
-                name: name,
-                serial: serial,
-                location: location
-              });
-            }
-          }
-        });
-
-        setAllEquipments(Array.from(serialMap.values()));
+        const processed = processRawEquipments(rawList);
+        setAllEquipments(processed);
+        if (rawList.length > 0) {
+          setCacheData(CACHE_KEYS.EQUIPMENT, rawList);
+        }
       } catch (err) {
         console.error('장비 데이터 로드 실패:', err);
         setError(err.message);
@@ -216,16 +232,26 @@ const LabelPrintPage = () => {
     setSerialInputText(sample);
   };
 
-  // ===== 최종 출력 데이터 목록 계산 =====
+  // ===== 최종 출력 데이터 목록 계산 (실시간 장비명/커스텀명 동적 조회) =====
   const targetLabelList = useMemo(() => {
     const rawTarget = [];
 
     // 대기열 아이템들을 qty 수량만큼 반복
     printQueue.forEach(item => {
       const count = item.qty || 1;
+      const clean = (item.serial || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+      const matched = equipmentLookupMap.get(clean);
+      
+      // 💡 대기열에 담긴 후 데이터가 비동기로 로드되었더라도 실시간 최신 장비명 반영
+      const customName = customNameMap[item.serial];
+      const liveName = customName || (matched ? matched.name : '') || (item.name && item.name !== '신규 등록 제품' ? item.name : '') || (matched ? matched.name : '신규 등록 제품');
+      const liveLocation = (matched ? matched.location : item.location) || '본사';
+
       for (let c = 0; c < count; c++) {
         rawTarget.push({
           ...item,
+          name: liveName,
+          location: liveLocation,
           isBlank: false,
           uniqueKey: `${item.serial}_${item.type}_${c}`
         });
@@ -240,7 +266,7 @@ const LabelPrintPage = () => {
     finalSlots.push(...rawTarget);
 
     return finalSlots;
-  }, [printQueue, startSlotOffset]);
+  }, [printQueue, startSlotOffset, equipmentLookupMap, customNameMap]);
 
   const totalActualLabels = targetLabelList.filter(s => !s.isBlank).length;
   const totalPages = Math.ceil(targetLabelList.length / 10);
