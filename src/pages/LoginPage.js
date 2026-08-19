@@ -1,13 +1,18 @@
-import React from 'react';
-// import { useState } from 'react';
-// import { useNavigate } from 'react-router-dom';
+import React, { useEffect } from 'react';
 import useAuthStore from '../stores/authStore';
-// import { pingGAS, testACL } from '../services/api';
+import { pingGAS } from '../services/api';
 import GoogleOAuthButton from '../components/GoogleOAuthButton';
 import styles from './LoginPage.module.css';
 
 const LoginPage = () => {
   const { isLoading, loadingMessage } = useAuthStore();
+
+  // 🔥 사용자가 로그인 페이지를 보고 있는 동안 GAS 서버 컨테이너를 미리 깨워둠 (Warm-up)
+  useEffect(() => {
+    pingGAS()
+      .then(() => console.log('🔥 [Warm-up] GAS 서버 웜업 완료'))
+      .catch((err) => console.log('🔥 [Warm-up] GAS 웜업 백그라운드 진행 중:', err.message));
+  }, []);
   // Google OAuth 로그인만 사용 (기존 로그인 폼 비활성화)
   // const [id, setId] = useState('');
   // const [password, setPassword] = useState('');
