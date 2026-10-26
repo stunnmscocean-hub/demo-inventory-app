@@ -22,6 +22,9 @@ const LabelPrintPage = () => {
   // 기본값: 0개 (빈 목록)
   const [printQueue, setPrintQueue] = useState([]);
 
+  // 인쇄 용지 포맷: 'a4_formtec' (A4 88.9x52mm 2열 5행) | 'nemonic_80' (네모닉 전용 80x80mm 1열)
+  const [paperFormat, setPaperFormat] = useState('a4_formtec');
+
   // 인쇄 옵션 (기존 QR 인쇄 설정과 100% 동일)
   const [col2Gap, setCol2Gap] = useState(2.5); // 2번째 열 우측 미세 이동 간격 (mm)
   const [startSlotOffset, setStartSlotOffset] = useState(0); // 1페이지 시작 위치 오프셋 (0~9)
@@ -258,18 +261,22 @@ const LabelPrintPage = () => {
       }
     });
 
-    // 시작 위치 오프셋 (1페이지 앞부분 빈 슬롯) 적용
+    // 시작 위치 오프셋 (A4 폼텍 재활용 시에만 적용, 네모닉은 1장씩 출력하므로 0)
+    const effectiveOffset = paperFormat === 'a4_formtec' ? startSlotOffset : 0;
     const finalSlots = [];
-    for (let i = 0; i < startSlotOffset; i++) {
+    for (let i = 0; i < effectiveOffset; i++) {
       finalSlots.push({ isBlank: true, id: `blank_${i}` });
     }
     finalSlots.push(...rawTarget);
 
     return finalSlots;
-  }, [printQueue, startSlotOffset, equipmentLookupMap, customNameMap]);
+  }, [printQueue, paperFormat, startSlotOffset, equipmentLookupMap, customNameMap]);
 
   const totalActualLabels = targetLabelList.filter(s => !s.isBlank).length;
-  const totalPages = Math.ceil(targetLabelList.length / 10);
+  // A4 폼텍은 10개/페이지, 네모닉은 1장당 1개 출력
+  const totalPages = paperFormat === 'a4_formtec'
+    ? Math.ceil(targetLabelList.length / 10)
+    : totalActualLabels;
 
   // 기존 QrPrintPage.js와 100% 동일한 시리얼 포맷 함수 (QR 라벨용)
   const formatSerial = (serialText) => {
@@ -290,18 +297,18 @@ const LabelPrintPage = () => {
 
   return (
     <div className={styles.container}>
-      {/* ===== 인쇄 전용 CSS (Formtec LS-3510: 88.9mm × 52mm, 2열 × 5행) ===== */}
+      {/* ===== 인쇄 및 화면 전용 동적 CSS (A4 폼텍 vs 네모닉 80x80mm) ===== */}
       <style>{`
         @media print {
           @page {
-            size: A4 portrait;
+            size: ${paperFormat === 'a4_formtec' ? 'A4 portrait' : '80mm 80mm'};
             margin: 0 !important;
           }
           html, body {
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
-            width: 210mm !important;
+            width: ${paperFormat === 'a4_formtec' ? '210mm' : '80mm'} !important;
             height: auto !important;
             min-height: auto !important;
             overflow: visible !important;
@@ -319,12 +326,14 @@ const LabelPrintPage = () => {
             position: static !important;
           }
           .label-sheet-wrapper {
-            width: 210mm !important;
+            width: ${paperFormat === 'a4_formtec' ? '210mm' : '80mm'} !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #fff !important;
             display: block !important;
           }
+
+          /* [A4 폼텍 전용 인쇄 스타일] */
           .label-page {
             width: 210mm !important;
             height: 297mm !important;
@@ -364,14 +373,48 @@ const LabelPrintPage = () => {
           .label-card.blank-slot {
             visibility: hidden !important;
           }
+
+          /* [네모닉 80x80mm 전용 인쇄 스타일: 1라벨 = 80mm x 80mm 1페이지 연속 출력] */
+          .label-page-nemonic {
+            width: 80mm !important;
+            height: 80mm !important;
+            min-height: 80mm !important;
+            max-height: 80mm !important;
+            page-break-before: auto !important;
+            page-break-after: always !important;
+            break-after: page !important;
+            box-sizing: border-box !important;
+            display: block !important;
+            background: #fff !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .label-page-nemonic:last-child {
+            page-break-after: avoid !important;
+            break-after: avoid !important;
+          }
+          .label-card-nemonic {
+            width: 80mm !important;
+            height: 80mm !important;
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            margin: 0 !important;
+            box-sizing: border-box !important;
+            overflow: hidden !important;
+            background: #fff !important;
+          }
         }
 
         @media screen {
           .label-sheet-wrapper {
-            max-width: 920px;
+            max-width: ${paperFormat === 'a4_formtec' ? '920px' : '480px'};
             margin: 0 auto;
             padding: 10px 0;
           }
+
+          /* A4 폼텍 화면 스타일 */
           .label-page {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
@@ -405,19 +448,66 @@ const LabelPrintPage = () => {
             font-size: 12px;
             font-weight: 600;
           }
+
+          /* 네모닉 80x80mm 화면 스타일: 1칼럼 1줄씩 */
+          .label-page-nemonic {
+            width: 80mm;
+            height: 80mm;
+            margin-bottom: 24px;
+            background: #ffffff;
+            border: 2px dashed #2563eb;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+            box-sizing: border-box;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+          }
+          .label-page-nemonic:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(37, 99, 235, 0.18);
+          }
+          .label-card-nemonic {
+            width: 100%;
+            height: 100%;
+            box-sizing: border-box;
+          }
         }
       `}</style>
 
-      {/* ===== 상단 컨트롤 바 (기존 QR 옵션 100% 동일 유지) ===== */}
+      {/* ===== 상단 컨트롤 바 (용지 선택 및 인쇄 옵션) ===== */}
       <header className={`no-print ${styles.topBar}`}>
         <div className={styles.titleGroup}>
           <h1>🏷️ 장비 바코드 / QR 라벨 출력 센터</h1>
           <p>
-            Formtec LS-3510 (88.9 × 52.0mm) · ⚠️ <strong>인쇄 설정: 여백 [없음(None)], 비율 [100%]</strong>
+            {paperFormat === 'a4_formtec' ? (
+              <>
+                Formtec LS-3510 (88.9 × 52.0mm) · ⚠️ <strong>인쇄 설정: 용지 [A4], 여백 [없음(None)], 비율 [100%]</strong>
+              </>
+            ) : (
+              <>
+                네모닉 프린터 전용 (80.0 × 80.0mm 1열) · ⚠️ <strong>인쇄 설정: 용지 [80×80mm], 여백 [없음(None)], 비율 [100%]</strong>
+              </>
+            )}
           </p>
         </div>
 
         <div className={styles.controlsGroup}>
+          {/* 1. 용지 규격 선택 (A4 폼텍 vs 네모닉 80x80) */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span style={{ fontSize: '12px', color: '#1e40af', fontWeight: '700' }}>용지:</span>
+            <select
+              value={paperFormat}
+              onChange={(e) => setPaperFormat(e.target.value)}
+              className={styles.optionSelect}
+              style={{ fontWeight: '700', borderColor: '#2563eb', color: '#1e3a8a', background: '#eff6ff' }}
+            >
+              <option value="a4_formtec">📄 A4 폼텍 LS-3510 (88.9×52mm, 2열)</option>
+              <option value="nemonic_80">🏷️ 네모닉 전용 (80×80mm, 1열)</option>
+            </select>
+          </div>
+
           {/* 도메인 선택 */}
           <select
             value={domain}
@@ -428,42 +518,61 @@ const LabelPrintPage = () => {
             <option value="http://localhost:3000">localhost:3000 (로컬)</option>
           </select>
 
-          {/* 2열 이동 간격 */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 이동:</span>
-            <select
-              value={col2Gap}
-              onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
-              className={styles.optionSelect}
-            >
-              <option value={0}>0 mm (기본)</option>
-              <option value={1.5}>+1.5 mm</option>
-              <option value={2.0}>+2.0 mm</option>
-              <option value={2.5}>+2.5 mm (추천)</option>
-              <option value={3.0}>+3.0 mm</option>
-              <option value={3.5}>+3.5 mm</option>
-              <option value={4.0}>+4.0 mm</option>
-            </select>
-          </div>
+          {/* A4 폼텍 전용 옵션 (2열 이동 & 시작 칸 오프셋) */}
+          {paperFormat === 'a4_formtec' ? (
+            <>
+              {/* 2열 이동 간격 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontSize: '12px', color: '#475569', fontWeight: '600' }}>2열 이동:</span>
+                <select
+                  value={col2Gap}
+                  onChange={(e) => setCol2Gap(parseFloat(e.target.value))}
+                  className={styles.optionSelect}
+                >
+                  <option value={0}>0 mm (기본)</option>
+                  <option value={1.5}>+1.5 mm</option>
+                  <option value={2.0}>+2.0 mm</option>
+                  <option value={2.5}>+2.5 mm (추천)</option>
+                  <option value={3.0}>+3.0 mm</option>
+                  <option value={3.5}>+3.5 mm</option>
+                  <option value={4.0}>+4.0 mm</option>
+                </select>
+              </div>
 
-          {/* 시작 위치 오프셋 */}
-          <select
-            value={startSlotOffset}
-            onChange={(e) => setStartSlotOffset(parseInt(e.target.value, 10))}
-            className={styles.optionSelect}
-            title="첫 페이지 시작 칸 번호"
-          >
-            <option value={0}>시작: 1번째 칸 (새 라벨지)</option>
-            <option value={1}>시작: 2번째 칸부터</option>
-            <option value={2}>시작: 3번째 칸부터</option>
-            <option value={3}>시작: 4번째 칸부터</option>
-            <option value={4}>시작: 5번째 칸부터</option>
-            <option value={5}>시작: 6번째 칸부터</option>
-            <option value={6}>시작: 7번째 칸부터</option>
-            <option value={7}>시작: 8번째 칸부터</option>
-            <option value={8}>시작: 9번째 칸부터</option>
-            <option value={9}>시작: 10번째 칸부터</option>
-          </select>
+              {/* 시작 위치 오프셋 */}
+              <select
+                value={startSlotOffset}
+                onChange={(e) => setStartSlotOffset(parseInt(e.target.value, 10))}
+                className={styles.optionSelect}
+                title="첫 페이지 시작 칸 번호"
+              >
+                <option value={0}>시작: 1번째 칸 (새 라벨지)</option>
+                <option value={1}>시작: 2번째 칸부터</option>
+                <option value={2}>시작: 3번째 칸부터</option>
+                <option value={3}>시작: 4번째 칸부터</option>
+                <option value={4}>시작: 5번째 칸부터</option>
+                <option value={5}>시작: 6번째 칸부터</option>
+                <option value={6}>시작: 7번째 칸부터</option>
+                <option value={7}>시작: 8번째 칸부터</option>
+                <option value={8}>시작: 9번째 칸부터</option>
+                <option value={9}>시작: 10번째 칸부터</option>
+              </select>
+            </>
+          ) : (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              fontSize: '11.5px',
+              color: '#0369a1',
+              background: '#e0f2fe',
+              padding: '5px 9px',
+              borderRadius: '6px',
+              fontWeight: '700'
+            }}>
+              🖨️ 1칼럼(1줄씩) 단장 연속 출력
+            </div>
+          )}
 
           {/* 영문 하이라이트 */}
           <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', fontWeight: '600', color: '#475569', cursor: 'pointer' }}>
@@ -630,12 +739,14 @@ const LabelPrintPage = () => {
               📦 인쇄 대기열: {printQueue.reduce((a, c) => a + c.qty, 0)}장
             </span>
             <span style={{ fontSize: '11.5px', color: '#64748b' }}>
-              (A4 {totalPages}페이지 소요)
+              {paperFormat === 'a4_formtec'
+                ? `(A4 ${totalPages}페이지 소요)`
+                : `(네모닉 80×80mm ${totalActualLabels}장 출력)`}
             </span>
           </div>
         </aside>
 
-        {/* 우측 메인 뷰: Formtec LS-3510 라벨지 실물 미리보기 & 인쇄 영역 */}
+        {/* 우측 메인 뷰: 실물 미리보기 & 인쇄 영역 (A4 폼텍 vs 네모닉 80x80 1열) */}
         <main className={styles.rightMain}>
           <div className="label-sheet-wrapper">
             {totalActualLabels === 0 && (
@@ -645,12 +756,13 @@ const LabelPrintPage = () => {
                 <p style={{ fontSize: '13px', color: '#64748b' }}>
                   좌측 입력창에 시리얼 넘버를 입력하신 후<br />
                   <strong>[📊 + 전체 바코드 추가]</strong> 또는 <strong>[📱 + 전체 QR 추가]</strong> 버튼을 누르시면<br />
-                  이곳에 실물 폼텍 라벨지가 즉시 렌더링됩니다.
+                  이곳에 실물 {paperFormat === 'a4_formtec' ? '폼텍 A4' : '네모닉 80×80mm'} 라벨지가 즉시 렌더링됩니다.
                 </p>
               </div>
             )}
 
-            {Array.from({ length: totalPages }, (_, pageIdx) => {
+            {/* ===== [A4 폼텍 LS-3510: 2열 5행 10칸 그리드] ===== */}
+            {paperFormat === 'a4_formtec' && Array.from({ length: totalPages }, (_, pageIdx) => {
               const pageSlots = targetLabelList.slice(pageIdx * 10, (pageIdx + 1) * 10);
               const actualPageNum = pageIdx + 1;
 
@@ -688,7 +800,7 @@ const LabelPrintPage = () => {
                       const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
 
                       return slot.type === 'barcode' ? (
-                        /* 📊 [바코드 라벨 전용: Python generate_labels.py 규격 100% 동일] */
+                        /* 📊 [A4 바코드 라벨 전용: Python generate_labels.py 규격 100% 동일] */
                         <div
                           key={slot.uniqueKey || slotIdx}
                           className="label-card label-barcode-card"
@@ -755,7 +867,7 @@ const LabelPrintPage = () => {
                           </div>
                         </div>
                       ) : (
-                        /* 📱 [듀얼 QR 라벨 전용: QrPrintPage.js 규격 100% 동일] */
+                        /* 📱 [A4 듀얼 QR 라벨 전용: QrPrintPage.js 규격 100% 동일] */
                         <div
                           key={slot.uniqueKey || slotIdx}
                           className="label-card label-qr-card"
@@ -816,6 +928,166 @@ const LabelPrintPage = () => {
                     })}
                   </div>
                 </React.Fragment>
+              );
+            })}
+
+            {/* ===== [네모닉 프린터 전용: 80mm × 80mm, 1칼럼 1줄씩 연속 출력] ===== */}
+            {paperFormat === 'nemonic_80' && targetLabelList.map((slot, labelIdx) => {
+              if (slot.isBlank) return null;
+
+              const serial = (slot.serial || '').toString().trim();
+              const name = slot.name || '미등록 장비';
+              const applyUrl = `${domain}/?action=apply&serial=${encodeURIComponent(serial)}`;
+              const returnUrl = `${domain}/?action=return&serial=${encodeURIComponent(serial)}`;
+              const applyQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(applyUrl)}`;
+              const returnQr = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(returnUrl)}`;
+
+              return (
+                <div key={slot.uniqueKey || labelIdx} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                  {/* 화면 전용 개별 라벨 안내 헤더 */}
+                  <div className="no-print" style={{
+                    fontSize: '12px',
+                    fontWeight: '700',
+                    color: '#334155',
+                    marginBottom: '6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '80mm',
+                    maxWidth: '100%'
+                  }}>
+                    <span>🏷️ #{labelIdx + 1} ({slot.type === 'barcode' ? '바코드' : 'QR'})</span>
+                    <span style={{ fontSize: '11px', color: '#0284c7', fontWeight: '600' }}>네모닉 (80 × 80mm)</span>
+                  </div>
+
+                  {/* 80mm x 80mm 단일 라벨 페이지 (인쇄 시 1페이지 단위 출력) */}
+                  <div className="label-page-nemonic">
+                    {slot.type === 'barcode' ? (
+                      /* 📊 [네모닉 바코드 라벨: A4 용지때와 100% 동일한 크기로 80x80mm 안에 쏙 들어감] */
+                      <div
+                        className="label-card-nemonic label-barcode-card"
+                        style={{
+                          width: '80mm',
+                          height: '80mm',
+                          padding: '6mm 5.5mm',
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'flex-start',
+                          fontFamily: "'Malgun Gothic', '맑은 고딕', 'Noto Sans KR', sans-serif",
+                          background: '#ffffff'
+                        }}
+                      >
+                        {/* 0. Logo and Header (8mm logo + 8pt text: A4와 100% 동일 크기) */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '2mm', marginBottom: '4mm' }}>
+                          <img
+                            src="/logo_ocean.png"
+                            alt="Logo"
+                            style={{ width: '8mm', height: '8mm', objectFit: 'contain' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                          />
+                          <span style={{ fontSize: '8pt', color: '#000000', fontWeight: '400', whiteSpace: 'nowrap' }}>
+                            오우션테크놀러지 Demo Device (02-2188-7737)
+                          </span>
+                        </div>
+
+                        {/* 1. Product Name (10pt regular/bold black: A4와 100% 동일 크기) */}
+                        <div style={{
+                          fontSize: '10pt',
+                          fontWeight: '600',
+                          color: '#000000',
+                          lineHeight: '1.25',
+                          marginBottom: '3.5mm',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {name}
+                        </div>
+
+                        {/* 2. Serial Number (10pt, S/N: + alphabet highlighted: A4와 100% 동일 크기) */}
+                        <div style={{
+                          fontSize: '10pt',
+                          color: '#000000',
+                          fontWeight: '400',
+                          marginBottom: '4.5mm',
+                          display: 'flex',
+                          alignItems: 'center'
+                        }}>
+                          <span>S/N:&nbsp;</span>
+                          {formatSerial(serial)}
+                        </div>
+
+                        {/* 3. Barcode (Left-aligned, height 13mm/46px, barWidth 1.1: A4와 100% 동일 규격) */}
+                        <div style={{ marginTop: 'auto', marginBottom: '2.5mm', display: 'flex', justifyContent: 'flex-start' }}>
+                          <BarcodeSvg
+                            value={serial}
+                            width={1.1}
+                            height={46}
+                            displayValue={false}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      /* 📱 [네모닉 듀얼 QR 라벨: A4 용지때와 100% 동일한 QR(92px) 크기로 80x80mm 안에 쏙 들어감] */
+                      <div
+                        className="label-card-nemonic label-qr-card"
+                        style={{
+                          width: '80mm',
+                          height: '80mm',
+                          padding: '5mm 5mm',
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          fontFamily: "'Noto Sans KR', 'Inter', sans-serif",
+                          background: '#ffffff'
+                        }}
+                      >
+                        {/* 0. 헤더: 회사명 & 연락처 (A4와 100% 동일 크기) */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #e2e8f0', paddingBottom: '3px', marginBottom: '3px' }}>
+                          <span style={{ fontSize: '8px', fontWeight: '700', color: '#334155' }}>
+                            오우션테크놀러지 Demo Device
+                          </span>
+                          <span style={{ fontSize: '7.5px', color: '#64748b' }}>
+                            02-2188-7737
+                          </span>
+                        </div>
+
+                        {/* 1. 상단: 장비명 + 시리얼 (A4와 100% 동일 크기) */}
+                        <div style={{ marginBottom: '4px' }}>
+                          <div style={{ fontSize: '12px', fontWeight: '800', color: '#0f172a', lineHeight: '1.25', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {name}
+                          </div>
+                          <div style={{ fontSize: '10.5px', color: '#334155', fontWeight: '700', fontFamily: "'Inter', monospace", marginTop: '2px' }}>
+                            S/N: {formatSerial(serial)}
+                          </div>
+                        </div>
+
+                        {/* 2. 하단: 듀얼 QR (92px 듀얼: A4와 100% 동일 크기) */}
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'space-around', flex: 1, paddingBottom: '2mm' }}>
+                          {/* 대여 신청 QR */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{
+                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#2563eb',
+                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                            }}>🔵 대여 신청</span>
+                            <img src={applyQr} alt="신청" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
+                          </div>
+
+                          {/* 반납 처리 QR */}
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                            <span style={{
+                              fontSize: '8px', fontWeight: '800', color: '#fff', background: '#dc2626',
+                              padding: '1.5px 6px', borderRadius: '3px', marginBottom: '3px', letterSpacing: '-0.3px'
+                            }}>🔴 반납 처리</span>
+                            <img src={returnQr} alt="반납" style={{ width: '92px', height: '92px', border: '1px solid #94a3b8', borderRadius: '4px', background: '#fff' }} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               );
             })}
           </div>
